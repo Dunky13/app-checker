@@ -166,6 +166,27 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         #expect(rule.evaluate(probe(env: ["TOOL_TELEMETRY": "0"])).status == .ok)
     }
 
+    @Test func readsMessagesAndToolCallsFromTheCLIStream() {
+        let long = String(repeating: "x", count: LLM.resultLimit + 1)
+        let stream = #"""
+        {"type":"system","subtype":"init","cwd":"/somewhere"}
+        not json
+        {"type":"assistant","message":{"content":[{"type":"thinking","thinking":""},{"type":"text","text":"Searching."},{"type":"tool_use","id":"a","name":"WebSearch","input":{"query":"tool telemetry"}}]}}
+        {"type":"assistant","message":{"content":[{"type":"tool_use","id":"b","name":"WebFetch","input":{"url":"https://example.com/a"}}]}}
+        {"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"b","content":[{"type":"text","text":"\#(long)"}]}]}}
+        {"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"a","content":"Links: none"}]}}
+        {"type":"assistant","message":{"content":[{"type":"text","text":"{}"}]}}
+        {"type":"result","subtype":"success","is_error":false,"result":"{}"}
+        """#
+        let log = LLM.transcript(ofStream: Data(stream.utf8))
+        #expect(log.result == "{}" && !log.failed)
+        #expect(log.turns.map(\.role) == [.assistant, .tool, .tool, .assistant])
+        #expect(log.turns[1] == LLM.Turn(role: .tool, text: #"{"query":"tool telemetry"}"#, tool: "WebSearch", result: "Links: none"))
+        #expect(log.turns[2].text == #"{"url":"https://example.com/a"}"# && log.turns[2].result == String(repeating: "x", count: LLM.resultLimit) + "\n… (shortened)")
+        let failed = LLM.transcript(ofStream: Data(#"{"type":"result","is_error":true,"result":"Not logged in"}"#.utf8))
+        #expect(failed.turns.isEmpty && failed.failed && failed.result == "Not logged in")
+    }
+
     @Test func rejectsUnusableReplies() {
         #expect(throws: LLM.Failure.self) { try LLM.parseRule(from: "I could not find anything.", itemID: "npm:tool") }
         #expect(throws: LLM.Failure.self) { try LLM.parseRule(from: #"{"telemetry": "maybe", "summary": "x"}"#, itemID: "npm:tool") }

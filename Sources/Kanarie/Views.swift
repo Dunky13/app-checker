@@ -194,6 +194,7 @@ struct DetailView: View {
     var verdict: Verdict
     @State private var copied = false
     @State private var submitting = false
+    @State private var showingLog = false
 
     private var sourceNote: String {
         switch verdict.source {
@@ -267,6 +268,8 @@ struct DetailView: View {
                         if model.analysing.contains(item.id) {
                             ProgressView().controlSize(.small).accessibilityHidden(true)
                             Text("Searching the web. This can take a minute or two.").foregroundStyle(.secondary)
+                        } else if model.hasLookupLog(item) {
+                            Button("Show Lookup Log…", systemImage: "text.bubble") { showingLog = true }
                         }
                     }
                     if let error = model.errors[item.id] {
@@ -284,6 +287,63 @@ struct DetailView: View {
         }
         .onChange(of: item.id) { copied = false }
         .sheet(isPresented: $submitting) { SubmitView(model: model, item: item, verdict: verdict) }
+        .sheet(isPresented: $showingLog) { LookupLogView(name: item.name, turns: model.lookupLog(item)) }
+    }
+}
+
+/// What one AI lookup asked and got back. All of it is shown as plain text: tool results are web pages.
+struct LookupLogView: View {
+    @Environment(\.dismiss) private var dismiss
+    var name: String
+    var turns: [LLM.Turn]
+
+    /// The tool calls between two messages form one group, which starts collapsed.
+    private var groups: [[LLM.Turn]] {
+        turns.reduce(into: []) { groups, turn in
+            if turn.role == .tool, groups.last?.first?.role == .tool { groups[groups.count - 1].append(turn) } else { groups.append([turn]) }
+        }
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 12) {
+                    ForEach(Array(groups.enumerated()), id: \.offset) { _, group in
+                        if group[0].role == .tool {
+                            DisclosureGroup(group.count == 1 ? "1 tool call" : "\(group.count) tool calls") {
+                                ForEach(Array(group.enumerated()), id: \.offset) { _, call in
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(verbatim: "\(call.tool ?? "Tool") \(call.text)").font(.callout.monospaced())
+                                        Text(verbatim: call.result ?? "No result was recorded.").font(.callout).foregroundStyle(.secondary)
+                                    }
+                                    .textSelection(.enabled)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.top, 6)
+                                }
+                            }
+                        } else {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(group[0].role == .user ? "Prompt" : "Model").font(.caption).bold().foregroundStyle(.secondary)
+                                Text(verbatim: group[0].text).textSelection(.enabled)
+                            }
+                            .padding(8)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
+                        }
+                    }
+                }
+                .padding()
+            }
+            Divider()
+            HStack {
+                Text("Last AI lookup of \(name). Kept on this Mac only.").font(.callout).foregroundStyle(.secondary)
+                Spacer()
+                Button("Done") { dismiss() }.keyboardShortcut(.defaultAction)
+            }
+            .padding()
+            .background(.bar)
+        }
+        .frame(width: 640, height: 600)
     }
 }
 

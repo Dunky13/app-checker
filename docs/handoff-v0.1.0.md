@@ -111,3 +111,10 @@ After any change below `findings/`: run `scripts/sign-findings.sh` and commit `i
 - Verdicts are computed on the main thread, which is fine for a few hundred items.
 - The model object that ties scanning, saving and notifications together has no unit tests; it was checked by running the app.
 - Not scanned: apps outside the two Applications folders, iPhone and iPad apps, other Homebrew prefixes, and editors other than the six listed in the README.
+
+## Since 0.1.0, not released yet
+
+- **Lookup log.** Every AI lookup keeps its exchange: the prompt, the model's messages and its tool calls with their results. **Show Lookup Log…** on an item shows the last one as a small chat log, with the tool calls between two messages folded into one group. The Claude CLI is now run with `--output-format stream-json --verbose`, and `LLM.transcript(ofStream:)` reads that event stream. One file per item in the `lookups` folder of the support folder, which the cask's zap removes.
+  - Evidence: a real lookup of `brew:age` through the Claude CLI in a build of this branch with its own support folder: verdict shown as before, log with the prompt, one group of 5 tool calls (collapsed, then opened) and the answer. 40 tests pass, one of them on the stream parser.
+  - Not run: the API backend after this change (its log is the prompt and the answer), and a failed lookup in the app (the parser test covers a failed stream).
+  - Limits: the log is written when the lookup ends, so it cannot be followed while it runs, and a lookup that times out logs only the prompt. A tool result is cut at 4,000 characters. Only the last lookup of an item is kept, and logs of removed items are not cleaned up. Text in the log comes from web pages and is shown as plain text, never as links.

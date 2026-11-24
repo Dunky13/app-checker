@@ -15,6 +15,53 @@ public enum LLM {
         public init(errorDescription: String) { self.errorDescription = errorDescription }
     }
 
+    /// One step of a lookup, kept so the user can read what was asked and what came back.
+    public struct Turn: Codable, Sendable, Equatable {
+        public enum Role: String, Codable, Sendable { case user, assistant, tool }
+        public var role: Role
+        /// The message, or for a tool call what the model passed to the tool.
+        public var text: String
+        public var tool: String?
+        /// What the tool returned, shortened to `resultLimit` characters.
+        public var result: String?
+
+        public init(role: Role, text: String, tool: String? = nil, result: String? = nil) {
+            (self.role, self.text, self.tool, self.result) = (role, text, tool, result)
+        }
+    }
+
+    /// Fetched pages can be long, and the log of every lookup is kept on disk.
+    static let resultLimit = 4000
+
+    /// Reads the event stream of `claude --output-format stream-json`: the model's messages and tool calls in order,
+    /// and the final answer. Each line is one JSON event; lines of other kinds are skipped.
+    static func transcript(ofStream data: Data) -> (turns: [Turn], result: String?, failed: Bool) {
+        var turns: [Turn] = [], result: String?, failed = false
+        var calls: [String: Int] = [:]  // tool call id -> its place in `turns`, for the result that follows
+        for line in data.split(separator: UInt8(ascii: "\n")) {
+            guard let event = try? JSONSerialization.jsonObject(with: line) as? [String: Any] else { continue }
+            if event["type"] as? String == "result" { (result, failed) = (event["result"] as? String, event["is_error"] as? Bool == true) }
+            for block in (event["message"] as? [String: Any])?["content"] as? [[String: Any]] ?? [] {
+                switch block["type"] as? String {
+                case "text":
+                    if let text = block["text"] as? String, !text.isEmpty { turns.append(Turn(role: .assistant, text: text)) }
+                case "tool_use":
+                    let input = (block["input"] as? [String: Any])
+                        .flatMap { try? JSONSerialization.data(withJSONObject: $0, options: [.sortedKeys, .withoutEscapingSlashes]) }
+                    if let id = block["id"] as? String { calls[id] = turns.count }
+                    turns.append(Turn(role: .tool, text: input.map { String(decoding: $0, as: UTF8.self) } ?? "", tool: block["name"] as? String))
+                case "tool_result":
+                    guard let index = (block["tool_use_id"] as? String).flatMap({ calls[$0] }) else { continue }
+                    let content = block["content"] as? String
+                        ?? (block["content"] as? [[String: Any]] ?? []).compactMap { $0["text"] as? String }.joined(separator: "\n")
+                    turns[index].result = content.count > resultLimit ? content.prefix(resultLimit) + "\n… (shortened)" : content
+                default: break
+                }
+            }
+        }
+        return (turns, result, failed)
+    }
+
     static let kinds = [
         "app": "macOS application, bundle identifier", "brew": "Homebrew formula", "cask": "Homebrew cask",
         "bin": "command-line tool", "npm": "global npm package", "ext": "VS Code extension",
@@ -85,32 +132,41 @@ public enum LLM {
         ) async -> URLRequest? { nil }
     }
 
-    public static func analyse(_ item: Item, backend: Backend, env: [String: String]) async throws -> Rule {
+    /// The log holds the prompt and everything that came back, also when the lookup fails.
+    public static func analyse(_ item: Item, backend: Backend, env: [String: String]) async -> (log: [Turn], rule: Result<Rule, any Error>) {
         let prompt = prompt(for: item)
-        let reply: String
+        var log = [Turn(role: .user, text: prompt)]
+        do {
+            let reply = try await ask(prompt, backend: backend, env: env, log: &log)
+            return (log, Result { try parseRule(from: reply, itemID: item.id) })
+        } catch {
+            return (log, .failure(error))
+        }
+    }
+
+    private static func ask(_ prompt: String, backend: Backend, env: [String: String], log: inout [Turn]) async throws -> String {
         switch backend {
         case let .claudeCLI(path, model):
-            reply = try await Task.detached {
+            let data = try await Task.detached {
                 // Empty working directory, no settings, CLAUDE.md, skills, hooks or MCP servers, web tools only:
                 // the model reads untrusted web pages, so it gets nothing personal and nothing it could act with.
                 let cwd = FileManager.default.temporaryDirectory.appendingPathComponent("kanarie-\(UUID().uuidString)")
                 try FileManager.default.createDirectory(at: cwd, withIntermediateDirectories: true)
                 defer { try? FileManager.default.removeItem(at: cwd) }
                 var arguments = [
-                    "-p", prompt, "--output-format", "json", "--tools", "WebSearch,WebFetch", "--allowedTools", "WebSearch,WebFetch",
+                    "-p", prompt, "--output-format", "stream-json", "--verbose", "--tools", "WebSearch,WebFetch", "--allowedTools", "WebSearch,WebFetch",
                     "--strict-mcp-config", "--no-session-persistence", "--setting-sources", "", "--safe-mode",
                 ]
                 if !model.isEmpty { arguments += ["--model", model] }
-                struct Output: Decodable { var result: String?; var is_error: Bool? }
                 // No settings are loaded, so an opt-out in the user's Claude settings would not apply: a lookup must not cause telemetry itself.
                 let quiet = env.merging(["DISABLE_TELEMETRY": "1", "DISABLE_ERROR_REPORTING": "1"]) { $1 }
-                let data = try Shell.run(path, arguments, env: quiet, cwd: cwd, timeout: 300, acceptFailure: true)
-                guard let output = try? JSONDecoder().decode(Output.self, from: data), let result = output.result else {
-                    throw Failure(errorDescription: "Unexpected output from the claude CLI.")
-                }
-                if output.is_error == true { throw Failure(errorDescription: "claude: \(result.prefix(300))") }
-                return result
+                return try Shell.run(path, arguments, env: quiet, cwd: cwd, timeout: 300, acceptFailure: true)
             }.value
+            let stream = transcript(ofStream: data)
+            log += stream.turns
+            guard let result = stream.result else { throw Failure(errorDescription: "Unexpected output from the claude CLI.") }
+            if stream.failed { throw Failure(errorDescription: "claude: \(result.prefix(300))") }
+            return result
         case let .openAI(baseURL, model, apiKey):
             // The API key must not travel in clear text.
             guard baseURL.scheme == "https" || ["localhost", "127.0.0.1"].contains(baseURL.host ?? "") else {
@@ -136,8 +192,8 @@ public enum LLM {
                 let status = (response as? HTTPURLResponse)?.statusCode ?? 0
                 throw Failure(errorDescription: decoded?.error?.message ?? "The endpoint answered with HTTP \(status).")
             }
-            reply = content
+            log.append(Turn(role: .assistant, text: content))
+            return content
         }
-        return try parseRule(from: reply, itemID: item.id)
     }
 }

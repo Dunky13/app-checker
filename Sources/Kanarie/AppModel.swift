@@ -9,6 +9,8 @@ final class AppModel {
     nonisolated static let findingsURL = URL(string: "https://raw.githubusercontent.com/Dunky13/kanarie/main/findings/")!
     nonisolated static let supportDir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Kanarie")
     nonisolated static let stateFile = supportDir.appendingPathComponent("state.json"), cachedFindings = supportDir.appendingPathComponent("findings")
+    /// One file per item: a log holds pages of web results, too much for the state file that is rewritten on every save.
+    nonisolated static let lookupLogs = supportDir.appendingPathComponent("lookups")
     /// Same key as the app's own updates: only findings the maintainer signed are accepted.
     nonisolated static var publicKey: String { Bundle.main.infoDictionary?["SUPublicEDKey"] as? String ?? "" }
     nonisolated static var bundledFindings: URL? { Bundle.main.url(forResource: "findings", withExtension: nil) }
@@ -253,13 +255,30 @@ final class AppModel {
         analysing.insert(item.id)
         errors[item.id] = nil
         do {
-            saved.aiRules[item.id] = try await LLM.analyse(item, backend: backend(), env: env)
+            let (log, rule) = await LLM.analyse(item, backend: try backend(), env: env)
+            do {
+                try FileManager.default.createDirectory(at: Self.lookupLogs, withIntermediateDirectories: true)
+                try JSONEncoder().encode(log).write(to: Self.logFile(item), options: .atomic)
+            } catch { NSLog("Kanarie: could not save the lookup log: \(error)") }
+            saved.aiRules[item.id] = try rule.get()
             save()
             evaluate()
         } catch {
             errors[item.id] = error.localizedDescription
         }
         analysing.remove(item.id)
+    }
+
+    private nonisolated static func logFile(_ item: Item) -> URL {
+        // An item id can hold slashes and dots, as in "npm:@scope/name".
+        lookupLogs.appendingPathComponent((item.id.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? item.id) + ".json")
+    }
+
+    func hasLookupLog(_ item: Item) -> Bool { FileManager.default.fileExists(atPath: Self.logFile(item).path) }
+
+    /// What the last lookup of this item asked and got back, whether it succeeded or not.
+    func lookupLog(_ item: Item) -> [LLM.Turn] {
+        (try? JSONDecoder().decode([LLM.Turn].self, from: Data(contentsOf: Self.logFile(item)))) ?? []
     }
 
     /// Looks up the given items one after another. Stops on the first failure, which is usually a quota or configuration problem.
