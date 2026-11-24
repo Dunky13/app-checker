@@ -81,15 +81,15 @@ public struct Rule: Codable, Sendable, Hashable {
 
     /// The findings that may hold for `version` among those for one item, oldest first. Normally that is one:
     /// the newest that starts at or below it. When the version cannot say, every finding that might hold comes back
-    /// and the caller shows the worst: all of them for a version that cannot be read, and any that starts on another
-    /// pre-release channel of the same release.
+    /// and the caller shows the worst: all of them for a version that cannot be read, and any whose start has no known
+    /// order with it (another pre-release channel of the same release, or a number after a dash, see `Version.hasNoOrder`).
     public static func pick(_ candidates: [Rule], version: String) -> [Rule] {
         let start = { (rule: Rule) in rule.since.flatMap(Version.init) ?? .zero }
         let sorted = candidates.sorted { start($0) < start($1) }
         guard let version = Version(version) else { return sorted }
         let unsure = { (rule: Rule) in version.hasNoOrder(with: start(rule)) }
-        // The first file also covers what sorts below it, such as "0.0.0-dev": no version may be left without a finding.
-        let certain = sorted.lastIndex { !unsure($0) && (start($0) <= version || start($0) == .zero) }
+        // A version below every file, such as "0.0.0-dev", gets the first file: no version may be left without a finding.
+        let certain = sorted.lastIndex { !unsure($0) && start($0) <= version } ?? sorted.firstIndex { !unsure($0) && start($0) == .zero }
         return sorted.enumerated().filter { $0.offset == certain || unsure($0.element) }.map(\.element)
     }
 

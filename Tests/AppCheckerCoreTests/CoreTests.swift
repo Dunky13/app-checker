@@ -336,6 +336,10 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         for text in ["1.2.0-1", "1.2.0-0", "1.2-3"] { #expect(try version(text).hasNoOrder(with: plain) && plain.hasNoOrder(with: version(text)), "\(text)") }
         for text in ["1.2.1-1", "1.2.0_1", "1.2.0-beta.1", "1.2.0", "1.3"] { #expect(try !version(text).hasNoOrder(with: plain), "\(text)") }
         #expect(try !version("1.2.0-1").hasNoOrder(with: version("1.2.0-2")))
+        // Anything between the two readings of a dash number, also when the dash number is the file's.
+        #expect(try version("1.2.0-1").hasNoOrder(with: version("1.2.0.1")) && version("1.2.0_3").hasNoOrder(with: version("1.2.0-5")))
+        #expect(try version("1.2-3").hasNoOrder(with: version("1.2.1-1")) && version("1.2.0-1").hasNoOrder(with: version("1.2.0-rc.1")))
+        #expect(try !version("1.2.0-1").hasNoOrder(with: version("1.3")) && !version("1.2.0-1").hasNoOrder(with: version("1.1.9")))
     }
 
     @Test func aFindingHoldsUntilTheNextOne() {
@@ -347,6 +351,16 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         #expect(pick("3") == ["3"] && pick("10.1") == ["3"])
         // The first file also covers versions that sort below it.
         for version in ["0.0.0-dev", "0-dev", "0.0.0-SNAPSHOT"] { #expect(pick(version) == ["0"], "\(version)") }
+        // A file below the first one is still the right one for the versions it covers.
+        var alpha = rule(.none)
+        alpha.since = "0-alpha"
+        let early = { (version: String) in Rule.pick([first, alpha, third], version: version).map { $0.since ?? "" } }
+        #expect(early("0-alpha.2") == ["0-alpha"] && early("0-alpha") == ["0-alpha"] && early("0.0.0-dev") == ["0-alpha", "0"] && early("0.5") == ["0"])
+        // A plain version against a file with a dash number, and a dash number below the first file.
+        var dashed = rule(.none)
+        dashed.since = "1.2.0-1"
+        #expect(Rule.pick([first, dashed], version: "1.2.0").map { $0.since ?? "" } == ["0", "1.2.0-1"])
+        #expect(Rule.pick([first, dashed], version: "1.2.1").map { $0.since ?? "" } == ["1.2.0-1"] && pick("0-1") == ["0"])
         // Without a first file (which `Findings.rules` refuses) an older version gets none.
         #expect(Rule.pick([second, third], version: "1.0").isEmpty && Rule.pick([], version: "1.0").isEmpty)
     }

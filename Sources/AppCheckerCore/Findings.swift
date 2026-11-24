@@ -2,7 +2,7 @@ import CryptoKit
 import Foundation
 
 /// A version as people read it, tolerant of what installers put in that field: "v2.0.12", "1.10" after "1.9",
-/// "3.0.0_1", "7.1.2-5", and pre-releases such as "0.1.12-nightly.20261124.5191", which sort after 0.1.11 and before 0.1.12.
+/// "3.0.0_1", and pre-releases such as "0.1.12-nightly.20261124.5191", which sort after 0.1.11 and before 0.1.12.
 /// shortcut: any word after the numbers marks a pre-release, so OpenSSL-style "1.1.1w" sorts before "1.1.1"; give such an app its own rule if one ever needs version files.
 public struct Version: Comparable, Hashable, Sendable {
     var release: [Int] = []
@@ -56,11 +56,18 @@ public struct Version: Comparable, Hashable, Sendable {
         return a.pre.count < b.pre.count
     }
 
-    /// Whether nothing says which of the two came first. Pre-releases of one release on different channels ("nightly",
-    /// "preview", "rc"): rc.1 may be older or newer than nightly.20261117. And "1.2.0-1" against a plain "1.2.0".
+    /// The lowest place a dash-number version may have: "1.2.0-1" read as a pre-release sits just below 1.2.0, read as a build at 1.2.0.1.
+    private var floor: Version { dashed.map { Version(release: $0, pre: []) } ?? self }
+
+    /// Whether nothing says which of the two came first.
     func hasNoOrder(with other: Version) -> Bool {
-        if let dashed, other.dashed == nil, dashed == other.release { return true }
-        if let theirs = other.dashed, dashed == nil, theirs == release { return true }
+        // A dash number may sit anywhere from its base up to itself, so whatever lies in that range has no order with it.
+        // Two dash numbers on one base follow the same scheme, whichever it is.
+        if dashed != other.dashed {
+            let mayReach = { (a: Version, b: Version) in a.floor <= b || a.floor.release == b.release }
+            if mayReach(self, other), mayReach(other, self) { return true }
+        }
+        // Pre-releases of one release on different channels ("nightly", "preview", "rc"): rc.1 may be older or newer than nightly.20261117.
         return release == other.release && !pre.isEmpty && !other.pre.isEmpty && pre.first != other.pre.first
     }
 }
