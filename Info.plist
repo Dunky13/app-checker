@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleIdentifier</key>
+	<string>io.went.app-checker</string>
+	<key>CFBundleName</key>
+	<string>App Checker</string>
+	<key>CFBundleDisplayName</key>
+	<string>App Checker</string>
+	<key>CFBundleExecutable</key>
+	<string>AppChecker</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleShortVersionString</key>
+	<string>0.0.0</string>
+	<key>CFBundleVersion</key>
+	<string>0.0.0</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>15.0</string>
+	<key>LSUIElement</key>
+	<true/>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.utilities</string>
+	<key>NSHumanReadableCopyright</key>
+	<string>MIT licensed. No telemetry.</string>
+	<key>SUFeedURL</key>
+	<string>https://raw.githubusercontent.com/Dunky13/app-checker/main/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>CIKVfBlCMo2CUPj7QLGS8uWx0FINoL++02suMafoJcs=</string>
+	<key>SUEnableSystemProfiling</key>
+	<false/>
+</dict>
+</plist>
