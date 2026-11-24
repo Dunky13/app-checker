@@ -109,9 +109,14 @@ public struct Rule: Codable, Sendable, Hashable {
             // A version below every file, such as "0.0.0-dev", gets the first file: no version may be left without a finding.
             return known.filter { place($0) <= version[keyPath: reading] }.max { place($0) < place($1) } ?? known.first { start(sorted[$0]) == .zero }
         }
-        // The part after the dash can also be a packager's label: "5.4.0-0ubuntu1" is a build of 5.4.0, not something before it.
-        // So the file for exactly the release in front of the dash may hold as well.
-        let labelled = { (rule: Rule) in version.base == start(rule).release && start(rule).pre.isEmpty }
+        // What follows the numbers is not always a pre-release: "5.4.0-0ubuntu1" is a packager's build of 5.4.0, and "9.9p2"
+        // and "1.1.1w" are patch levels. Only a known pre-release word says "before", so otherwise the file for exactly
+        // that release may hold as well.
+        let labelled = { (rule: Rule) in
+            let file = start(rule)
+            let patched = version.release == file.release && version.pre.first.map { !Version.preReleaseWords.contains($0) } == true
+            return file.pre.isEmpty && (version.base == file.release || patched)
+        }
         return sorted.enumerated().filter { certain.contains($0.offset) || unsure($0.element) || labelled($0.element) }.map(\.element)
     }
 

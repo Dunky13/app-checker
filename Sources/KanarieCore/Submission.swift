@@ -102,7 +102,8 @@ public enum Submission {
         var names = ((rule.disabledWhen ?? []) + (rule.enabledWhen ?? [])).compactMap { $0.env ?? $0.key ?? $0.contains }
         // Variables and preference keys in the command count too: that line is copied straight into a shell.
         let command = rule.optOut?.command ?? ""
-        names += command.matches(of: /\b[A-Z][A-Z0-9]*_[A-Z0-9_]+/).map { String($0.output) }
+        // The simple kind of word boundary: the default one does not see a boundary at "." or ":" between letters ("$env:NAME").
+        names += command.matches(of: /\b[A-Z][A-Z0-9]*_[A-Z0-9_]+/.wordBoundaryKind(.simple)).map { String($0.output) }
         names += command.matches(of: /(?:^|[\s'";])([A-Za-z_]\w*)=/).map { String($0.output.1) }
         names += command.matches(of: /defaults\s+write\s+\S+\s+["']?([\w.-]+)/).map { String($0.output.1) }
         names = names.enumerated().filter { !$0.element.isEmpty && names.firstIndex(of: $0.element) == $0.offset }.map(\.element)
@@ -194,11 +195,11 @@ public enum Submission {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
         let json = String(decoding: try encoder.encode(rule), as: UTF8.self)
-        // A name without ASCII letters gives no folder name, so the id stands in.
+        // A name without ASCII letters gives no folder name, so the id without its prefix stands in.
         let slug = { (text: String) in text.lowercased().split { !($0.isASCII && ($0.isLetter || $0.isNumber)) }.joined(separator: "-") }
-        let folder = [rule.name ?? item.name, item.id].map(slug).first { !$0.isEmpty } ?? ""
+        let folder = [rule.name ?? item.name, String(item.id.drop { $0 != ":" })].map(slug).first { !$0.isEmpty }
         let file = rule.since.map { "a correction of the finding for \(rule.match.map { "`\(plain($0))`" }.joined(separator: ", ")) that starts at version `\(plain($0))`" }
-            ?? "`findings/\(folder)/0.json`"
+            ?? folder.map { "`findings/\($0)/0.json`" } ?? "a new finding, in a folder the maintainer names"
         let read = readings.map { $0.map { "- `\(plain($0, limit: 300))`" } }
             ?? ["- Not included: the checks came from an AI lookup, so what they read stays on the submitter's Mac."]
         let body = """

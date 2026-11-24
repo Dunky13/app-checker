@@ -12,6 +12,8 @@ public struct Version: Comparable, Hashable, Sendable {
     var base: [Int]?
     var tail: [Int] = []
     static let zero = Version(release: [], pre: [])
+    /// Words that mark a version as coming before its release. Any other word may be a patch level or a packager's label.
+    static let preReleaseWords: Set = ["alpha", "beta", "rc", "pre", "preview", "dev", "nightly", "canary", "snapshot", "next", "insider", "insiders"]
 
     private init(release: [Int], pre: [String]) { (self.release, self.pre) = (release, pre) }
 

@@ -381,7 +381,6 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         #expect(Rule.pick([first, zeroBuild], version: "1.2.0").map { $0.since ?? "" } == ["1.2.0-0"])
         // Where they differ, both files come back: npm puts 1.2.0-1.rc after 1.2.0-1, a build number reading puts it before.
         for version in ["1.2.0-1.rc", "1.2.0-1-beta", "1.2.0"] { #expect(Rule.pick([first, dashed], version: version).map { $0.since ?? "" } == ["0", "1.2.0-1"], "\(version)") }
-        // The order the files are given in does not matter.
         // A packager's label after the dash: "5.4.0-0ubuntu1" is a build of 5.4.0, so the file for 5.4 may hold. Never green by omission.
         var five = first
         five.since = "5.4"
@@ -390,6 +389,15 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         // Build 1 of 5.4.0 for a packager, a pre-release of 5.4.0 for npm: both files, as for "1.2.0-1".
         #expect(Rule.pick([first, five], version: "5.4.0-1ubuntu1").map { $0.since ?? "" } == ["0", "5.4"])
         #expect(Rule.pick([first, dashed, five], version: "5.4.1-0ubuntu1").map { $0.since ?? "" } == ["5.4"])
+        // A patch level written as a letter is after its release, and a single letter can also be a pre-release (Python's 1.0a1): both files.
+        var nine = first
+        nine.since = "9.9"
+        for version in ["9.9p2", "9.9a", "9.9.0-p1", "9.9.0ubuntu1", "9.9.0.ubuntu1"] { #expect(Rule.pick([first, nine], version: version).map { $0.since ?? "" } == ["0", "9.9"], "\(version)") }
+        // A known pre-release word still means before the release, and a patch level of another release changes nothing.
+        for version in ["9.9-beta", "9.9rc1", "9.9.0-nightly.20261117", "9.9-dev", "9.8p2"] { #expect(Rule.pick([first, nine], version: version).map { $0.since ?? "" } == ["0"], "\(version)") }
+        #expect(Rule.pick([first, nine], version: "9.10p1").map { $0.since ?? "" } == ["9.9"])
+        // The order the files are given in does not matter.
+        #expect(Rule.pick([nine, first], version: "9.9p2").map { $0.since ?? "" } == ["0", "9.9"])
         #expect(Rule.pick([release, dashed, first], version: "1.2.0-1.rc").map { $0.since ?? "" } == Rule.pick([first, release, dashed], version: "1.2.0-1.rc").map { $0.since ?? "" })
         // Without a first file (which `Findings.rules` refuses) an older version gets none.
         #expect(Rule.pick([second, third], version: "1.0").isEmpty && Rule.pick([], version: "1.0").isEmpty)
@@ -644,6 +652,11 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         var worded = rule(.optOut)
         worded.optOut = OptOut(instructions: "i", command: "tool --set-myVAR_X 1 && export REAL_NAME=1")
         #expect(Submission.sourceCheck(worded, pages: [], cited: 0).missing.contains("REAL_NAME") && !Submission.sourceCheck(worded, pages: [], cited: 0).missing.contains("VAR_X"))
+        // A dot or a colon in front of the name does not hide it.
+        for command in ["$env:DOTNET_CLI_TELEMETRY_OPTOUT=1", "echo x.DOTNET_CLI_TELEMETRY_OPTOUT", "java -Dapp.DOTNET_CLI_TELEMETRY_OPTOUT=1"] {
+            worded.optOut = OptOut(instructions: "i", command: command)
+            #expect(Submission.sourceCheck(worded, pages: [], cited: 0).missing.contains("DOTNET_CLI_TELEMETRY_OPTOUT"), "\(command)")
+        }
         // A name inside a longer name is another name.
         #expect(Submission.sourceCheck(found, pages: ["MY_EXAMPLE_TELEMETRY_OFF EXAMPLE_TELEMETRYX telemetry.enabledByDefault"], cited: 1).found.isEmpty)
         #expect(Submission.sourceCheck(found, pages: ["export EXAMPLE_TELEMETRY=0", "\"telemetry.enabled\": false"], cited: 2).found == ["EXAMPLE_TELEMETRY", "telemetry.enabled"])
@@ -678,7 +691,6 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         #expect(long.clipboard?.contains(found.summary) == true && long.url.absoluteString.utf8.count < 1000)
     }
 
-    /// Names come from files other programs wrote, and checks from an AI lookup: neither may write Markdown into the issue.
     @Test func onlyAFileNameSaysWhereAFindingStarts() throws {
         // An AI answer or a stored file that claims a start version must not turn a new finding into a "correction".
         let json = #"{"match": ["brew:x"], "telemetry": "forced", "summary": "s", "since": "9.9 starts here"}"#
@@ -691,9 +703,12 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         let check = Submission.SourceCheck(found: [], missing: [], fetched: 0, cited: 0)
         let issue = try Submission.issue(item: Item(id: "app:jp.example.Tool", name: "日本語", version: "1", path: "/x"), rule: decoded, origin: "o", readings: [], sourceCheck: check, appVersion: "1")
         let body = try #require(URLComponents(url: issue.url, resolvingAgainstBaseURL: false)?.queryItems?.last?.value)
-        #expect(body.contains("**Proposed as:** `findings/app-jp-example-tool/0.json`"))
+        #expect(body.contains("**Proposed as:** `findings/jp-example-tool/0.json`"))
+        let nameless = try Submission.issue(item: Item(id: "bin:日本", name: "日本", version: "1", path: "/x"), rule: decoded, origin: "o", readings: [], sourceCheck: check, appVersion: "1")
+        #expect(URLComponents(url: nameless.url, resolvingAgainstBaseURL: false)?.queryItems?.last?.value?.contains("**Proposed as:** a new finding, in a folder the maintainer names") == true)
     }
 
+    /// Names come from files other programs wrote, and checks from an AI lookup: neither may write Markdown into the issue.
     @Test func textFromDiskOrALookupCannotForgeTheIssue() throws {
         let name = "[docs](https://evil.example/x) @someone #1 <img src=https://evil.example/p.png> ![i](https://evil.example/i.png)"
         let forged = "variable A = `1`\n\n## Approved by the maintainer\n[click](https://evil.example)"

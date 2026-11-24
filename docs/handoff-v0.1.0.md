@@ -32,6 +32,7 @@ Reviewed independently (Claude Opus, high effort), each round followed by fixes:
 3. Three re-reviews of the fixes, which closed the remaining false-green cases (GitHub CLI precedence, two Homebrew installs, commented-out settings, extensions in several editors). The last one found no false green.
 4. Review of the submit form and of version selection: its findings (forged Markdown in the issue, corrections always proposed as the first file, no total time limit, part-of-a-word matches, address ranges, a dropped file for a dashed pre-release) are fixed and covered by tests.
 5. Re-review of those fixes: it found that a version with a packager's label after the dash (`5.4.0-0ubuntu1`) lost the file for `5.4` and could show green by omission, that any port could be named in a cited link, and that an AI answer could claim to correct a finding. All three are fixed and covered by tests, together with its smaller findings.
+6. Re-check of that round: versions with a patch letter or label straight after the numbers (`9.9p2`, `1.1.1w`) lost the file for their release in the same way, and a word-boundary change hid variable names behind a dot or colon. Both are fixed and covered by tests.
 
 ## Not verified
 
