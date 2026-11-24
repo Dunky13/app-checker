@@ -66,7 +66,7 @@ If you installed it with Homebrew, remove it again, with its settings and the AP
 brew uninstall --cask --zap dunky13/kanarie/kanarie && brew untap dunky13/kanarie
 ```
 
-The app has no Dock icon. Look for the bird in the menu bar. If you use a menu bar manager, or your Mac has a notch and a full menu bar, the icon may be hidden: opening the app again from Finder shows the list.
+Kanarie lives in the menu bar: look for the bird. While its list window is open it is also in the Dock and the app switcher (Command-Tab). If you use a menu bar manager, or your Mac has a notch and a full menu bar, the icon may be hidden: opening the app again from Finder shows the list.
 
 ## AI lookup
 
