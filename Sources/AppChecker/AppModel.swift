@@ -199,8 +199,11 @@ final class AppModel {
 
     nonisolated static func sdkKey(_ item: Item) -> String { "\(item.id)@\(item.version)" }
 
+    /// This Mac's settings as the checks read them, for a finding that is not in use yet.
+    var probe: Probe { Probe.live(env: env) }
+
     private func evaluate() {
-        let probe = Probe.live(env: env)
+        let probe = probe
         verdicts = Dictionary(uniqueKeysWithValues: items.map {
             ($0.id, Verdict(item: $0, rules: rules, aiRules: saved.aiRules, sdks: saved.sdks[Self.sdkKey($0)] ?? [], probe: probe))
         })
@@ -215,17 +218,8 @@ final class AppModel {
         guard UserDefaults.standard.bool(forKey: "refreshRules") else { return }
         do {
             let session = URLSession(configuration: .ephemeral)
-            func fetch(_ path: String) async throws -> Data {
-                let (bytes, response) = try await session.bytes(from: Self.findingsURL.appendingPathComponent(path))
-                guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw URLError(.badServerResponse) }
-                // Findings are a few kilobytes each. The cap also holds for the index, which is read before its signature can be checked.
-                var data = Data()
-                for try await byte in bytes {
-                    data.append(byte)
-                    if data.count > 1_000_000 { throw URLError(.dataLengthExceedsMaximum) }
-                }
-                return data
-            }
+            // Findings are a few kilobytes each. The cap also holds for the index, which is read before its signature can be checked.
+            let fetch = { (path: String) in try await session.data(from: Self.findingsURL.appendingPathComponent(path), limit: 1_000_000) }
             let (indexData, signature) = (try await fetch("index.json"), try await fetch("index.json.sig"))
             let index = try Findings.index(indexData, signature: String(decoding: signature, as: UTF8.self), publicKey: Self.publicKey)
             // Nothing newer. This also refuses an older index that someone plays back, even after the cache was lost.

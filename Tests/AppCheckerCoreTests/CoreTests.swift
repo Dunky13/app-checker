@@ -172,8 +172,8 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
             #expect(throws: LLM.Failure.self) { try LLM.parseRule(from: reply, itemID: "npm:tool") }
         }
         // Yellow means "there is a way out", so an AI answer that names none is refused.
-        #expect(rule(.optOut).problems(curated: false) == ["an opt-out needs instructions"])
-        #expect(rule(.optIn).problems(curated: false) == ["an opt-out needs instructions"])
+        #expect(rule(.optOut).problems(curated: false) == ["the steps to switch it off are missing"])
+        #expect(rule(.optIn).problems(curated: false) == ["the steps to switch it off are missing"])
     }
 }
 
@@ -474,6 +474,105 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
             let data = try JSONEncoder().encode(bad)
             #expect(throws: CocoaError.self) { try Findings.index(data, signature: key.signature(for: data).base64EncodedString(), publicKey: publicKey) }
         }
+    }
+}
+
+@Suite struct Submissions {
+    @Test func citedPagesAreOnlyFetchedFromThePublicInternet() {
+        let local = ["127.0.0.1", "localhost", "2130706433", "0.0.0.0", "10.0.0.1", "192.168.1.1", "172.16.0.1", "169.254.169.254", "100.64.0.1",
+                     "::1", "::", "::ffff:127.0.0.1", "::ffff:192.168.1.1", "fe80::1", "fd00::1", "64:ff9b::7f00:1", "no such host.invalid"]
+        for host in local { #expect(!Submission.isPublic(host), "\(host)") }
+        for host in ["1.1.1.1", "172.32.0.1", "2606:4700:4700::1111", "::ffff:1.1.1.1", "64:ff9b::101:101"] { #expect(Submission.isPublic(host), "\(host)") }
+        #expect(!Submission.isPublic(nil))
+        #expect(URL(string: "http://[::1]:8080/x")?.host == "::1")
+        // Without HTTPS a host could answer with a public address for the check and a local one for the fetch.
+        let fetched = ["https://1.1.1.1/x", "HTTPS://1.1.1.1"]
+        let refused = ["http://1.1.1.1/x", "https://127.0.0.1/x", "https://[::1]:8443/x", "https://localhost/x", "ftp://1.1.1.1/x", "file:///etc/hosts", "https:///x"]
+        for link in fetched { #expect(Submission.mayFetch(URL(string: link)), "\(link)") }
+        for link in refused { #expect(!Submission.mayFetch(URL(string: link)), "\(link)") }
+        #expect(!Submission.mayFetch(nil))
+    }
+
+    let item = Item(id: "brew:x", name: "Example CLI", version: "1.2", path: "/x")
+
+    func draft(_ change: (inout Submission.Draft) -> Void = { _ in }) -> Submission.Draft {
+        var draft = Submission.Draft(from: nil, item: item)
+        (draft.summary, draft.instructions, draft.optOutURL, draft.sources) = ("Usage events.", "Set the variable.", "https://example.com/docs", " https://example.com/docs \n\nhttps://example.com/issue/1\n")
+        (draft.command, draft.variable, draft.value) = ("echo 'export EXAMPLE_TELEMETRY=0' >> ~/.zshrc", "EXAMPLE_TELEMETRY", "0")
+        change(&draft)
+        return draft
+    }
+
+    @Test func aDraftBecomesAFindingThatPassesTheCuratedChecks() throws {
+        let rule = draft().rule(for: item)
+        #expect(draft().problems(for: item).isEmpty)
+        #expect(rule.match == ["brew:x"] && rule.name == "Example CLI" && rule.telemetry == .optOut)
+        #expect(rule.sources == ["https://example.com/docs", "https://example.com/issue/1"])
+        #expect(rule.disabledWhen == [Check(env: "EXAMPLE_TELEMETRY", equals: "0")] && rule.enabledWhen == nil)
+        // The same file checks as a contributed finding.
+        #expect(try Findings.rules(from: ["example-cli/0.json": JSONEncoder().encode(rule)]).count == 1)
+
+        #expect(!draft { $0.sources = "" }.problems(for: item).isEmpty)
+        #expect(!draft { $0.optOutURL = "file:///etc/passwd" }.problems(for: item).isEmpty)
+        #expect(!draft { $0.command = "export X=0\u{202e}" }.problems(for: item).isEmpty)
+        #expect(!draft { $0.variable = "EXAMPLE_TELEMETRY=0" }.problems(for: item).isEmpty)
+        // Without an opt-out there are no steps and no checks, and the hidden variable field is not judged.
+        let forced = draft { ($0.telemetry, $0.variable) = (.forced, "not a name") }
+        #expect(forced.problems(for: item).isEmpty && forced.rule(for: item).optOut == nil && forced.rule(for: item).disabledWhen == nil)
+    }
+
+    @Test func checksOfTheStartingFindingAreKeptUnlessTheTelemetryClassChanges() {
+        var found = rule(.optOut, disabledWhen: [Check(json: "~/x.json", key: "telemetry", equals: "off")], enabledWhen: [Check(env: "X_FORCE")])
+        (found.optOut, found.sources, found.match) = (OptOut(instructions: "i", url: "https://example.com"), ["https://example.com"], ["brew:x", "cask:x"])
+        var draft = Submission.Draft(from: found, item: item)
+        draft.variable = "IGNORED"
+        #expect(draft.rule(for: item).disabledWhen == found.disabledWhen && draft.rule(for: item).enabledWhen == found.enabledWhen)
+        #expect(draft.checks.count == 2 && draft.rule(for: item).match == ["brew:x"])
+        draft.telemetry = .optIn
+        #expect(draft.rule(for: item).disabledWhen == nil && draft.rule(for: item).enabledWhen == nil && draft.checks.isEmpty)
+        // A correction of a curated finding keeps every item it covers.
+        found.since = "2.0"
+        #expect(Submission.Draft(from: found, item: item).rule(for: item).match == ["brew:x", "cask:x"])
+    }
+
+    @Test func readingsSayWhetherAChecksMatchedAndNeverWhatItRead() {
+        let found = rule(.optOut, disabledWhen: [Check(env: "EXAMPLE_TOKEN", equals: "0"), Check(json: "~/x.json", key: "k", equals: "off")])
+        let lines = Submission.readings(found, item: item, probe: probe(env: ["EXAMPLE_TOKEN": "hunter2"], blocked: ["~/x.json"]))
+        #expect(lines.count == 3 && lines[0].hasSuffix("does not match") && lines[1].hasSuffix("could not be read") && lines[2].contains("yellow"))
+        #expect(!lines.joined().contains("hunter2"))
+        #expect(Submission.readings(found, item: item, probe: probe(env: ["EXAMPLE_TOKEN": "0"])).joined().contains("green"))
+    }
+
+    @Test func namesMustAppearLiterallyOnACitedPage() {
+        var found = rule(.optOut, disabledWhen: [Check(env: "EXAMPLE_TELEMETRY", equals: "0"), Check(json: "~/x.json", key: "telemetry.enabled", equals: "false")])
+        found.optOut = OptOut(instructions: "i", command: "echo 'export EXAMPLE_TELEMETRY=0 INVENTED_FLAG=1' >> ~/.zshrc", url: "https://example.com")
+        let check = Submission.sourceCheck(found, pages: ["<p>Set <code>EXAMPLE_TELEMETRY</code> to 0.</p>", "telemetry.enabled"], cited: 3)
+        #expect(check.found == ["EXAMPLE_TELEMETRY", "telemetry.enabled"] && check.missing == ["INVENTED_FLAG"] && check.fetched == 2 && check.cited == 3)
+        // Nothing fetched confirms nothing, and a finding without names has nothing to confirm.
+        #expect(Submission.sourceCheck(found, pages: [], cited: 3).missing.count == 3)
+        #expect(Submission.sourceCheck(rule(.forced), pages: [], cited: 0).missing.isEmpty)
+    }
+
+    @Test func theIssueCarriesTheFindingAndSurvivesTheLink() throws {
+        var found = draft { $0.summary = "A+B & C #1 100% `tick`" }.rule(for: item)
+        let check = Submission.sourceCheck(found, pages: ["EXAMPLE_TELEMETRY"], cited: 2)
+        let odd = Item(id: "brew:x", name: "Evil`\n## Heading", version: "1.2\n", path: "/x")
+        let issue = Submission.issue(item: odd, rule: found, origin: "Written by hand", readings: ["one"], sourceCheck: check, appVersion: "0.1.0")
+        #expect(issue.clipboard == nil && issue.url.absoluteString.hasPrefix("https://github.com/Dunky13/app-checker/issues/new?"))
+        #expect(!issue.url.absoluteString.contains("+"))
+        let query = try #require(URLComponents(url: issue.url, resolvingAgainstBaseURL: false)?.queryItems)
+        let body = try #require(query.first { $0.name == "body" }?.value)
+        #expect(query.first { $0.name == "title" }?.value == "Finding: Example CLI")
+        // The finding in the issue is the finding, and what came from disk stays on its line.
+        let json = try #require(body.split(separator: "````json\n").last?.split(separator: "\n````").first)
+        #expect(try JSONDecoder().decode(Rule.self, from: Data(json.utf8)) == found)
+        #expect(body.contains("`brew:x` (Evil## Heading, version `1.2`)") && body.contains("`findings/example-cli/0.json`"))
+        #expect(body.contains("- one") && body.contains("Found on a cited page: `EXAMPLE_TELEMETRY`") && body.contains("Fetched 1 of 2"))
+
+        // Too long for a link: the text goes to the clipboard and the issue asks for it.
+        found.summary = String(repeating: "long ", count: 2000)
+        let long = Submission.issue(item: item, rule: found, origin: "o", readings: [], sourceCheck: check, appVersion: "0.1.0")
+        #expect(long.clipboard?.contains(found.summary) == true && long.url.absoluteString.utf8.count < 1000)
     }
 }
 
