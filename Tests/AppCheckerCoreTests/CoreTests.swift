@@ -485,6 +485,12 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         for host in ["1.1.1.1", "172.32.0.1", "2606:4700:4700::1111", "::ffff:1.1.1.1", "64:ff9b::101:101"] { #expect(Submission.isPublic(host), "\(host)") }
         #expect(!Submission.isPublic(nil))
         #expect(URL(string: "http://[::1]:8080/x")?.host == "::1")
+        // Without HTTPS a host could answer with a public address for the check and a local one for the fetch.
+        let fetched = ["https://1.1.1.1/x", "HTTPS://1.1.1.1"]
+        let refused = ["http://1.1.1.1/x", "https://127.0.0.1/x", "https://[::1]:8443/x", "https://localhost/x", "ftp://1.1.1.1/x", "file:///etc/hosts", "https:///x"]
+        for link in fetched { #expect(Submission.mayFetch(URL(string: link)), "\(link)") }
+        for link in refused { #expect(!Submission.mayFetch(URL(string: link)), "\(link)") }
+        #expect(!Submission.mayFetch(nil))
     }
 
     let item = Item(id: "brew:x", name: "Example CLI", version: "1.2", path: "/x")

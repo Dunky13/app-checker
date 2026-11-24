@@ -100,7 +100,7 @@ public enum Submission {
         return SourceCheck(found: found, missing: names.filter { !found.contains($0) }, fetched: pages.count, cited: cited)
     }
 
-    /// The text of the pages a finding cites. A page that cannot be fetched, or is not on the public internet, is left out, and `cited` says how many were asked for.
+    /// The text of the pages a finding cites. A page that cannot be fetched, or is not served over HTTPS on the public internet, is left out, and `cited` says how many were asked for.
     public static func pages(for rule: Rule) async -> (texts: [String], cited: Int) {
         let links = ((rule.sources ?? []) + [rule.optOut?.url].compactMap(\.self)).compactMap { safeURL($0) }
         let urls = links.enumerated().filter { links.firstIndex(of: $0.element) == $0.offset }.map(\.element).prefix(8)
@@ -108,15 +108,18 @@ public enum Submission {
         configuration.timeoutIntervalForRequest = 20
         let session = URLSession(configuration: configuration, delegate: PublicOnly(), delegateQueue: nil)
         var texts: [String] = []
-        for url in urls where isPublic(url.host) {
+        for url in urls where mayFetch(url) {
             if let data = try? await session.data(from: url, limit: 3_000_000) { texts.append(String(decoding: data, as: UTF8.self)) }
         }
         return (texts, urls.count)
     }
 
-    /// Whether every address of a host is on the public internet. The cited links come from an AI lookup or a form,
-    /// so they must not make this Mac ask itself or its own network: a router or a local service answers a request too.
-    /// shortcut: the name is looked up again when the page is fetched, so a host that changes its answer in between gets through; connect to the checked address if that ever matters.
+    /// Whether a cited page may be fetched. The links come from an AI lookup or a form, so they must not make this Mac
+    /// ask itself or its own network: a router or a local service answers a request too.
+    /// HTTPS covers the time between this lookup and the fetch: a host that answers with a local address by then has no certificate for its name there, so no request is sent.
+    static func mayFetch(_ url: URL?) -> Bool { url?.scheme?.lowercased() == "https" && isPublic(url?.host) }
+
+    /// Whether every address of a host is on the public internet.
     static func isPublic(_ host: String?) -> Bool {
         var hints = addrinfo(), list: UnsafeMutablePointer<addrinfo>?
         hints.ai_socktype = SOCK_STREAM
@@ -145,10 +148,10 @@ public enum Submission {
         }
     }
 
-    /// Keeps a cited page from redirecting to an address that `isPublic` refuses.
+    /// Keeps a cited page from redirecting to a link that `mayFetch` refuses.
     private final class PublicOnly: NSObject, URLSessionTaskDelegate {
         func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest) async -> URLRequest? {
-            safeURL(request.url?.absoluteString).flatMap { isPublic($0.host) ? request : nil }
+            mayFetch(request.url) ? request : nil
         }
     }
 

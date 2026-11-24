@@ -125,7 +125,7 @@ Found a wrong or missing finding? Use **Submit a Finding…** (or **Suggest a Co
 The form starts from the item's AI lookup or current finding, or empty, and can be edited by hand. It only lets you continue with a finding that passes the checks every curated finding passes. Then the app:
 
 1. reads the finding's checks on your Mac and notes whether each one matches, never the value it read,
-2. fetches the pages you cite and looks for the variable and setting names on them, word for word. A name that no cited page mentions is shown before you continue, because an invented name is the main risk of an AI lookup. Only pages on the public internet are fetched: a link to your own Mac or network, or one that redirects there, is skipped,
+2. fetches the pages you cite and looks for the variable and setting names on them, word for word. A name that no cited page mentions is shown before you continue, because an invented name is the main risk of an AI lookup. Only pages served over HTTPS on the public internet are fetched: a link to your own Mac or network, or one that redirects there, is skipped,
 3. opens a prefilled issue in this repository in your browser. Nothing is sent until you submit it there with your own GitHub account, and the issue is public.
 
 A submission is a proposal. It reaches other users only after the maintainer has reviewed it, added it below `findings/` and signed the index. Whether the vendor really stops collecting when the switch is set cannot be checked automatically; that is what the sources and the review are for.
