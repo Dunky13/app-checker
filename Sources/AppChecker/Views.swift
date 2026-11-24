@@ -306,7 +306,7 @@ struct SettingsView: View {
                     }
                 Toggle("Download new findings daily", isOn: $refreshRules)
             } footer: {
-                Text("Rule updates are fetched from GitHub. Nothing about your Mac is sent.").frame(maxWidth: .infinity, alignment: .leading)
+                Text("Findings are fetched from GitHub. Nothing about your Mac is sent.").frame(maxWidth: .infinity, alignment: .leading)
             }
             Section {
                 Picker("Backend", selection: $backend) {

@@ -87,8 +87,9 @@ public struct Rule: Codable, Sendable, Hashable {
         let start = { (rule: Rule) in rule.since.flatMap(Version.init) ?? .zero }
         let sorted = candidates.sorted { start($0) < start($1) }
         guard let version = Version(version) else { return sorted }
-        let unsure = { (rule: Rule) in version.isOnAnotherChannel(than: start(rule)) }
-        let certain = sorted.lastIndex { !unsure($0) && start($0) <= version }
+        let unsure = { (rule: Rule) in version.hasNoOrder(with: start(rule)) }
+        // The first file also covers what sorts below it, such as "0.0.0-dev": no version may be left without a finding.
+        let certain = sorted.lastIndex { !unsure($0) && (start($0) <= version || start($0) == .zero) }
         return sorted.enumerated().filter { $0.offset == certain || unsure($0.element) }.map(\.element)
     }
 
@@ -265,7 +266,7 @@ public struct Verdict: Sendable, Equatable {
             (self.rule, source) = (rule, .ai)
         } else if !sdks.isEmpty {
             // A string match is a lead, not evidence: bundled dependencies and domain lists contain these names too. So it stays grey.
-            (status, state, rule, source) = (.unknown, "Not in the rules database. Its files mention \(sdks.joined(separator: ", ")). That is a hint worth looking up, not proof of telemetry.", nil, .sdk)
+            (status, state, rule, source) = (.unknown, "Not in the App Checker findings. Its files mention \(sdks.joined(separator: ", ")). That is a hint worth looking up, not proof of telemetry.", nil, .sdk)
         } else {
             (status, state, rule, source) = (.unknown, "Nothing is known about this item yet.", nil, .none)
         }

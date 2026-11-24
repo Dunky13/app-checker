@@ -72,8 +72,8 @@ After any change below `findings/`: run `scripts/sign-findings.sh` and commit `i
 - Variables are read from the login shell at launch and on Rescan, so a change to a shell profile shows up after Rescan.
 - The findings format is version 1. No build was released before the move from one rules file to the findings folder, so no older app can misread it. Raise `version` in the index and `supportedVersion` together for the next format change.
 - A word after the version numbers is read as a pre-release, so a version such as OpenSSL's `1.1.1w` sorts before `1.1.1`. No app with such versions has more than one file yet.
-- Pre-releases on different channels of one release are never ordered, also where a convention exists (beta before rc). Such an item gets the strictest of the findings that might hold, which can be yellow where green would be right.
-- The highest findings serial the app accepted is kept in `state.json`. Deleting the whole App Checker support folder resets it to the serial shipped in the app.
+- Pre-releases on different channels of one release are never ordered, also where a convention exists (beta before rc). Such an item gets the strictest of the findings that might hold, which can be yellow where green would be right, or red where yellow would be. The same holds for an item without a readable version, such as Homebrew itself or a cask at `latest`: version files cannot tell its builds apart.
+- The highest findings serial the app accepted is kept in `state.json`. Deleting the whole App Checker support folder, or a `state.json` that can no longer be read, resets it to the serial shipped in the app.
 - An extension with a different version in each editor is judged by the first editor's version.
 - If the findings change on the server between the download of the index and of a file, that download is rejected and tried again the next day.
 - Stopping a batch of AI lookups lets the running lookup finish. A lookup that times out stops the CLI but not programs the CLI started.

@@ -21,7 +21,7 @@ for FILE in */*.json; do
 }    \"$FILE\": \"$(shasum -a 256 "$FILE" | cut -d' ' -f1)\""
 done
 # The serial only ever grows, so the app can refuse an older index: the time, or one more than the last serial if the clock is behind it.
-OLD=$(sed -n 's/.*"serial": *\([0-9][0-9]*\).*/\1/p' index.json 2>/dev/null | head -1)
+OLD=$(sed -n 's/.*"serial": *\([0-9][0-9]*\).*/\1/p' index.json 2>/dev/null | head -1 || true)  # no index yet: start from the time
 NOW=$(date +%s)
 SERIAL=$(( NOW > ${OLD:-0} ? NOW : ${OLD:-0} + 1 ))
 # Both files are written next to the real ones and only moved into place once signing worked.

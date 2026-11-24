@@ -76,6 +76,7 @@ final class AppModel {
         saved.aiRules = saved.aiRules.filter { $0.value.problems(curated: false).isEmpty }
         Probe.blockedFiles = Set(saved.blocked ?? [])
         (serial, rules) = Self.loadFindings()
+        saved.serial = max(saved.serial ?? 0, serial)
         UserDefaults.standard.register(defaults: [
             "refreshRules": true, "backend": "claude", "claudeModel": "sonnet",
             "apiBaseURL": "https://openrouter.ai/api/v1", "apiModel": "~anthropic/claude-sonnet-latest",

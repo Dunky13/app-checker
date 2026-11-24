@@ -330,6 +330,12 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         }
         #expect(Version("1.0") == Version("1.0.0+build.5") && Version("V2.1") == Version("2.1,0") && Version("1-beta.01") == Version("1-beta.1"))
         #expect(Version("") == nil && Version("latest") == nil)
+        // A number after a dash is a later build for some ("7.1.2-5") and a pre-release for npm ("1.2.0-1"): no order against the plain release.
+        let version = { (text: String) in try #require(Version(text)) }
+        let plain = try version("1.2.0")
+        for text in ["1.2.0-1", "1.2.0-0", "1.2-3"] { #expect(try version(text).hasNoOrder(with: plain) && plain.hasNoOrder(with: version(text)), "\(text)") }
+        for text in ["1.2.1-1", "1.2.0_1", "1.2.0-beta.1", "1.2.0", "1.3"] { #expect(try !version(text).hasNoOrder(with: plain), "\(text)") }
+        #expect(try !version("1.2.0-1").hasNoOrder(with: version("1.2.0-2")))
     }
 
     @Test func aFindingHoldsUntilTheNextOne() {
@@ -339,7 +345,9 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         #expect(pick("1.4") == ["0"] && pick("2.0-beta.2") == ["0"])
         #expect(pick("2.0-beta.3") == ["2.0-beta.3"] && pick("2.0") == ["2.0-beta.3"] && pick("2.99") == ["2.0-beta.3"])
         #expect(pick("3") == ["3"] && pick("10.1") == ["3"])
-        // A version from before the first finding gets none.
+        // The first file also covers versions that sort below it.
+        for version in ["0.0.0-dev", "0-dev", "0.0.0-SNAPSHOT"] { #expect(pick(version) == ["0"], "\(version)") }
+        // Without a first file (which `Findings.rules` refuses) an older version gets none.
         #expect(Rule.pick([second, third], version: "1.0").isEmpty && Rule.pick([], version: "1.0").isEmpty)
     }
 
@@ -351,6 +359,8 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         #expect(pick("2.0-rc.1") == ["0", "2.0-beta.3"] && pick("2.0-alpha.9") == ["0", "2.0-beta.3"])
         #expect(pick("unknown") == ["0", "2.0-beta.3", "3"] && pick("") == ["0", "2.0-beta.3", "3"])
         #expect(pick("2.1-rc.1") == ["2.0-beta.3"] && pick("3.0-rc.1") == ["2.0-beta.3"])
+        // npm's 3.0.0-0 is a pre-release of 3, so it may not have reached the file for 3.
+        #expect(pick("3.0.0-0") == ["2.0-beta.3", "3"] && pick("3.0.1-0") == ["3"])
 
         let verdict = { (version: String) in
             Verdict(item: Item(id: "brew:x", name: "x", version: version, path: "/x"), rules: [first, second, third], aiRules: [:], sdks: [], probe: probe())

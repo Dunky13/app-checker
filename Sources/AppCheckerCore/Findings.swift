@@ -7,6 +7,9 @@ import Foundation
 public struct Version: Comparable, Hashable, Sendable {
     var release: [Int] = []
     var pre: [String] = []
+    /// The release numbers in front of a "-number" part, when there is one: "1.2.0-1" is a pre-release of 1.2.0 for npm
+    /// and a later build of it elsewhere, so against a plain 1.2.0 it has no known order.
+    var dashed: [Int]?
     static let zero = Version(release: [], pre: [])
 
     private init(release: [Int], pre: [String]) { (self.release, self.pre) = (release, pre) }
@@ -16,19 +19,28 @@ public struct Version: Comparable, Hashable, Sendable {
         // Only the first word counts ("1.2 (345)"), and build metadata after "+" says nothing about order.
         let word = text.lowercased().split(whereSeparator: { $0.isWhitespace || $0 == "+" || $0 == "," }).first ?? ""
         // Runs of digits and runs of letters; anything else only separates them.
-        var runs: [String] = [], joined = false
+        var runs: [(text: String, afterDash: Bool)] = [], joined = false, dash = false
         for character in word {
-            guard character.isASCII, character.isLetter || character.isNumber else { joined = false; continue }
-            if joined, runs.last?.last?.isNumber == character.isNumber { runs[runs.count - 1].append(character) } else { runs.append(String(character)) }
+            guard character.isASCII, character.isLetter || character.isNumber else { (joined, dash) = (false, character == "-"); continue }
+            if joined, runs.last?.text.last?.isNumber == character.isNumber { runs[runs.count - 1].text.append(character) } else { runs.append((String(character), dash)) }
             joined = true
         }
         // A leading word is a prefix such as "v" or "release-".
-        for run in runs.drop(while: { $0.first?.isNumber != true }) {
-            if pre.isEmpty, run.first?.isNumber == true { release.append(Int(run) ?? .max) } else { pre.append(Int(run).map(String.init) ?? run) }  // beta.01 is beta.1
+        for run in runs.drop(while: { $0.text.first?.isNumber != true }) {
+            guard pre.isEmpty, run.text.first?.isNumber == true else { pre.append(Int(run.text).map(String.init) ?? run.text); continue }  // beta.01 is beta.1
+            if run.afterDash, dashed == nil, !release.isEmpty { dashed = Self.trimmed(release) }
+            release.append(Int(run.text) ?? .max)
         }
         guard !release.isEmpty else { return nil }
-        while release.last == 0 { release.removeLast() }  // 1.0 and 1.0.0 are the same version
+        release = Self.trimmed(release)
     }
+
+    /// 1.0 and 1.0.0 are the same version.
+    private static func trimmed(_ numbers: [Int]) -> [Int] { Array(numbers[..<(numbers.lastIndex { $0 != 0 }.map { $0 + 1 } ?? 0)]) }
+
+    // Order and equality both look at the numbers and the pre-release only.
+    public static func == (a: Version, b: Version) -> Bool { a.release == b.release && a.pre == b.pre }
+    public func hash(into hasher: inout Hasher) { hasher.combine(release); hasher.combine(pre) }
 
     public static func < (a: Version, b: Version) -> Bool {
         for index in 0..<max(a.release.count, b.release.count) {
@@ -44,10 +56,12 @@ public struct Version: Comparable, Hashable, Sendable {
         return a.pre.count < b.pre.count
     }
 
-    /// Pre-releases of one release on different channels ("nightly", "preview", "rc") have no order between them:
-    /// nothing says whether rc.1 was cut before or after nightly.20261117.
-    func isOnAnotherChannel(than other: Version) -> Bool {
-        release == other.release && !pre.isEmpty && !other.pre.isEmpty && pre.first != other.pre.first
+    /// Whether nothing says which of the two came first. Pre-releases of one release on different channels ("nightly",
+    /// "preview", "rc"): rc.1 may be older or newer than nightly.20261117. And "1.2.0-1" against a plain "1.2.0".
+    func hasNoOrder(with other: Version) -> Bool {
+        if let dashed, other.dashed == nil, dashed == other.release { return true }
+        if let theirs = other.dashed, dashed == nil, theirs == release { return true }
+        return release == other.release && !pre.isEmpty && !other.pre.isEmpty && pre.first != other.pre.first
     }
 }
 
@@ -115,7 +129,7 @@ public enum Findings {
         }
         // Without a first file an older install would have no curated finding and could be judged by an unverified AI answer.
         if let id = seen.keys.sorted().first(where: { seen[$0]?.versions.contains(.zero) == false }) {
-            throw failure("\(seen[id]?.app ?? "")/: \(id) needs a 0.json for the versions before its first file")
+            throw failure("\(seen[id]?.app ?? "")/: no 0.json lists \(id), so versions before its first file would have no finding")
         }
         return rules
     }
