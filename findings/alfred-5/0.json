@@ -1,0 +1,13 @@
+{
+  "match": [
+    "app:com.runningwithcrayons.Alfred"
+  ],
+  "name": "Alfred 5",
+  "telemetry": "none",
+  "summary": "Alfred's security page says it doesn't collect or store usage data, and searches aren't tracked or shared with the developer. The app contacts the vendor only for Powerpack license activation, periodic update checks and Alfred Gallery access. Preference syncing is optional and goes through a cloud service you choose. The page doesn't mention crash reports by name.",
+  "policyURL": "https://www.alfredapp.com/help/kb/alfred-security/",
+  "sources": [
+    "https://www.alfredapp.com/help/kb/alfred-security/",
+    "https://www.alfredapp.com/terms/"
+  ]
+}
