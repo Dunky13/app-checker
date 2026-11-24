@@ -6,12 +6,14 @@ public enum Submission {
     static let issues = "https://github.com/Dunky13/kanarie/issues/new"
 
     /// The fields of the form.
-    /// shortcut: checks that came with an AI lookup or a curated finding are kept as they are, and by hand only one variable can be added; give checks their own editor if submissions need more.
+    /// shortcut: checks that came with an AI lookup or a curated finding are kept or dropped as a whole, and by hand only one variable can be added; give checks their own editor if submissions need more.
     public struct Draft: Hashable, Sendable {
         public var telemetry = Telemetry.optOut
         public var name = "", summary = "", policyURL = "", instructions = "", command = "", optOutURL = "", sources = ""
         /// A variable that switches telemetry off, for a finding that has no checks yet.
         public var variable = "", value = ""
+        /// Drops the checks of the finding this draft started from, so the person can name the variable instead.
+        public var replaceChecks = false
         var base: Rule?
 
         public init(from rule: Rule?, item: Item) {
@@ -24,7 +26,7 @@ public enum Submission {
 
         /// The checks of the finding this draft started from. They were written for its telemetry class, so another class drops them.
         var kept: (off: [Check], on: [Check]) {
-            guard let base, base.telemetry == telemetry, [.optOut, .optIn].contains(telemetry) else { return ([], []) }
+            guard let base, !replaceChecks, base.telemetry == telemetry, [.optOut, .optIn].contains(telemetry) else { return ([], []) }
             return (base.disabledWhen ?? [], base.enabledWhen ?? [])
         }
 
@@ -35,7 +37,8 @@ public enum Submission {
             let optional = { (field: String) in text(field).isEmpty ? nil : text(field) }
             // A correction keeps every item the curated finding covers.
             var rule = Rule(match: base?.since == nil ? [item.id] : base?.match ?? [item.id], telemetry: telemetry, summary: text(summary))
-            (rule.name, rule.policyURL) = (optional(name), optional(policyURL))
+            // A correction also says which of the item's findings it corrects.
+            (rule.name, rule.policyURL, rule.since) = (optional(name), optional(policyURL), base?.since)
             rule.sources = sources.split(whereSeparator: \.isNewline).map { text(String($0)) }.filter { !$0.isEmpty }
             guard [.optOut, .optIn].contains(telemetry) else { return rule }
             rule.optOut = OptOut(instructions: text(instructions), command: optional(command), url: optional(optOutURL))
@@ -49,8 +52,7 @@ public enum Submission {
         public func problems(for item: Item) -> [String] {
             // Only where the field is in use: with another telemetry class or with kept checks it is not shown.
             let name = telemetry == .optOut && kept.off.isEmpty && kept.on.isEmpty ? variable.trimmingCharacters(in: .whitespacesAndNewlines) : ""
-            let isName = name.allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "_") } && name.first?.isNumber != true
-            return rule(for: item).problems(curated: true) + (isName ? [] : ["the variable is a name only, such as EXAMPLE_TELEMETRY; its value goes in the other field"])
+            return rule(for: item).problems(curated: true) + (name.isEmpty || Check.isName(name) ? [] : ["the variable is a name only, such as EXAMPLE_TELEMETRY; its value goes in the other field"])
         }
     }
 
@@ -66,16 +68,20 @@ public enum Submission {
     /// What the finding's checks read on this Mac: evidence that the switch can be read at all.
     /// Only whether a check matched is reported, never the value it read.
     public static func readings(_ rule: Rule, item: Item, probe: Probe) -> [String] {
-        let local = item.editors.first.map(probe.forEditor) ?? probe
-        let line = { (check: Check, role: String) in
-            "\(describe(check)) (\(role)): " + (check.result(local).map { $0 ? "matches" : "does not match" } ?? "could not be read")
+        // An extension is read in every editor that has it, as the verdict does.
+        let places = item.editors.isEmpty ? [("", probe)] : item.editors.map {
+            (item.editors.count > 1 ? "In \($0 == "Code" ? "VS Code" : $0): " : "", probe.forEditor($0))
+        }
+        let lines = { (checks: [Check]?, role: String) in
+            places.flatMap { place, local in
+                (checks ?? []).map { "\(place)\(describe($0)) (\(role)): " + ($0.result(local).map { $0 ? "matches" : "does not match" } ?? "could not be read") }
+            }
         }
         var alone = rule
         alone.since = nil
         let verdict = Verdict(item: item, rules: [alone], aiRules: [:], sdks: [], probe: probe)
         let colour = [Status.ok: "green", .warn: "yellow", .bad: "red", .unknown: "grey"][verdict.status] ?? ""
-        return (rule.disabledWhen ?? []).map { line($0, "switches it off") } + (rule.enabledWhen ?? []).map { line($0, "switches it on") }
-            + ["Verdict with this finding: \(colour). \(verdict.state)"]
+        return lines(rule.disabledWhen, "switches it off") + lines(rule.enabledWhen, "switches it on") + ["Verdict with this finding: \(colour). \(verdict.state)"]
     }
 
     /// Whether the names a finding relies on appear literally on the pages it cites.
@@ -84,31 +90,46 @@ public enum Submission {
         public var found: [String], missing: [String], fetched: Int, cited: Int
 
         public var lines: [String] {
-            ["Fetched \(fetched) of \(cited) cited pages."]
+            let list = { (names: [String]) in names.map { "`\(plain($0))`" }.joined(separator: ", ") }
+            return ["Fetched \(fetched) of \(cited) cited pages." + (cited > pageLimit ? " Only the first \(pageLimit) are fetched." : "")]
                 + (found.isEmpty && missing.isEmpty ? ["The finding names no variable or setting, so there was nothing to look for."] : [])
-                + (found.isEmpty ? [] : ["Found on a cited page: \(found.map { "`\($0)`" }.joined(separator: ", "))."])
-                + (missing.isEmpty ? [] : ["Not found on any cited page: \(missing.map { "`\($0)`" }.joined(separator: ", "))."])
+                + (found.isEmpty ? [] : ["Found on a cited page: \(list(found))."])
+                + (missing.isEmpty ? [] : ["Not found on any cited page: \(list(missing))."])
         }
     }
 
     public static func sourceCheck(_ rule: Rule, pages: [String], cited: Int) -> SourceCheck {
         var names = ((rule.disabledWhen ?? []) + (rule.enabledWhen ?? [])).compactMap { $0.env ?? $0.key ?? $0.contains }
-        // Variables in the command count too: that line is copied straight into a shell profile.
-        names += (rule.optOut?.command ?? "").matches(of: /[A-Z][A-Z0-9]*_[A-Z0-9_]+/).map { String($0.output) }
-        names = names.enumerated().filter { names.firstIndex(of: $0.element) == $0.offset }.map(\.element)
-        let found = names.filter { name in pages.contains { $0.contains(name) } }
+        // Variables and preference keys in the command count too: that line is copied straight into a shell.
+        let command = rule.optOut?.command ?? ""
+        names += command.matches(of: /[A-Z][A-Z0-9]*_[A-Z0-9_]+/).map { String($0.output) }
+        names += command.matches(of: /(?:^|[\s'";])([A-Za-z_]\w*)=/).map { String($0.output.1) }
+        names += command.matches(of: /defaults\s+write\s+\S+\s+["']?([\w.-]+)/).map { String($0.output.1) }
+        names = names.enumerated().filter { !$0.element.isEmpty && names.firstIndex(of: $0.element) == $0.offset }.map(\.element)
+        let found = names.filter { name in pages.contains { mentions($0, name) } }
         return SourceCheck(found: found, missing: names.filter { !found.contains($0) }, fetched: pages.count, cited: cited)
     }
 
-    /// The text of the pages a finding cites. A page that cannot be fetched, or is not served over HTTPS on the public internet, is left out, and `cited` says how many were asked for.
+    /// Whether a page has the name as a whole, not as part of a longer one: TELEMETRY is not in EXAMPLE_TELEMETRY_OFF.
+    static func mentions(_ page: String, _ name: String) -> Bool {
+        guard !name.isEmpty else { return false }
+        let inWord = { (character: Character?) in character.map { $0.isLetter || $0.isNumber || $0 == "_" } ?? false }
+        let pattern = (inWord(name.first) ? "(?<![\\p{L}\\p{N}_])" : "") + NSRegularExpression.escapedPattern(for: name) + (inWord(name.last) ? "(?![\\p{L}\\p{N}_])" : "")
+        return page.range(of: pattern, options: .regularExpression) != nil
+    }
+
+    static let pageLimit = 8
+
+    /// The text of the pages a finding cites. A page that cannot be fetched, or is not served over HTTPS from a public address, is left out, and `cited` says how many there were.
     public static func pages(for rule: Rule) async -> (texts: [String], cited: Int) {
         let links = ((rule.sources ?? []) + [rule.optOut?.url].compactMap(\.self)).compactMap { safeURL($0) }
-        let urls = links.enumerated().filter { links.firstIndex(of: $0.element) == $0.offset }.map(\.element).prefix(8)
+        let urls = links.enumerated().filter { links.firstIndex(of: $0.element) == $0.offset }.map(\.element)
         let configuration = URLSessionConfiguration.ephemeral
-        configuration.timeoutIntervalForRequest = 20
+        // The first stops a server that goes quiet, the second one that keeps sending a byte now and then.
+        (configuration.timeoutIntervalForRequest, configuration.timeoutIntervalForResource) = (20, 20)
         let session = URLSession(configuration: configuration, delegate: PublicOnly(), delegateQueue: nil)
         var texts: [String] = []
-        for url in urls where mayFetch(url) {
+        for url in urls.prefix(pageLimit) where !Task.isCancelled && mayFetch(url) {
             if let data = try? await session.data(from: url, limit: 3_000_000) { texts.append(String(decoding: data, as: UTF8.self)) }
         }
         return (texts, urls.count)
@@ -136,40 +157,44 @@ public enum Submission {
 
     static func isPublic(address bytes: [UInt8]) -> Bool {
         if bytes.count == 16 {
-            // An IPv4 address inside an IPv6 one (::ffff:a.b.c.d, ::a.b.c.d and the NAT64 prefix 64:ff9b::) is judged as IPv4.
+            // An IPv4 address inside an IPv6 one is judged as IPv4: ::ffff:a.b.c.d, ::a.b.c.d, the NAT64 prefix 64:ff9b:: and 6to4 (2002:).
             let embedded = bytes.prefix(10).allSatisfy { $0 == 0 } && bytes[10] == bytes[11] && [0, 0xff].contains(bytes[10])
                 || Array(bytes.prefix(12)) == [0, 0x64, 0xff, 0x9b, 0, 0, 0, 0, 0, 0, 0, 0]
-            // Everything else must be a global address (2000::/3), which leaves out loopback, link-local, private and multicast.
-            return embedded ? isPublic(address: Array(bytes[12...])) : bytes[0] & 0xe0 == 0x20
+            if embedded { return isPublic(address: Array(bytes[12...])) }
+            if bytes[0] == 0x20, bytes[1] == 0x02 { return isPublic(address: Array(bytes[2..<6])) }
+            // Everything else must be a global address (2000::/3), which leaves out loopback, link-local, private and multicast,
+            // and not Teredo (2001::/32), which tunnels to an IPv4 address, or the range for documentation (2001:db8::/32).
+            return bytes[0] & 0xe0 == 0x20 && ![[0x20, 0x01, 0, 0], [0x20, 0x01, 0x0d, 0xb8]].contains(Array(bytes.prefix(4)))
         }
-        switch (bytes[0], bytes[1]) {
-        case (0, _), (10, _), (127, _), (169, 254), (192, 168), (100, 64...127), (172, 16...31), (198, 18...19), (224..., _): return false
+        switch (bytes[0], bytes[1], bytes[2]) {
+        case (0, _, _), (10, _, _), (127, _, _), (169, 254, _), (192, 168, _), (100, 64...127, _), (172, 16...31, _), (198, 18...19, _), (224..., _, _): return false
+        case (192, 0, 0), (192, 0, 2), (198, 51, 100), (203, 0, 113): return false   // protocol assignments and documentation
         default: return true
         }
     }
 
     /// Keeps a cited page from redirecting to a link that `mayFetch` refuses.
-    private final class PublicOnly: NSObject, URLSessionTaskDelegate {
+    final class PublicOnly: NSObject, URLSessionTaskDelegate {
         func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest) async -> URLRequest? {
             mayFetch(request.url) ? request : nil
         }
     }
 
     /// The prefilled GitHub issue. A body too long for a link comes back as `clipboard`, and the issue then asks to paste it.
-    public static func issue(item: Item, rule: Rule, origin: String, readings: [String], sourceCheck: SourceCheck, appVersion: String) -> (url: URL, clipboard: String?) {
-        // Names and versions come from files on disk: one short line each, and nothing that ends the code formatting.
-        let plain = { (text: String) in
-            String(String.UnicodeScalarView(text.unicodeScalars.filter { !CharacterSet.controlCharacters.contains($0) && $0 != "`" }.prefix(100)))
-        }
+    /// `readings` is nil when they must stay on the Mac: see `SubmitView`.
+    public static func issue(item: Item, rule: Rule, origin: String, readings: [String]?, sourceCheck: SourceCheck, appVersion: String) throws -> (url: URL, clipboard: String?) {
         var clean = rule
         clean.since = nil
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
-        let json = (try? encoder.encode(clean)).map { String(decoding: $0, as: UTF8.self) } ?? "{}"
+        let json = String(decoding: try encoder.encode(clean), as: UTF8.self)
         let folder = (rule.name ?? item.name).lowercased().split { !($0.isASCII && ($0.isLetter || $0.isNumber)) }.joined(separator: "-")
-        let file = rule.since.map { "a new file after `\(plain($0)).json`" } ?? "`findings/\(folder.isEmpty ? "app" : folder)/0.json`"
+        let file = rule.since.map { "a correction of the finding for \(rule.match.map { "`\(plain($0))`" }.joined(separator: ", ")) that starts at version `\(plain($0))`" }
+            ?? "`findings/\(folder.isEmpty ? "app" : folder)/0.json`"
+        let read = readings.map { $0.map { "- `\(plain($0, limit: 300))`" } }
+            ?? ["- Not included: the checks came from an AI lookup, so what they read stays on the submitter's Mac."]
         let body = """
-        **Item:** `\(plain(item.id))` (\(plain(item.name)), version `\(plain(item.version))`)
+        **Item:** `\(plain(item.id))` (`\(plain(item.name))`, \(item.version.isEmpty ? "version unknown" : "version `\(plain(item.version))`"))
         **Origin:** \(origin)
         **Proposed as:** \(file)
 
@@ -178,7 +203,7 @@ public enum Submission {
         ````
 
         **Read on the submitter's Mac**
-        \(readings.map { "- \($0)" }.joined(separator: "\n"))
+        \(read.joined(separator: "\n"))
 
         **Source check**
         \(sourceCheck.lines.map { "- \($0)" }.joined(separator: "\n"))
@@ -186,17 +211,25 @@ public enum Submission {
         Sent from Kanarie \(plain(appVersion)). The finding passed the app's format and safety checks. Whether it is true is for review.
         """
         let title = "Finding: \(plain(rule.name ?? item.name))"
-        func url(_ body: String) -> URL {
-            var components = URLComponents(string: issues) ?? URLComponents()
+        func url(_ body: String) throws -> URL {
+            guard var components = URLComponents(string: issues) else { throw URLError(.badURL) }
             components.queryItems = [URLQueryItem(name: "title", value: title), URLQueryItem(name: "body", value: body)]
             // URLComponents leaves "+" as it is, and GitHub would read it as a space.
             components.percentEncodedQuery = components.percentEncodedQuery?.replacingOccurrences(of: "+", with: "%2B")
-            return components.url ?? URL(fileURLWithPath: "/")
+            guard let url = components.url else { throw URLError(.badURL) }
+            return url
         }
-        let link = url(body)
+        let link = try url(body)
         // GitHub answers a longer address with an error page.
         guard link.absoluteString.utf8.count > 7000 else { return (link, nil) }
-        return (url("Paste the finding here: Kanarie put it on your clipboard."), body)
+        return (try url("Paste the finding here: Kanarie put it on your clipboard."), body)
+    }
+
+    /// Text from a file on disk or from an AI lookup, for a code span on one line of the issue: no line breaks, nothing
+    /// invisible (a line break becomes a space), and no backtick that would end the span. Inside the span Markdown does nothing: no links, mentions or headings.
+    static func plain(_ text: String, limit: Int = 100) -> String {
+        let line = text.split(whereSeparator: \.isNewline).joined(separator: " ")
+        return String(String.UnicodeScalarView(line.unicodeScalars.filter { !CharacterSet.controlCharacters.contains($0) && $0 != "`" }.prefix(limit)))
     }
 }
 
