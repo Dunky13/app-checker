@@ -1,6 +1,6 @@
 # Handoff: first release (v0.1.0)
 
-Status on 2026-11-24: the app is built, tested, reviewed and pushed to `main`. The release itself has not been made, because notarization credentials were not available. Until it is made, `appcast.xml` does not exist and Sparkle has nothing to update from.
+Status on 2026-11-24: version 0.1.0 is released. The notarized archive is on the GitHub release `v0.1.0`, `appcast.xml` on `main` is the Sparkle feed, and `Casks/kanarie.rb` installs it through Homebrew. What is left is one check, a real Sparkle update, which needs a second release or an older build: see "Not verified".
 
 ## What exists
 
@@ -24,6 +24,8 @@ Checked by running it, on one Mac (macOS 27, Apple Silicon):
 - The submit form, with a seeded AI result that named an invented variable: the form showed what its check read on the Mac, the source check fetched the cited page and reported the name as not found, and Continue Anyway opened a GitHub issue page with the title and the finding filled in. An item without any finding opened an empty form that listed what was missing and kept Continue disabled. With a local web server running, cited links to `127.0.0.1`, to `localhost` and to a public address that redirects to the local server were all left out (the server logged no request, and did log one when `curl` followed the same redirect), while a public page in the same list was fetched. After the HTTPS rule: a plain HTTP link and an HTTPS link that redirects to plain HTTP or to this Mac were not fetched; an HTTPS link and an HTTPS link redirecting to another HTTPS page were.
 - The submit form after the review fixes, as a correction of the Homebrew finding: Cancel during the fetch closed the form and opened no browser tab. Continue fetched 2 of the 3 cited pages (GitHub answered the third request with an error at that moment), reported `HOMEBREW_NO_ANALYTICS` as found and `analyticsdisabled = true` as not found, and Continue Anyway opened an issue that says which finding it corrects and from which version, with every name and reading in a code span. Replace These Checks swapped the two kept checks for the variable fields.
 - The Homebrew cask, from a throwaway local tap with a locally built archive and the release script's own substitution of version and hash: `brew style` and `brew audit --cask --strict` reported nothing, `brew install --cask` put the app in the chosen folder, and `brew uninstall --cask --zap` removed it, together with a stand-in keychain item, and also when there was none. A zap after a plain uninstall was refused ("untrusted tap"), which is why the README gives one command. Installing the published archive is checked after the release.
+- The release of 0.1.0 with `scripts/release.sh`: notarization status `Accepted`, the app stapled and accepted by Gatekeeper as "Notarized Developer ID". The archive downloaded again from the GitHub release is universal, validates as stapled, passes `spctl` and `codesign --verify --strict --deep`, and its SHA-256 is the one in the cask. The feed is served from `main`, names that archive with its length, and its EdDSA signature verifies against the archive and fails against another file. The public key in the released app is the one the feed was signed with.
+- Installed through Homebrew by the maintainer with the two README commands: the app in `/Applications` is byte for byte the published one, still carries the quarantine mark and is accepted by Gatekeeper.
 - `Kanarie --list` on that Mac: 216 items, of which 15 yellow, 3 green and 198 grey. The native Claude Code install is found as `bin:claude`.
 
 Reviewed independently (Claude Opus, high effort), each round followed by fixes:
@@ -37,14 +39,15 @@ Reviewed independently (Claude Opus, high effort), each round followed by fixes:
 
 ## Not verified
 
-- The release script, notarization, the stapled app on another Mac, and a real Sparkle update. None of these can run before the first release exists.
+- A real Sparkle update: an older build that offers 0.1.0, installs it and relaunches. The steps are below. What was checked instead is listed under "Evidence".
+- The stapled app on a second Mac, and `brew uninstall --zap` on an API key that the released app itself stored (a stand-in item was used).
 - Submitting an issue: the prefilled page was opened and read, not submitted. Corrections of a curated finding and a body too long for a link were tested in unit tests only.
 - OpenRouter itself (only a local stub was used), and the notification for an updated (as opposed to new) item.
 - Editors that were not installed on the test Mac: VS Code Insiders, VSCodium and Windsurf. Their settings folder names come from their documentation.
 - An Intel Mac and a Mac with two Homebrew installs.
 - These rule details: whether Chrome's usage statistics are on by default in every region, the `dev.zed.Zed-Preview` bundle identifier, which values Turborepo and Gatsby accept besides `1`.
 
-## To release
+## To release the next version
 
 On the maintainer's Mac, with the Developer ID certificate and the Sparkle key in the login keychain, from a clean and pushed `main`:
 
@@ -52,10 +55,10 @@ On the maintainer's Mac, with the Developer ID certificate and the Sparkle key i
 # Once, and done on the maintainer's Mac on 2026-11-24 with the team's App Store Connect API key.
 xcrun notarytool store-credentials kanarie-notary --key <AuthKey.p8> --key-id <key id> --issuer <issuer id>
 
-NOTARY_KEYCHAIN_PROFILE=kanarie-notary scripts/release.sh 0.1.0
+NOTARY_KEYCHAIN_PROFILE=kanarie-notary scripts/release.sh <version>
 ```
 
-Expected: tests pass, notarization status `Accepted`, the app is stapled and passes `spctl`, a GitHub release `v0.1.0` with `Kanarie-0.1.0-universal.zip` exists, and a commit `Release 0.1.0` adds `appcast.xml` and writes the version and hash into `Casks/kanarie.rb`. macOS may ask once for permission to use the Sparkle key: choose Always Allow. If notarization times out, do not submit again: continue with `xcrun notarytool wait <id>` using the receipt in `build/notary/`.
+Expected: tests pass, notarization status `Accepted`, the app is stapled and passes `spctl`, a GitHub release `v<version>` with `Kanarie-<version>-universal.zip` exists, and a commit `Release <version>` updates `appcast.xml` and writes the version and hash into `Casks/kanarie.rb`. macOS may ask once for permission to use the Sparkle key: choose Always Allow. If notarization times out, do not submit again: continue with `xcrun notarytool wait <id>` using the receipt in `build/notary/`.
 
 Then check the Homebrew install (the full name is needed, Homebrew refuses a short name from an untrusted tap):
 
