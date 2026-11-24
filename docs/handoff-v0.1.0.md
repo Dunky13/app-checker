@@ -82,6 +82,8 @@ Back up the Sparkle private key (`.build/artifacts/sparkle/Sparkle/bin/generate_
 
 After any change below `findings/`: run `scripts/sign-findings.sh` and commit `index.json` and `index.json.sig` with it, otherwise the test fails and installed apps keep their old findings.
 
+A finding sent from the app arrives as an issue. `scripts/accept-finding.py <issue number>...` turns one or more of them into a pull request: on a new branch from `main` it writes each finding to the file the issue proposes (a correction goes to the file it corrects), signs the index, runs the tests, commits, pushes and opens the pull request, which closes the issues on merge. It needs `gh`, a clean checkout and the signing key, and it leaves the checkout on the branch it started from. Merging is the review: the script checks form, not truth. `theAcceptScriptReadsASubmittedIssue` runs its parser on issues built by `Submission.issue`, so the two cannot drift apart unnoticed.
+
 ## Known limits, left open on purpose
 
 - The Homebrew cask is not signed, unlike updates and findings: whoever can push to `main` decides what Homebrew runs each time it loads the cask, which is at install and at every `brew upgrade` after that, also when there is no new version. Only the maintainer, and so any token of the maintainer's, has write access, and `main` is not protected because `scripts/release.sh` pushes the release commit to it. Changes below `Casks/` in a pull request from someone else need the same care as code.

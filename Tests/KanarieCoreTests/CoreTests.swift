@@ -669,6 +669,39 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         #expect(Submission.SourceCheck(found: [], missing: [], fetched: 8, cited: 12).lines[0] == "Fetched 8 of 12 cited pages. Only the first 8 are fetched.")
     }
 
+    /// The maintainer's script reads what the app writes: the file an issue proposes and the finding in it.
+    @Test func theAcceptScriptReadsASubmittedIssue() throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("issue-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        func placed(_ rule: Rule) throws -> [Substring] {
+            let check = Submission.sourceCheck(rule, pages: [], cited: 0)
+            let issue = try Submission.issue(item: item, rule: rule, origin: "o", readings: [], sourceCheck: check, appVersion: "1")
+            let body = try #require(URLComponents(url: issue.url, resolvingAgainstBaseURL: false)?.queryItems?.last?.value)
+            let file = folder.appendingPathComponent("body.md")
+            // GitHub hands the body of an issue back with CRLF line ends.
+            try Data(body.replacingOccurrences(of: "\n", with: "\r\n").utf8).write(to: file)
+            let script = repoRoot.appendingPathComponent("scripts/accept-finding.py").path
+            return String(decoding: try Shell.run("/usr/bin/env", ["python3", script, "--parse", file.path], timeout: 30), as: UTF8.self).split(separator: "\n", maxSplits: 1)
+        }
+        var found = draft { $0.name = "Example New Tool"; $0.summary = "Sends \"usage\" data: café." }.rule(for: item)
+        let new = try placed(found)
+        #expect(new[0] == "example-new-tool/0.json")
+        #expect(try JSONDecoder().decode(Rule.self, from: Data(new[1].utf8)) == found)
+        // In the order the findings here are written in, not the alphabetical one of the issue.
+        #expect(new[1].hasPrefix("{\n  \"match\": [\n    \"brew:x\"\n  ],\n  \"name\": \"Example New Tool\",\n  \"telemetry\""))
+        // A correction goes to the file it corrects, wherever the issue says it should go.
+        (found.match, found.since) = (["brew:gh"], "0")
+        #expect(try placed(found)[0] == "github-cli/0.json")
+        // Refused: a new finding where one is already, a correction of nothing, and anything invisible.
+        (found.name, found.since) = ("GitHub CLI", nil)
+        #expect(throws: Shell.Failure.self) { try placed(found) }
+        (found.match, found.since) = (["brew:no-such-tool"], "0")
+        #expect(throws: Shell.Failure.self) { try placed(found) }
+        (found.name, found.since, found.summary) = ("Example New Tool", nil, "Seen\u{200B}unseen")
+        #expect(throws: Shell.Failure.self) { try placed(found) }
+    }
+
     @Test func theIssueCarriesTheFindingAndSurvivesTheLink() throws {
         var found = draft { $0.summary = "A+B & C #1 100% `tick`" }.rule(for: item)
         let check = Submission.sourceCheck(found, pages: ["EXAMPLE_TELEMETRY"], cited: 2)
