@@ -120,11 +120,17 @@ struct MainView: View {
                     }
                     if model.analysing.contains(item.id) {
                         Spacer()
-                        ProgressView().controlSize(.small)
+                        ProgressView().controlSize(.small).accessibilityLabel("Looking up")
                     }
                 }
             }
             .navigationSplitViewColumnWidth(min: 280, ideal: 340)
+            .safeAreaInset(edge: .bottom) {
+                if model.shellFailed {
+                    Label("Could not read your shell environment. Settings made with environment variables may show as on.", systemImage: "exclamationmark.triangle")
+                        .font(.callout).padding(8).frame(maxWidth: .infinity, alignment: .leading).background(.bar)
+                }
+            }
             .overlay {
                 if model.items.isEmpty, model.scanning {
                     ProgressView("Scanning installed software…")
@@ -182,6 +188,7 @@ struct DetailView: View {
     var model: AppModel
     var item: Item
     var verdict: Verdict
+    @State private var copied = false
 
     private var sourceNote: String {
         switch verdict.source {
@@ -213,13 +220,18 @@ struct DetailView: View {
                                 HStack {
                                     Text(command).font(.body.monospaced()).textSelection(.enabled)
                                     Spacer()
-                                    Button("Copy", systemImage: "doc.on.doc") {
+                                    Button(copied ? "Copied" : "Copy", systemImage: copied ? "checkmark" : "doc.on.doc") {
                                         NSPasteboard.general.clearContents()
                                         NSPasteboard.general.setString(command, forType: .string)
+                                        copied = true
                                     }
                                 }
                                 .padding(8)
                                 .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
+                                if verdict.source == .ai {
+                                    Label("This command was suggested by an AI lookup. Read it and check the linked source before you run it.", systemImage: "exclamationmark.triangle")
+                                        .font(.callout).foregroundStyle(.secondary)
+                                }
                             }
                             if let url = safeURL(optOut.url) { Link("Opt-out documentation", destination: url) }
                         }
@@ -248,7 +260,7 @@ struct DetailView: View {
                         }
                         .disabled(model.analysing.contains(item.id))
                         if model.analysing.contains(item.id) {
-                            ProgressView().controlSize(.small)
+                            ProgressView().controlSize(.small).accessibilityHidden(true)
                             Text("Searching the web. This can take a minute or two.").foregroundStyle(.secondary)
                         }
                     }
@@ -267,6 +279,7 @@ struct DetailView: View {
             .padding()
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .onChange(of: item.id) { copied = false }
     }
 }
 
@@ -301,7 +314,7 @@ struct SettingsView: View {
                 } else {
                     TextField("Base URL", text: $apiBaseURL)
                     TextField("Model", text: $apiModel)
-                    SecureField("API key", text: $apiKey).onChange(of: apiKey) { _, key in Keychain.apiKey = key }
+                    SecureField("API key", text: $apiKey)
                 }
             } header: {
                 Text("AI lookup")
@@ -315,6 +328,8 @@ struct SettingsView: View {
         }
         .formStyle(.grouped)
         .frame(width: 520)
+        .onExitCommand { dismiss() }
+        .onDisappear { if apiKey != Keychain.apiKey ?? "" { Keychain.apiKey = apiKey } }
         .safeAreaInset(edge: .bottom) {
             HStack {
                 Spacer()

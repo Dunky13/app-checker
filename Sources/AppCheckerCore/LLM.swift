@@ -21,13 +21,15 @@ public enum LLM {
     ]
 
     public static func prompt(for item: Item) -> String {
-        // Names come from disk, so keep them to one short printable line.
-        let name = String(item.name.unicodeScalars.filter { !CharacterSet.controlCharacters.contains($0) }.prefix(100))
+        // Name, identifier and version come from files on disk, so keep each to one short printable line.
+        func clean(_ text: String) -> String {
+            String(String.UnicodeScalarView(text.unicodeScalars.filter { !CharacterSet.controlCharacters.contains($0) }.prefix(100)))
+        }
         let identifier = item.id.split(separator: ":", maxSplits: 1).last.map(String.init) ?? item.id
         return """
         You are researching the telemetry behaviour of one piece of software for a macOS privacy tool.
 
-        Software: \(name) (\(kinds[item.kind] ?? item.kind) "\(identifier)", installed version \(item.version))
+        Software: \(clean(item.name)) (\(kinds[item.kind] ?? item.kind) "\(clean(identifier))", installed version \(clean(item.version)))
 
         Use web search. Find the vendor's privacy policy and telemetry documentation. Also check the project's source \
         repository and issue tracker: opt-out switches are often environment variables or hidden settings that are only \
@@ -72,7 +74,15 @@ public enum LLM {
         }
         rule.disabledWhen = rule.disabledWhen?.filter(\.isWellFormed)
         rule.enabledWhen = rule.enabledWhen?.filter(\.isWellFormed)
+        if let problem = rule.problems(curated: false).first { throw Failure(errorDescription: "The answer was rejected: \(problem).") }
         return rule
+    }
+
+    /// A redirect is answered with its own 3xx response, so the prompt and the API key only ever go to the configured host.
+    private final class NoRedirects: NSObject, URLSessionTaskDelegate {
+        func urlSession(
+            _ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest
+        ) async -> URLRequest? { nil }
     }
 
     public static func analyse(_ item: Item, backend: Backend, env: [String: String]) async throws -> Rule {
@@ -81,17 +91,18 @@ public enum LLM {
         switch backend {
         case let .claudeCLI(path, model):
             reply = try await Task.detached {
-                // Empty working directory, no project/user settings, no MCP servers, web tools only.
+                // Empty working directory, no settings, CLAUDE.md, skills, hooks or MCP servers, web tools only:
+                // the model reads untrusted web pages, so it gets nothing personal and nothing it could act with.
                 let cwd = FileManager.default.temporaryDirectory.appendingPathComponent("app-checker-\(UUID().uuidString)")
                 try FileManager.default.createDirectory(at: cwd, withIntermediateDirectories: true)
                 defer { try? FileManager.default.removeItem(at: cwd) }
                 var arguments = [
                     "-p", prompt, "--output-format", "json", "--tools", "WebSearch,WebFetch", "--allowedTools", "WebSearch,WebFetch",
-                    "--strict-mcp-config", "--no-session-persistence", "--setting-sources", "",
+                    "--strict-mcp-config", "--no-session-persistence", "--setting-sources", "", "--safe-mode",
                 ]
                 if !model.isEmpty { arguments += ["--model", model] }
                 struct Output: Decodable { var result: String?; var is_error: Bool? }
-                let data = try Shell.run(path, arguments, env: env, cwd: cwd, timeout: 300)
+                let data = try Shell.run(path, arguments, env: env, cwd: cwd, timeout: 300, acceptFailure: true)
                 guard let output = try? JSONDecoder().decode(Output.self, from: data), let result = output.result else {
                     throw Failure(errorDescription: "Unexpected output from the claude CLI.")
                 }
@@ -117,7 +128,7 @@ public enum LLM {
                 var choices: [Choice]?
                 var error: APIError?
             }
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await URLSession(configuration: .ephemeral).data(for: request, delegate: NoRedirects())
             let decoded = try? JSONDecoder().decode(Reply.self, from: data)
             guard let content = decoded?.choices?.first?.message.content else {
                 let status = (response as? HTTPURLResponse)?.statusCode ?? 0

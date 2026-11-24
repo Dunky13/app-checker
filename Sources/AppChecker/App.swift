@@ -13,6 +13,7 @@ enum Main {
     static func main() {
         guard CommandLine.arguments.contains("--list") else { return AppCheckerApp.main() }
         let (snapshot, rules, saved) = (AppModel.scan(), AppModel.loadRules(), AppModel.loadSaved())
+        Probe.blockedFiles = Set(saved.blocked ?? [])
         let probe = Probe.live(env: snapshot.env)
         for item in snapshot.items {
             let verdict = Verdict(item: item, rules: rules, aiRules: saved.aiRules, sdks: saved.sdks[AppModel.sdkKey(item)] ?? [], probe: probe)
@@ -106,8 +107,13 @@ final class Updater: NSObject, @preconcurrency SPUStandardUserDriverDelegate {
 
     var supportsGentleScheduledUpdateReminders: Bool { true }
 
+    // Sparkle shows its window only when the app is in front; otherwise the update is announced below.
+    func standardUserDriverShouldHandleShowingScheduledUpdate(_ update: SUAppcastItem, andInImmediateFocus immediateFocus: Bool) -> Bool {
+        immediateFocus
+    }
+
     func standardUserDriverWillHandleShowingUpdate(_ handleShowingUpdate: Bool, forUpdate update: SUAppcastItem, state: SPUUserUpdateState) {
-        guard !state.userInitiated else { return }
+        guard !handleShowingUpdate else { return }
         updateAvailable = true
         notify("App Checker \(update.displayVersionString) is available", "Open the menu bar icon to install the update.")
     }

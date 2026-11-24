@@ -24,15 +24,26 @@ final class AppModel {
     private(set) var errors: [String: String] = [:]
     private(set) var scanning = false
     private(set) var batch: Task<Void, Never>?
+    /// True when the login shell could not be asked for its variables, so variable-based settings may wrongly read as "on".
+    private(set) var shellFailed = false
 
     private var rules: [Rule] = []
     private var saved = Saved()
     private var env: [String: String] = [:]
     private var watcher: Watcher?
     private var rescanQueued = false
+    private var batchID = UUID()
 
     nonisolated static func loadSaved() -> Saved {
-        (try? Data(contentsOf: stateFile)).flatMap { try? JSONDecoder().decode(Saved.self, from: $0) } ?? Saved()
+        guard let data = try? Data(contentsOf: stateFile) else { return Saved() }
+        do { return try JSONDecoder().decode(Saved.self, from: data) } catch {
+            // Set the unreadable file aside instead of overwriting it: it may hold AI lookups a later version can still read.
+            let aside = stateFile.appendingPathExtension("bad")
+            try? FileManager.default.removeItem(at: aside)
+            try? FileManager.default.moveItem(at: stateFile, to: aside)
+            NSLog("App Checker: could not read saved state, kept it as \(aside.lastPathComponent): \(error)")
+            return Saved()
+        }
     }
 
     /// Uses whichever rules file is newer: the one shipped in the app or the last download.
@@ -54,7 +65,8 @@ final class AppModel {
         ])
         if !UserDefaults.standard.bool(forKey: "didSetUp") {
             UserDefaults.standard.set(true, forKey: "didSetUp")
-            try? SMAppService.mainApp.register()
+            // Not fatal: Settings shows the real state and lets the user try again.
+            do { try SMAppService.mainApp.register() } catch { NSLog("App Checker: could not register the login item: \(error)") }
             UNUserNotificationCenter.current().requestAuthorization(options: [.alert]) { _, _ in }
         }
         Task {
@@ -72,12 +84,14 @@ final class AppModel {
 
     struct Snapshot: Sendable {
         var env: [String: String]
+        var shellFailed: Bool
         var items: [Item]
         var watch: [String]
     }
 
     nonisolated static func scan() -> Snapshot {
-        let env = Shell.loginEnvironment()
+        let shellEnv = Shell.loginEnvironment()
+        let env = shellEnv ?? ProcessInfo.processInfo.environment
         let home = FileManager.default.homeDirectoryForCurrentUser
         let appDirs = [URL(fileURLWithPath: "/Applications"), home.appendingPathComponent("Applications")]
         let brewPrefixes = ["/opt/homebrew", "/usr/local"].map { URL(fileURLWithPath: $0) }
@@ -91,7 +105,7 @@ final class AppModel {
             .filter { seen.insert($0.id).inserted }
         let watch = (appDirs + brewPrefixes.flatMap { [$0.appendingPathComponent("Cellar"), $0.appendingPathComponent("Caskroom")] } + npmRoots + extensionDirs)
             .map(\.path).filter { FileManager.default.fileExists(atPath: $0) }
-        return Snapshot(env: env, items: items, watch: watch)
+        return Snapshot(env: env, shellFailed: shellEnv == nil, items: items, watch: watch)
     }
 
     /// `userInitiated` also retries files macOS blocked earlier, in case access was granted since.
@@ -100,13 +114,15 @@ final class AppModel {
         guard !scanning else { rescanQueued = true; return }
         scanning = true
         let snapshot = await Task.detached { Self.scan() }.value
-        (env, items) = (snapshot.env, snapshot.items)
+        (env, shellFailed, items) = (snapshot.env, snapshot.shellFailed, snapshot.items)
         evaluate()
 
         // Slow part, once per item version: look for telemetry SDKs in items nothing else is known about.
         let unscanned = items.filter { verdicts[$0.id]?.source == Verdict.Source.none && saved.sdks[Self.sdkKey($0)] == nil }
         let found = await Task.detached { unscanned.map { SDKScan.scan($0) } }.value
         for (item, sdks) in zip(unscanned, found) { saved.sdks[Self.sdkKey(item)] = sdks }
+        let current = Set(items.map(Self.sdkKey))
+        saved.sdks = saved.sdks.filter { current.contains($0.key) }  // drop results for versions that are gone
         evaluate()
 
         let changed = items.filter { saved.known[$0.id] != $0.version }
@@ -148,12 +164,20 @@ final class AppModel {
     }
 
     private func refreshRules() async {
-        guard UserDefaults.standard.bool(forKey: "refreshRules"),
-              let (data, response) = try? await URLSession(configuration: .ephemeral).data(from: Self.rulesURL),
-              (response as? HTTPURLResponse)?.statusCode == 200, let set = try? RuleSet.decode(data) else { return }
-        rules = set.rules
-        try? data.write(to: Self.cachedRules, options: .atomic)
-        evaluate()
+        guard UserDefaults.standard.bool(forKey: "refreshRules") else { return }
+        do {
+            let session = URLSession(configuration: .ephemeral)
+            let (data, response) = try await session.data(from: Self.rulesURL)
+            let (signature, _) = try await session.data(from: Self.rulesURL.appendingPathExtension("sig"))
+            guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw URLError(.badServerResponse) }
+            // Same key as the app's own updates: only rules the maintainer signed are accepted.
+            let key = Bundle.main.infoDictionary?["SUPublicEDKey"] as? String ?? ""
+            rules = try RuleSet.decode(data, signature: String(decoding: signature, as: UTF8.self), publicKey: key).rules
+            try data.write(to: Self.cachedRules, options: .atomic)
+            evaluate()
+        } catch {
+            NSLog("App Checker: rules not updated, keeping the current ones: \(error.localizedDescription)")
+        }
     }
 
     // MARK: AI lookup
@@ -174,12 +198,15 @@ final class AppModel {
 
     /// Looks up the given items one after another. Stops on the first failure, which is usually a quota or configuration problem.
     func analyseAll(_ items: [Item]) {
+        let id = UUID()
+        batchID = id
         batch = Task {
             for item in items where !Task.isCancelled {
                 await analyse(item)
                 if errors[item.id] != nil { break }
             }
-            batch = nil
+            // A stopped batch still finishes its current lookup; by then a newer batch may own `batch`.
+            if batchID == id { batch = nil }
         }
     }
 

@@ -6,9 +6,11 @@ public enum Shell {
     }
 
     /// Runs a program and returns its stdout. Blocking: call from a background task.
+    /// `acceptFailure` is for programs that report errors as output with a non-zero exit, like the claude CLI.
+    /// shortcut: the timeout stops the program itself but not processes it started; give it its own process group if that ever matters.
     public static func run(
         _ executable: String, _ arguments: [String],
-        env: [String: String]? = nil, cwd: URL? = nil, timeout: TimeInterval
+        env: [String: String]? = nil, cwd: URL? = nil, timeout: TimeInterval, acceptFailure: Bool = false
     ) throws -> Data {
         let process = Process(), out = Pipe()
         process.executableURL = URL(fileURLWithPath: executable)
@@ -26,7 +28,7 @@ public enum Shell {
         guard process.terminationReason == .exit else {
             throw Failure(errorDescription: "\(URL(fileURLWithPath: executable).lastPathComponent) timed out after \(Int(timeout)) s.")
         }
-        guard process.terminationStatus == 0 || !data.isEmpty else {
+        guard process.terminationStatus == 0 || (acceptFailure && !data.isEmpty) else {
             throw Failure(errorDescription: "\(URL(fileURLWithPath: executable).lastPathComponent) exited with status \(process.terminationStatus).")
         }
         return data
@@ -34,17 +36,17 @@ public enum Shell {
 
     /// The environment of the user's interactive login shell. Apps started from Finder do not inherit
     /// variables exported in .zshrc/.zprofile, and that is where telemetry opt-outs live.
-    public static func loginEnvironment() -> [String: String] {
-        let fallback = ProcessInfo.processInfo.environment
-        let shell = fallback["SHELL"] ?? "/bin/zsh", marker = "__APP_CHECKER_ENV__"
+    /// nil when the shell could not be asked, so the caller can say that variable-based verdicts may be wrong.
+    public static func loginEnvironment() -> [String: String]? {
+        let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh", marker = "__APP_CHECKER_ENV__"
         guard let data = try? run(shell, ["-ilc", "printf \(marker); /usr/bin/env -0"], timeout: 15),
-              let start = data.range(of: Data(marker.utf8)) else { return fallback }
+              let start = data.range(of: Data(marker.utf8)) else { return nil }
         var env: [String: String] = [:]
         for entry in data[start.upperBound...].split(separator: 0) {
             let pair = String(decoding: entry, as: UTF8.self).split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
             if pair.count == 2 { env[String(pair[0])] = String(pair[1]) }
         }
-        return env.isEmpty ? fallback : env
+        return env.isEmpty ? nil : env
     }
 
     /// Absolute path of a command on the given PATH.

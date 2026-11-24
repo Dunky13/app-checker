@@ -2,7 +2,7 @@ import Foundation
 
 /// One installed thing. `id` is what rules match on:
 /// "app:<bundle id>", "brew:<formula>", "cask:<token>", "npm:<package>", "ext:<publisher.name>".
-public struct Item: Codable, Sendable, Identifiable, Hashable {
+public struct Item: Sendable, Identifiable, Hashable {
     public var id: String
     public var name: String
     public var version: String
@@ -22,7 +22,9 @@ public enum Scanner {
     static var fm: FileManager { .default }
 
     static func children(_ dir: URL) -> [URL] {
-        ((try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)) ?? []).sorted { $0.path < $1.path }
+        // Numeric-aware, so version folder 1.10 sorts after 1.9 and `last` is the newest.
+        ((try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)) ?? [])
+            .sorted { $0.path.localizedStandardCompare($1.path) == .orderedAscending }
     }
 
     static func json(_ url: URL) -> Any? {

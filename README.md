@@ -49,8 +49,8 @@ A lookup sends the item's name, identifier and version to that backend. Answers 
 
 App Checker has no telemetry. It talks to the network in three cases:
 
-- Once a day it downloads `rules.json` from this repository (can be switched off in Settings).
-- Sparkle checks this repository for updates, if you allow that on first launch. The anonymous system profile is disabled.
+- Once a day it downloads `rules.json` from this repository (can be switched off in Settings). The file is only used if it carries the maintainer's signature.
+- Sparkle checks this repository for updates, after asking you once. The anonymous system profile is disabled.
 - AI lookups, when you ask for them.
 
 ## macOS "Data Access Blocked"
@@ -86,16 +86,18 @@ Each rule in [rules.json](rules.json) matches one or more item IDs:
 }
 ```
 
-`telemetry` is `none`, `opt-in`, `opt-out` or `forced`. `disabledWhen` and `enabledWhen` are lists of checks; one matching check is enough. A check reads one value. With `equals` it must be exactly that; without it, any non-empty value matches.
+`telemetry` is `none`, `opt-in`, `opt-out` or `forced`. `disabledWhen` and `enabledWhen` are lists of checks; one matching check is enough. A check reads one value:
 
-- `{ "env": "NAME", "equals": "0" }`: a variable in your login shell
-- `{ "defaults": "bundle.id", "key": "name", "equals": "0" }`: a macOS preference
-- `{ "json": "~/path/settings.json", "key": "a.b", "equals": "off" }`: a value in a JSON or JSONC file
+- `{ "env": "NAME", "equals": "0" }`: a variable in your login shell. Without `equals`, any non-empty value matches.
+- `{ "defaults": "bundle.id", "key": "name", "equals": "0" }`: a macOS preference. Booleans read as `1` and `0`.
+- `{ "json": "~/path/settings.json", "key": "a.b", "equals": "false" }`: a value in a JSON or JSONC file. Booleans read as `true` and `false`.
 - `{ "file": "~/path/config", "contains": "text" }`: text in a file
 
-Rules cannot run commands, by design: the file is refreshed from the network.
+File paths must start with `~/` or a Homebrew prefix. Rules cannot run commands, by design.
 
 Found a wrong or missing rule? [Open an issue](https://github.com/Dunky13/app-checker/issues/new) or a pull request with a source. `swift test` validates the file.
+
+The app only accepts a downloaded `rules.json` that is signed with the same key as app updates. The maintainer signs after merging a rules change with `scripts/sign-rules.sh`, which writes `rules.json.sig`. Until then the app keeps the rules it already has.
 
 ## Build
 
@@ -119,7 +121,7 @@ Print the verdicts without the interface:
 
 - a Developer ID Application certificate in the keychain,
 - notarization credentials: `NOTARY_KEYCHAIN_PROFILE`, or `NOTARY_KEY_FILE` with `NOTARY_KEY_ID` and `NOTARY_ISSUER_ID`,
-- the Sparkle EdDSA private key in the login keychain (or `SPARKLE_KEY_FILE`),
+- the Sparkle EdDSA private key in the login keychain (or `SPARKLE_KEY_FILE`). Keep a backup: without it no update or rules file can be signed,
 - the `gh` CLI, signed in.
 
 ## License

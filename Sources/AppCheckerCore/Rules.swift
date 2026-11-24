@@ -1,7 +1,8 @@
+import CryptoKit
 import Foundation
 import Synchronization
 
-public enum Status: String, Codable, Sendable, CaseIterable {
+public enum Status: String, Codable, Sendable {
     case bad, warn, ok, unknown
 }
 
@@ -17,10 +18,17 @@ public struct Check: Codable, Sendable, Hashable {
     public var isWellFormed: Bool {
         switch (env, defaults, json, file) {
         case (.some, nil, nil, nil): key == nil && contains == nil
-        case (nil, .some, nil, nil), (nil, nil, .some, nil): key != nil && contains == nil
-        case (nil, nil, nil, .some): contains != nil && key == nil && equals == nil
+        // A stored false reads as "0" or "false", so "any value" would mistake it for a switch that is on.
+        case (nil, .some, nil, nil): key != nil && equals != nil && contains == nil
+        case let (nil, nil, .some(path), nil): key != nil && equals != nil && contains == nil && Self.isReadable(path)
+        case let (nil, nil, nil, .some(path)): contains != nil && key == nil && equals == nil && Self.isReadable(path)
         default: false
         }
+    }
+
+    /// Rules may only read settings below the home folder or a Homebrew prefix, never other volumes or other users.
+    static func isReadable(_ path: String) -> Bool {
+        ["~/", "/opt/homebrew/", "/usr/local/"].contains { path.hasPrefix($0) } && !path.split(separator: "/").contains("..")
     }
 
     /// true or false when the setting could be read, nil when macOS privacy protection blocked the read.
@@ -59,6 +67,29 @@ public struct Rule: Codable, Sendable, Hashable {
     public var enabledWhen: [Check]?
     public var sources: [String]?
 
+    /// What is wrong with this rule, first problem first. Every rule passes through here before it is used:
+    /// bundled and downloaded ones as `curated`, AI answers with the safety checks only.
+    public func problems(curated: Bool) -> [String] {
+        var found: [String] = []
+        if match.isEmpty || !match.allSatisfy({ id in ["app", "brew", "cask", "npm", "ext"].contains { id.hasPrefix("\($0):") } }) {
+            found.append("match needs ids starting with app:, brew:, cask:, npm: or ext:")
+        }
+        if !((disabledWhen ?? []) + (enabledWhen ?? [])).allSatisfy(\.isWellFormed) { found.append("malformed check") }
+        // The command is offered for copying, so nothing invisible (control or formatting characters, line breaks) may ride along.
+        if optOut?.command?.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains) == true {
+            found.append("the command contains hidden characters or line breaks")
+        }
+        guard curated else { return found }
+        if telemetry == .unknown { found.append("unknown telemetry does not belong in the curated rules") }
+        if summary.isEmpty { found.append("no summary") }
+        if (sources ?? []).isEmpty { found.append("no sources") }
+        if [.optOut, .optIn].contains(telemetry), safeURL(optOut?.url) == nil { found.append("needs optOut with a url") }
+        for link in [policyURL, optOut?.url].compactMap(\.self) + (sources ?? []) where safeURL(link) == nil {
+            found.append("not an http(s) link: \(link)")
+        }
+        return found
+    }
+
     /// Maps the rule plus this Mac's current settings to a status and a one-line explanation.
     public func evaluate(_ probe: Probe) -> (status: Status, state: String) {
         switch telemetry {
@@ -87,12 +118,30 @@ public struct RuleSet: Codable, Sendable {
     public var version: Int
     public var rules: [Rule]
 
+    static func failure(_ message: String) -> CocoaError {
+        CocoaError(.fileReadCorruptFile, userInfo: [NSLocalizedDescriptionKey: message])
+    }
+
+    /// Decodes and validates a rules file. One invalid rule rejects the whole file.
     public static func decode(_ data: Data) throws -> RuleSet {
         let set = try JSONDecoder().decode(RuleSet.self, from: data)
-        guard set.version <= supportedVersion else {
-            throw CocoaError(.fileReadUnknown, userInfo: [NSLocalizedDescriptionKey: "Rules version \(set.version) needs a newer App Checker."])
+        guard set.version <= supportedVersion else { throw failure("Rules version \(set.version) needs a newer App Checker.") }
+        var seen = Set<String>()
+        for rule in set.rules {
+            let label = rule.name ?? rule.match.first ?? "?"
+            if let problem = rule.problems(curated: true).first { throw failure("\(label): \(problem)") }
+            for id in rule.match where !seen.insert(id).inserted { throw failure("\(id) is matched by two rules") }
         }
         return set
+    }
+
+    /// For downloaded rules: they must carry the maintainer's Ed25519 signature (made with the Sparkle update key),
+    /// so a tampered file can never change a verdict or put a command behind the Copy button.
+    public static func decode(_ data: Data, signature: String, publicKey: String) throws -> RuleSet {
+        guard let signature = Data(base64Encoded: signature.trimmingCharacters(in: .whitespacesAndNewlines)),
+              let key = Data(base64Encoded: publicKey).flatMap({ try? Curve25519.Signing.PublicKey(rawRepresentation: $0) }),
+              key.isValidSignature(signature, for: data) else { throw failure("The rules file is not signed by App Checker.") }
+        return try decode(data)
     }
 }
 
@@ -123,7 +172,8 @@ public struct Probe: Sendable {
                 return CFPreferencesCopyAppValue(key as CFString, domain as CFString).map { "\($0)" }
             },
             file: { path in
-                let path = NSString(string: path).expandingTildeInPath, url = URL(fileURLWithPath: path)
+                // Dotfile managers symlink config files into place, so judge the target, not the link.
+                let path = NSString(string: path).expandingTildeInPath, url = URL(fileURLWithPath: path).resolvingSymlinksInPath()
                 // macOS shows a "Data Access Blocked" notification for every refused read, so ask only once until the user rescans.
                 if blockedPaths.withLock({ $0.contains(path) }) { return .blocked }
                 do {
