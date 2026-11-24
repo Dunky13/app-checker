@@ -6,6 +6,7 @@ Status on 2026-11-24: the app is built, tested, reviewed and pushed to `main`. T
 
 - A menu bar app (no Dock icon, starts at login) that lists apps, Homebrew formulae and casks, commands in `~/.local/bin`, global npm and pnpm packages and editor extensions, with a green, yellow, red or grey verdict per item. See the [README](../README.md).
 - Verdicts from the curated findings ([findings/](../findings), one folder per app and one file per version from which a finding holds, 44 apps), an on-demand AI lookup (Claude Code CLI or an OpenAI-compatible endpoint such as OpenRouter) and an offline hint that stays grey.
+- A form on every item to submit a finding or a correction as a prefilled GitHub issue, with the app's format checks, what the checks read on that Mac, and a search of the cited pages for the names the finding relies on.
 - Sparkle 2 for updates, fed from `appcast.xml` on `main`. The same EdDSA key signs `findings/index.json`, which lists every finding file with its hash, and the app refuses downloaded findings that do not match a signed index or whose index is older than the one it has.
 - `scripts/build-app.sh`, `scripts/sign-findings.sh`, `scripts/release.sh`, and CI that runs the tests and a release build on every push.
 
@@ -13,12 +14,13 @@ Status on 2026-11-24: the app is built, tested, reviewed and pushed to `main`. T
 
 Checked by running it, on one Mac (macOS 27, Apple Silicon):
 
-- `swift test`: 29 tests in 9 suites pass locally. CI results are linked from each commit and pull request page.
+- `swift test`: 34 tests in 10 suites pass locally. CI results are linked from each commit and pull request page.
 - First run: window opens, login item is registered, notification permission is requested. Second launch is silent and Sparkle asks once about automatic checks.
 - A new app bundle dropped into `~/Applications` was detected in about 12 seconds and produced a notification.
 - Search, the filter menu, the detail pane, the copy button, the "Data Access Blocked" note, and the AI marker in the list.
 - A real lookup through the Claude Code CLI with web search, and a lookup through the OpenAI-compatible backend against a local stub (key read from the keychain, no redirect followed).
 - The findings download, with a test build that read the `findings-folder` branch and shipped an older bundled copy (serial 1, one changed file): it fetched the signed index, replaced its copy, and its cache was identical to the committed folder. A relaunch with nothing new left the cache untouched. A cached file changed by hand to claim "no telemetry" was not used (the item stayed yellow) and was replaced at the next launch. With the cache deleted and the saved serial set above the published one, the published index was refused.
+- The submit form, with a seeded AI result that named an invented variable: the form showed what its check read on the Mac, the source check fetched the cited page and reported the name as not found, and Continue Anyway opened a GitHub issue page with the title and the finding filled in. An item without any finding opened an empty form that listed what was missing and kept Continue disabled.
 - `AppChecker --list` on that Mac: 216 items, of which 15 yellow, 3 green and 198 grey. The native Claude Code install is found as `bin:claude`.
 
 Reviewed independently (Claude Opus, high effort), each round followed by fixes:
@@ -30,6 +32,7 @@ Reviewed independently (Claude Opus, high effort), each round followed by fixes:
 ## Not verified
 
 - The release script, notarization, the stapled app on another Mac, and a real Sparkle update. None of these can run before the first release exists.
+- Submitting an issue: the prefilled page was opened and read, not submitted. Corrections of a curated finding and a body too long for a link were tested in unit tests only.
 - OpenRouter itself (only a local stub was used), and the notification for an updated (as opposed to new) item.
 - Editors that were not installed on the test Mac: VS Code Insiders, VSCodium and Windsurf. Their settings folder names come from their documentation.
 - An Intel Mac and a Mac with two Homebrew installs.
@@ -63,6 +66,7 @@ After any change below `findings/`: run `scripts/sign-findings.sh` and commit `i
 
 ## Known limits, left open on purpose
 
+- The submit form keeps the checks of the finding it started from and can add one variable by hand; other checks are written by the maintainer. Its source check reads the page as served, so a name on a page that is built in the browser is reported as not found.
 - A yellow item whose switch cannot be read (a setting inside an app, or a tool's own `telemetry disable` command) stays yellow. There is no "mark as done".
 - Opt-in tools without a readable state (Angular, Aider, Google Cloud CLI) are green with a note that the choice cannot be read.
 - No notification when a verdict changes without a version change, and none for a reinstall at the same version.

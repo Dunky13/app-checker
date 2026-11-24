@@ -106,12 +106,12 @@ public struct Rule: Codable, Sendable, Hashable {
             found.append("the command contains hidden characters or line breaks")
         }
         // Yellow promises a way out, so an opt-out verdict without one is not usable.
-        if [.optOut, .optIn].contains(telemetry), (optOut?.instructions ?? "").isEmpty { found.append("an opt-out needs instructions") }
+        if [.optOut, .optIn].contains(telemetry), (optOut?.instructions ?? "").isEmpty { found.append("the steps to switch it off are missing") }
         guard curated else { return found }
         if telemetry == .unknown { found.append("unknown telemetry does not belong in the curated rules") }
-        if summary.isEmpty { found.append("no summary") }
-        if (sources ?? []).isEmpty { found.append("no sources") }
-        if [.optOut, .optIn].contains(telemetry), safeURL(optOut?.url) == nil { found.append("needs optOut with a url") }
+        if summary.isEmpty { found.append("the summary of what is collected is missing") }
+        if (sources ?? []).isEmpty { found.append("a source link is missing") }
+        if [.optOut, .optIn].contains(telemetry), safeURL(optOut?.url) == nil { found.append("the documentation link for switching it off is missing or not an http(s) link") }
         for link in [policyURL, optOut?.url].compactMap(\.self) + (sources ?? []) where safeURL(link) == nil {
             found.append("not an http(s) link: \(link)")
         }

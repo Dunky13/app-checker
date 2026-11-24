@@ -193,6 +193,7 @@ struct DetailView: View {
     var item: Item
     var verdict: Verdict
     @State private var copied = false
+    @State private var submitting = false
 
     private var sourceNote: String {
         switch verdict.source {
@@ -274,9 +275,7 @@ struct DetailView: View {
                 }
                 HStack {
                     Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: item.path)]) }
-                    if let url = URL(string: "https://github.com/Dunky13/app-checker/issues/new") {
-                        Link("Report a wrong or missing rule", destination: url)
-                    }
+                    Button(verdict.source == .rules ? "Suggest a Correction…" : "Submit a Finding…") { submitting = true }
                 }
                 Text(item.id).font(.caption.monospaced()).foregroundStyle(.secondary).textSelection(.enabled)
             }
@@ -284,6 +283,7 @@ struct DetailView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .onChange(of: item.id) { copied = false }
+        .sheet(isPresented: $submitting) { SubmitView(model: model, item: item, verdict: verdict) }
     }
 }
 

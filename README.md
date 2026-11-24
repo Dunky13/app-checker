@@ -57,6 +57,7 @@ App Checker has no telemetry. It talks to the network in three cases:
 - At launch and then once a day it downloads the findings from this repository (can be switched off in Settings). It fetches every file that changed, not only those for apps you have, so the requests say nothing about your Mac. Files are only used if they match the list the maintainer signed.
 - Sparkle checks this repository for updates, after asking you once. The anonymous system profile is disabled.
 - AI lookups, when you ask for them.
+- Submitting a finding, when you choose to: the app fetches the pages the finding cites, then opens GitHub in your browser.
 
 At launch and when you choose Rescan, the app starts your login shell once to read its variables, which runs your shell startup files, and asks `npm` and `pnpm` for their global folder with their update check switched off. Other rescans reuse that answer, so a change to your shell profile shows up after Rescan.
 
@@ -117,7 +118,17 @@ File paths must start with `~/` or a Homebrew prefix. Rules cannot run commands,
 
 A `command` is one line, and it should make the change permanent: `echo 'export NAME=1' >> ~/.zshrc`, not `export NAME=1`.
 
-Found a wrong or missing finding? [Open an issue](https://github.com/Dunky13/app-checker/issues/new) or a pull request with a source. `swift test` validates every file.
+Found a wrong or missing finding? Use **Submit a Finding…** (or **Suggest a Correction…**) on the item in the app, or open a pull request with a source. `swift test` validates every file.
+
+### Submitting from the app
+
+The form starts from the item's AI lookup or current finding, or empty, and can be edited by hand. It only lets you continue with a finding that passes the checks every curated finding passes. Then the app:
+
+1. reads the finding's checks on your Mac and notes whether each one matches, never the value it read,
+2. fetches the pages you cite and looks for the variable and setting names on them, word for word. A name that no cited page mentions is shown before you continue, because an invented name is the main risk of an AI lookup,
+3. opens a prefilled issue in this repository in your browser. Nothing is sent until you submit it there with your own GitHub account, and the issue is public.
+
+A submission is a proposal. It reaches other users only after the maintainer has reviewed it, added it below `findings/` and signed the index. Whether the vendor really stops collecting when the switch is set cannot be checked automatically; that is what the sources and the review are for.
 
 The app only accepts downloaded findings that match `findings/index.json`, the list of every file with its SHA-256, and only when that list is signed with the same key as app updates. The maintainer runs `scripts/sign-findings.sh` after merging a change, which writes the index and `index.json.sig`. Until then the app keeps the findings it already has. Every signing gives the index a higher serial number, and the app never goes back to a lower one.
 
