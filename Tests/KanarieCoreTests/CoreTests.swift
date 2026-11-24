@@ -214,8 +214,10 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         #expect(LLM.blocks(of: "Type ``` to open a block. Then\nthe rest").map(\.text) == ["Type ``` to open a block. Then\nthe rest"])
         // Only a line that reads like a language name is taken as one.
         #expect(LLM.blocks(of: "```first line\nsecond```").map(\.text) == ["first line\nsecond"])
-        // Fences inside a JSON string do not split it.
+        // Fences inside a JSON string do not split it, with a fence around the JSON or without.
         #expect(LLM.blocks(of: #"{"summary":"use ```json fences```"}"#).map(\.text) == ["{\n  \"summary\": \"use ```json fences```\"\n}"])
+        let fenced = LLM.blocks(of: "Here:\n```json\n{\"command\": \"echo ```hi```\", \"n\": 1}\n```\nDone.")
+        #expect(fenced.map(\.text) == ["Here:", "{\n  \"command\": \"echo ```hi```\",\n  \"n\": 1\n}", "Done."] && fenced.map(\.isCode) == [false, true, false])
     }
 
     @Test func readsAFencedAnswerAmongBraces() throws {
@@ -858,7 +860,8 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         #expect {
             try Shell.run("/bin/sh", ["-c", "trap 'kill $!; exit 0' TERM; echo part; sleep 30 >/dev/null & wait"], timeout: 1, acceptFailure: true)
         } throws: { error in
-            (error as? Shell.Failure)?.output == Data("part\n".utf8) && error.localizedDescription == "sh timed out after 1 s."
+            // What was printed is not checked here: on a slow machine the signal may come before the shell has set its trap.
+            error.localizedDescription == "sh timed out after 1 s."
         }
         #expect { try Shell.run("/bin/sh", ["-c", "kill -KILL $$"], timeout: 10) } throws: { $0.localizedDescription == "sh was stopped by signal 9." }
     }

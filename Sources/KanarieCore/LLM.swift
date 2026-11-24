@@ -83,16 +83,21 @@ public enum LLM {
         let whole = text.trimmingCharacters(in: .whitespacesAndNewlines)
         // Checked before the fences: a string inside JSON may hold three backticks.
         if isJSON(whole) { return [(laidOut(json: whole), true)] }
+        // The first line inside a fence names the language, when it reads like a name.
+        func fenced(_ part: String) -> String {
+            guard let end = part.firstIndex(where: \.isNewline), part[..<end].allSatisfy({ $0.isLetter || $0.isNumber || "_+.-".contains($0) }) else { return part }
+            return String(part[end...])
+        }
         var parts = text.components(separatedBy: "```")
+        // One fenced answer is the usual reply, and the JSON in it may hold fences in a string too.
+        if parts.count > 3, case let inner = fenced(parts[1..<parts.count - 1].joined(separator: "```")).trimmingCharacters(in: .whitespacesAndNewlines), isJSON(inner) {
+            return [(parts[0], false), (laidOut(json: inner), true), (parts[parts.count - 1], false)]
+                .map { ($0.0.trimmingCharacters(in: .whitespacesAndNewlines), $0.1) }.filter { !$0.0.isEmpty }
+        }
         // A fence that never closes is text.
         if parts.count % 2 == 0, let last = parts.popLast() { parts[parts.count - 1] += "```" + last }
         return parts.enumerated().compactMap { index, part in
-            var body = part
-            // The first line inside a fence names the language, when it reads like a name.
-            if index % 2 == 1, let end = part.firstIndex(where: \.isNewline), part[..<end].allSatisfy({ $0.isLetter || $0.isNumber || "_+.-".contains($0) }) {
-                body = String(part[end...])
-            }
-            body = body.trimmingCharacters(in: .whitespacesAndNewlines)
+            let body = (index % 2 == 1 ? fenced(part) : part).trimmingCharacters(in: .whitespacesAndNewlines)
             if body.isEmpty { return nil }
             return index % 2 == 1 ? (isJSON(body) ? laidOut(json: body) : body, true) : (body, false)
         }
@@ -266,7 +271,9 @@ public enum LLM {
             let decoded = try? JSONDecoder().decode(Reply.self, from: data)
             guard let content = decoded?.choices?.first?.message.content else {
                 let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-                // The reason goes into the lookup log on disk: kept short, and without the key should the endpoint repeat it.
+                // The reason goes into the lookup log on disk. An endpoint that refuses a key tends to quote a part of it, so its words are left out then.
+                if [401, 403].contains(status) { throw Failure(errorDescription: "The endpoint refused the API key (HTTP \(status)).") }
+                // Otherwise kept short, and without the key should the endpoint repeat it.
                 let reason = decoded?.error?.message.replacingOccurrences(of: apiKey, with: "…").prefix(300)
                 throw Failure(errorDescription: reason.map(String.init) ?? "The endpoint answered with HTTP \(status).")
             }
