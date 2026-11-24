@@ -1,4 +1,4 @@
-<img src="Resources/logo.png" width="128" alt="Kanarie logo: a yellow canary on a perch">
+<img src="Resources/logo.png" width="128" alt="Kanarie logo: a yellow canary on a perch, carrying a blue medieval shield">
 
 # Kanarie
 

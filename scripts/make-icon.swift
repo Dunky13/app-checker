@@ -26,6 +26,22 @@ func shape(_ points: [NSPoint]) -> NSBezierPath {
     return path
 }
 
+/// A medieval heater shield: flat on top, straight sides, curving into a point.
+func shield(_ centre: NSPoint, width: CGFloat, height: CGFloat, turned degrees: CGFloat) -> NSBezierPath {
+    let w = width / 2, top = height / 2, shoulder = height * 0.1, tip = -height / 2
+    let path = NSBezierPath()
+    path.move(to: NSPoint(x: -w, y: top))
+    path.line(to: NSPoint(x: w, y: top))
+    path.line(to: NSPoint(x: w, y: shoulder))
+    path.curve(to: NSPoint(x: 0, y: tip), controlPoint1: NSPoint(x: w, y: tip + height * 0.25), controlPoint2: NSPoint(x: w * 0.45, y: tip + height * 0.08))
+    path.curve(to: NSPoint(x: -w, y: shoulder), controlPoint1: NSPoint(x: -w * 0.45, y: tip + height * 0.08), controlPoint2: NSPoint(x: -w, y: tip + height * 0.25))
+    path.close()
+    var transform = AffineTransform(translationByX: centre.x, byY: centre.y)
+    transform.rotate(byDegrees: degrees)
+    path.transform(using: transform)
+    return path
+}
+
 for (points, scale) in [16, 32, 128, 256, 512].flatMap({ [($0, 1), ($0, 2)] }) {
     let size = CGFloat(points * scale)
     let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(size), pixelsHigh: Int(size), bitsPerSample: 8, samplesPerPixel: 4,
@@ -60,6 +76,18 @@ for (points, scale) in [16, 32, 128, 256, 512].flatMap({ [($0, 1), ($0, 2)] }) {
 
     dark.setFill()
     oval(NSPoint(x: 0.665, y: 0.695), 0.04, 0.04).fill()   // eye
+
+    // The shield the canary carries: a steel rim around blue, the right half a shade darker.
+    let centre = NSPoint(x: 0.56, y: 0.43)
+    colour(0xdfe6f2).setFill()
+    shield(centre, width: 0.30, height: 0.36, turned: -8).fill()
+    let face = shield(centre, width: 0.24, height: 0.30, turned: -8)
+    NSGradient(starting: colour(0x4a90f0), ending: colour(0x2458c4))!.draw(in: face, angle: -90)
+    NSGraphicsContext.saveGraphicsState()
+    face.addClip()
+    colour(0x1c47a6).withAlphaComponent(0.55).setFill()
+    shape([NSPoint(x: 0.56 + 0.025, y: 0.62), NSPoint(x: 0.75, y: 0.62), NSPoint(x: 0.75, y: 0.22), NSPoint(x: 0.56 - 0.025, y: 0.22)]).fill()
+    NSGraphicsContext.restoreGraphicsState()
 
     NSGraphicsContext.current = nil
     try rep.representation(using: .png, properties: [:])!.write(to: out.appendingPathComponent("icon_\(points)x\(points)\(scale == 2 ? "@2x" : "").png"))
