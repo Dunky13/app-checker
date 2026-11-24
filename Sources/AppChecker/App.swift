@@ -12,9 +12,9 @@ enum Main {
     /// `AppChecker --list` prints one tab-separated line per item (status, id, version, explanation) and exits.
     static func main() {
         guard CommandLine.arguments.contains("--list") else { return AppCheckerApp.main() }
-        let (snapshot, rules, saved) = (AppModel.scan(), AppModel.loadRules(), AppModel.loadSaved())
+        let (snapshot, rules, saved) = (AppModel.scan(shell: nil), AppModel.loadRules(), AppModel.loadSaved())
         Probe.blockedFiles = Set(saved.blocked ?? [])
-        let probe = Probe.live(env: snapshot.env)
+        let probe = Probe.live(env: snapshot.shell.env)
         for item in snapshot.items {
             let verdict = Verdict(item: item, rules: rules, aiRules: saved.aiRules, sdks: saved.sdks[AppModel.sdkKey(item)] ?? [], probe: probe)
             print([verdict.status.rawValue, item.id, item.version, verdict.state].joined(separator: "\t"))

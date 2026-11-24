@@ -17,7 +17,7 @@ public enum LLM {
 
     static let kinds = [
         "app": "macOS application, bundle identifier", "brew": "Homebrew formula", "cask": "Homebrew cask",
-        "npm": "global npm package", "ext": "VS Code extension",
+        "bin": "command-line tool", "npm": "global npm package", "ext": "VS Code extension",
     ]
 
     public static func prompt(for item: Item) -> String {
@@ -102,7 +102,9 @@ public enum LLM {
                 ]
                 if !model.isEmpty { arguments += ["--model", model] }
                 struct Output: Decodable { var result: String?; var is_error: Bool? }
-                let data = try Shell.run(path, arguments, env: env, cwd: cwd, timeout: 300, acceptFailure: true)
+                // No settings are loaded, so an opt-out in the user's Claude settings would not apply: a lookup must not cause telemetry itself.
+                let quiet = env.merging(["DISABLE_TELEMETRY": "1", "DISABLE_ERROR_REPORTING": "1"]) { $1 }
+                let data = try Shell.run(path, arguments, env: quiet, cwd: cwd, timeout: 300, acceptFailure: true)
                 guard let output = try? JSONDecoder().decode(Output.self, from: data), let result = output.result else {
                     throw Failure(errorDescription: "Unexpected output from the claude CLI.")
                 }

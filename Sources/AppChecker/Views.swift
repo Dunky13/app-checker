@@ -6,7 +6,7 @@ extension Status {
     var label: String {
         switch self {
         case .bad: "Telemetry, no opt-out"
-        case .warn: "Telemetry on"
+        case .warn: "Telemetry, opt-out available"
         case .ok: "Telemetry off"
         case .unknown: "Unknown"
         }
@@ -42,7 +42,7 @@ struct StatusIcon: View {
     }
 }
 
-let kindNames = ["app": "App", "brew": "Homebrew", "cask": "Homebrew cask", "npm": "npm package", "ext": "Editor extension"]
+let kindNames = ["app": "App", "brew": "Homebrew", "cask": "Homebrew cask", "bin": "Command-line tool", "npm": "npm package", "ext": "Editor extension"]
 
 struct MenuView: View {
     var model: AppModel
@@ -79,7 +79,7 @@ struct MenuView: View {
         }
         .buttonStyle(.link)
         .padding()
-        .frame(width: 260)
+        .frame(width: 300)
     }
 }
 
@@ -117,6 +117,10 @@ struct MainView: View {
                         Text(item.name)
                         Text([kindNames[item.kind] ?? item.kind, item.version].filter { !$0.isEmpty }.joined(separator: " · "))
                             .font(.caption).foregroundStyle(.secondary)
+                    }
+                    if model.verdicts[item.id]?.source == .ai {
+                        Spacer()
+                        Image(systemName: "sparkles").foregroundStyle(.secondary).help("From an AI lookup, not verified").accessibilityLabel("From an AI lookup, not verified")
                     }
                     if model.analysing.contains(item.id) {
                         Spacer()
@@ -240,7 +244,7 @@ struct DetailView: View {
                     }
                 }
 
-                if let url = safeURL(verdict.rule?.policyURL) { Link("Privacy policy", destination: url) }
+                if let url = safeURL(verdict.rule?.policyURL) { Link("Privacy information", destination: url) }
                 let sources = (verdict.rule?.sources ?? []).compactMap { safeURL($0) }
                 if !sources.isEmpty {
                     VStack(alignment: .leading, spacing: 4) {

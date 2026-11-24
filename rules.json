@@ -9,9 +9,9 @@
       "name": "T3 Code",
       "telemetry": "opt-out",
       "summary": "Sends product usage events (provider, model, reasoning effort, permission mode, turn results, durations, token counts, release channel) tied to hashed account or install identifiers to ingest.t3.codes, which forwards them to PostHog. Also sends relay connection traces to Axiom. Prompts, responses and file contents are not included. Stable and Nightly desktop builds share this bundle ID.",
-      "policyURL": "https://github.com/pingdotgg/t3code/blob/main/apps/marketing/src/pages/privacy-policy.astro",
+      "policyURL": "https://t3.codes/privacy-policy",
       "optOut": {
-        "instructions": "Set the environment variable T3CODE_TELEMETRY_ENABLED=false. The desktop app reads it from your shell profile (for example ~/.zshrc), so export it there and restart the app. For the t3 CLI or a server, set it in the server's environment before starting it. Opt-out of relay tracing also follows OTEL_SDK_DISABLED / T3CODE_OTEL_SDK_DISABLED. The browser web app and the mobile apps send their own connection traces that this variable does not control.",
+        "instructions": "Set the environment variable T3CODE_TELEMETRY_ENABLED=false. The desktop app reads it from your shell profile (for example ~/.zshrc), so export it there and restart the app. For the t3 CLI or a server, set it in the server's environment before starting it. Opt-out of relay tracing also follows OTEL_SDK_DISABLED / T3CODE_OTEL_SDK_DISABLED. The browser web app and the mobile apps send their own connection traces that this variable does not control. Desktop builds from before 2026-11-16 ignored the variable for relay tracing (issue 37772), so update the app.",
         "command": "echo 'export T3CODE_TELEMETRY_ENABLED=false' >> ~/.zshrc",
         "url": "https://github.com/pingdotgg/t3code/blob/main/docs/user/telemetry.md"
       },
@@ -43,7 +43,8 @@
         "https://github.com/pingdotgg/t3code/blob/main/apps/marketing/src/pages/privacy-policy.astro",
         "https://github.com/pingdotgg/t3code/blob/main/scripts/build-desktop-artifact.ts",
         "https://github.com/pingdotgg/t3code/blob/main/packages/shared/src/otelEnvironment.ts",
-        "https://github.com/pingdotgg/t3code/issues/37772"
+        "https://github.com/pingdotgg/t3code/issues/37772",
+        "https://t3.codes/privacy-policy"
       ]
     },
     {
@@ -66,25 +67,31 @@
         {
           "file": "/opt/homebrew/.git/config",
           "contains": "analyticsdisabled = true"
+        },
+        {
+          "file": "/usr/local/Homebrew/.git/config",
+          "contains": "analyticsdisabled = true"
         }
       ],
       "sources": [
         "https://docs.brew.sh/Analytics",
-        "https://github.com/Homebrew/brew/blob/master/Library/Homebrew/utils/analytics.rb",
-        "https://github.com/Homebrew/brew/blob/master/Library/Homebrew/env_config.rb"
+        "https://github.com/Homebrew/brew/blob/main/Library/Homebrew/utils/analytics.rb",
+        "https://github.com/Homebrew/brew/blob/main/Library/Homebrew/env_config.rb"
       ]
     },
     {
       "match": [
-        "npm:@anthropic-ai/claude-code"
+        "npm:@anthropic-ai/claude-code",
+        "cask:claude-code",
+        "bin:claude"
       ],
       "name": "Claude Code",
       "telemetry": "opt-out",
       "summary": "Sends usage metrics (latency, reliability, usage patterns; no code, prompts or file paths) to Anthropic and third-party logging infrastructure. Sends error reports (stack traces, with redaction) to a third-party error tracker, on by default only for Pro, Max and Ultra sign-ins on v2.1.198 or later that connect directly to the Claude API. Metrics are off by default on Bedrock, Vertex and Foundry.",
-      "policyURL": "https://code.claude.com/docs/en/data-usage",
+      "policyURL": "https://www.anthropic.com/legal/privacy",
       "optOut": {
         "instructions": "Set CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 to turn off metrics, error reports and surveys at once. Individually: DISABLE_TELEMETRY=1 turns off metrics, DISABLE_ERROR_REPORTING=1 turns off error reports. These variables can also be put in the env block of ~/.claude/settings.json.",
-        "command": "export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1",
+        "command": "echo 'export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1' >> ~/.zshrc",
         "url": "https://code.claude.com/docs/en/data-usage"
       },
       "disabledWhen": [
@@ -99,7 +106,8 @@
         }
       ],
       "sources": [
-        "https://code.claude.com/docs/en/data-usage"
+        "https://code.claude.com/docs/en/data-usage",
+        "https://www.anthropic.com/legal/privacy"
       ]
     },
     {
@@ -112,7 +120,7 @@
       "policyURL": "https://nextjs.org/telemetry",
       "optOut": {
         "instructions": "Run next telemetry disable in the project root, or set NEXT_TELEMETRY_DISABLED=1.",
-        "command": "export NEXT_TELEMETRY_DISABLED=1",
+        "command": "echo 'export NEXT_TELEMETRY_DISABLED=1' >> ~/.zshrc",
         "url": "https://nextjs.org/telemetry"
       },
       "disabledWhen": [
@@ -135,7 +143,7 @@
       "policyURL": "https://astro.build/telemetry/",
       "optOut": {
         "instructions": "Run astro telemetry disable (applies to the whole machine), or set ASTRO_TELEMETRY_DISABLED=1.",
-        "command": "export ASTRO_TELEMETRY_DISABLED=1",
+        "command": "echo 'export ASTRO_TELEMETRY_DISABLED=1' >> ~/.zshrc",
         "url": "https://astro.build/telemetry/"
       },
       "disabledWhen": [
@@ -164,7 +172,14 @@
         "url": "https://github.com/nuxt/telemetry#opting-out"
       },
       "sources": [
-        "https://raw.githubusercontent.com/nuxt/telemetry/main/README.md"
+        "https://raw.githubusercontent.com/nuxt/telemetry/main/README.md",
+        "https://github.com/nuxt/telemetry/blob/main/src/consent.ts"
+      ],
+      "enabledWhen": [
+        {
+          "file": "~/.nuxtrc",
+          "contains": "telemetry.enabled=true"
+        }
       ]
     },
     {
@@ -176,8 +191,8 @@
       "summary": "Vercel collects anonymous usage and host information about Turborepo commands. Collection is optional.",
       "policyURL": "https://turborepo.com/docs/telemetry",
       "optOut": {
-        "instructions": "Run turbo telemetry disable, or set TURBO_TELEMETRY_DISABLED=1 or DO_NOT_TRACK=1.",
-        "command": "turbo telemetry disable",
+        "instructions": "Set TURBO_TELEMETRY_DISABLED=1 in your shell profile. Running turbo telemetry disable also works, but App Checker cannot see that.",
+        "command": "echo 'export TURBO_TELEMETRY_DISABLED=1' >> ~/.zshrc",
         "url": "https://turborepo.com/docs/telemetry"
       },
       "disabledWhen": [
@@ -223,7 +238,7 @@
       "policyURL": "https://storybook.js.org/docs/configure/telemetry",
       "optOut": {
         "instructions": "Set core.disableTelemetry: true in .storybook/main.ts, pass --disable-telemetry, or set STORYBOOK_DISABLE_TELEMETRY=true (the only option that also stops the early boot event).",
-        "command": "export STORYBOOK_DISABLE_TELEMETRY=true",
+        "command": "echo 'export STORYBOOK_DISABLE_TELEMETRY=true' >> ~/.zshrc",
         "url": "https://storybook.js.org/docs/configure/telemetry"
       },
       "disabledWhen": [
@@ -245,8 +260,8 @@
       "summary": "Collects anonymous aggregate usage analytics. Users are notified on install and on first run.",
       "policyURL": "https://www.gatsbyjs.com/docs/telemetry/",
       "optOut": {
-        "instructions": "Run gatsby telemetry --disable, or set GATSBY_TELEMETRY_DISABLED=1.",
-        "command": "gatsby telemetry --disable",
+        "instructions": "Set GATSBY_TELEMETRY_DISABLED=1 in your shell profile. Running gatsby telemetry --disable also works, but App Checker cannot see that.",
+        "command": "echo 'export GATSBY_TELEMETRY_DISABLED=1' >> ~/.zshrc",
         "url": "https://www.gatsbyjs.com/docs/telemetry/"
       },
       "disabledWhen": [
@@ -267,10 +282,10 @@
       "name": "Expo CLI",
       "telemetry": "opt-out",
       "summary": "Collects anonymous usage data about general use of the Expo dev tools.",
-      "policyURL": "https://docs.expo.dev/more/expo-cli/",
+      "policyURL": "https://expo.dev/privacy",
       "optOut": {
         "instructions": "Set EXPO_NO_TELEMETRY=1.",
-        "command": "export EXPO_NO_TELEMETRY=1",
+        "command": "echo 'export EXPO_NO_TELEMETRY=1' >> ~/.zshrc",
         "url": "https://docs.expo.dev/more/expo-cli/"
       },
       "disabledWhen": [
@@ -280,7 +295,8 @@
         }
       ],
       "sources": [
-        "https://docs.expo.dev/more/expo-cli/"
+        "https://docs.expo.dev/more/expo-cli/",
+        "https://expo.dev/privacy"
       ]
     },
     {
@@ -292,12 +308,18 @@
       "summary": "Collects usage telemetry: commands and options used, CLI version, general machine info (CPU count, OS, CI or not) and identifiers tied to your account. Environment variables, file paths, file contents, logs and serialized errors are not collected.",
       "policyURL": "https://vercel.com/docs/cli/about-telemetry",
       "optOut": {
-        "instructions": "Run vercel telemetry disable. vercel telemetry status shows the current state.",
-        "command": "vercel telemetry disable",
+        "instructions": "Set VERCEL_TELEMETRY_DISABLED=1 in your shell profile. Running vercel telemetry disable also works, but App Checker cannot see that.",
+        "command": "echo 'export VERCEL_TELEMETRY_DISABLED=1' >> ~/.zshrc",
         "url": "https://vercel.com/docs/cli/about-telemetry"
       },
       "sources": [
         "https://vercel.com/docs/cli/about-telemetry"
+      ],
+      "disabledWhen": [
+        {
+          "env": "VERCEL_TELEMETRY_DISABLED",
+          "equals": "1"
+        }
       ]
     },
     {
@@ -308,14 +330,15 @@
       "name": "Netlify CLI",
       "telemetry": "opt-out",
       "summary": "Collects data on usage of Netlify CLI commands to improve reliability and performance.",
-      "policyURL": "https://docs.netlify.com/api-and-cli-guides/cli-guides/get-started-with-cli/",
+      "policyURL": "https://www.netlify.com/privacy/",
       "optOut": {
         "instructions": "Run netlify --telemetry-disable, or set the telemetryDisabled property in the Netlify CLI config.json.",
         "command": "netlify --telemetry-disable",
         "url": "https://docs.netlify.com/api-and-cli-guides/cli-guides/get-started-with-cli/"
       },
       "sources": [
-        "https://docs.netlify.com/api-and-cli-guides/cli-guides/get-started-with-cli/"
+        "https://docs.netlify.com/api-and-cli-guides/cli-guides/get-started-with-cli/",
+        "https://www.netlify.com/privacy/"
       ]
     },
     {
@@ -347,7 +370,7 @@
       "policyURL": "https://bun.sh/docs/runtime/bunfig",
       "optOut": {
         "instructions": "Set telemetry = false in bunfig.toml, or set DO_NOT_TRACK=1.",
-        "command": "export DO_NOT_TRACK=1",
+        "command": "echo 'export DO_NOT_TRACK=1' >> ~/.zshrc",
         "url": "https://bun.sh/docs/runtime/bunfig"
       },
       "disabledWhen": [
@@ -370,7 +393,7 @@
       "policyURL": "https://learn.microsoft.com/en-us/dotnet/core/tools/telemetry",
       "optOut": {
         "instructions": "Set DOTNET_CLI_TELEMETRY_OPTOUT=1 (or true). To also stop the installer entry, set it before installing the SDK.",
-        "command": "export DOTNET_CLI_TELEMETRY_OPTOUT=1",
+        "command": "echo 'export DOTNET_CLI_TELEMETRY_OPTOUT=1' >> ~/.zshrc",
         "url": "https://learn.microsoft.com/en-us/dotnet/core/tools/telemetry"
       },
       "disabledWhen": [
@@ -397,7 +420,7 @@
       "policyURL": "https://www.prisma.io/docs/cli/telemetry",
       "optOut": {
         "instructions": "Run npx prisma telemetry disable, or set PRISMA_DISABLE_TELEMETRY=1 or DO_NOT_TRACK=1.",
-        "command": "export PRISMA_DISABLE_TELEMETRY=1",
+        "command": "echo 'export PRISMA_DISABLE_TELEMETRY=1' >> ~/.zshrc",
         "url": "https://www.prisma.io/docs/cli/telemetry"
       },
       "disabledWhen": [
@@ -446,7 +469,7 @@
       "summary": "Since v2.91.0 sends pseudonymous usage telemetry to GitHub's internal analytics. GH_TELEMETRY=log prints the payload instead of sending it.",
       "policyURL": "https://github.blog/changelog/2026-04-22-github-cli-opt-out-usage-telemetry",
       "optOut": {
-        "instructions": "Run gh config set telemetry disabled, or set GH_TELEMETRY=false or DO_NOT_TRACK=true. Environment variables take precedence over the config value.",
+        "instructions": "Run gh config set telemetry disabled, or set GH_TELEMETRY=false or DO_NOT_TRACK=1. GH_TELEMETRY wins over DO_NOT_TRACK, which wins over the config value, so a GH_TELEMETRY that enables telemetry overrides the other two.",
         "command": "gh config set telemetry disabled",
         "url": "https://github.blog/changelog/2026-04-22-github-cli-opt-out-usage-telemetry"
       },
@@ -454,6 +477,26 @@
         {
           "env": "GH_TELEMETRY",
           "equals": "false"
+        },
+        {
+          "env": "GH_TELEMETRY",
+          "equals": "0"
+        },
+        {
+          "env": "GH_TELEMETRY",
+          "equals": "no"
+        },
+        {
+          "env": "GH_TELEMETRY",
+          "equals": "off"
+        },
+        {
+          "env": "GH_TELEMETRY",
+          "equals": "disabled"
+        },
+        {
+          "env": "DO_NOT_TRACK",
+          "equals": "1"
         },
         {
           "env": "DO_NOT_TRACK",
@@ -466,7 +509,8 @@
       ],
       "sources": [
         "https://github.blog/changelog/2026-04-22-github-cli-opt-out-usage-telemetry",
-        "https://github.com/cli/cli/blob/trunk/internal/config/config.go"
+        "https://github.com/cli/cli/blob/trunk/internal/config/config.go",
+        "https://github.com/cli/cli/blob/trunk/internal/telemetry/telemetry.go"
       ]
     },
     {
@@ -495,8 +539,8 @@
       "summary": "Collects generic usage metrics, system and environment information (OS, runtime environment) and errors. No personal information such as user names or emails is collected.",
       "policyURL": "https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-telemetry.html",
       "optOut": {
-        "instructions": "Set SAM_CLI_TELEMETRY=0 (add it to ~/.profile to persist).",
-        "command": "export SAM_CLI_TELEMETRY=0",
+        "instructions": "Set SAM_CLI_TELEMETRY=0 in your shell profile (~/.zshrc).",
+        "command": "echo 'export SAM_CLI_TELEMETRY=0' >> ~/.zshrc",
         "url": "https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-telemetry.html"
       },
       "disabledWhen": [
@@ -537,7 +581,7 @@
       "policyURL": "https://grafana.com/docs/k6/latest/set-up/usage-collection/",
       "optOut": {
         "instructions": "Set K6_NO_USAGE_REPORT=true, pass --no-usage-report, or set noUsageReport in the config file.",
-        "command": "export K6_NO_USAGE_REPORT=true",
+        "command": "echo 'export K6_NO_USAGE_REPORT=true' >> ~/.zshrc",
         "url": "https://grafana.com/docs/k6/latest/set-up/usage-collection/"
       },
       "disabledWhen": [
@@ -564,7 +608,14 @@
         "url": "https://docs.flutter.dev/reference/crash-reporting"
       },
       "sources": [
-        "https://docs.flutter.dev/reference/crash-reporting"
+        "https://docs.flutter.dev/reference/crash-reporting",
+        "https://github.com/dart-lang/tools/blob/main/pkgs/unified_analytics/lib/src/constants.dart"
+      ],
+      "disabledWhen": [
+        {
+          "file": "~/.dart-tool/dart-flutter-telemetry.config",
+          "contains": "reporting=0"
+        }
       ]
     },
     {
@@ -584,6 +635,11 @@
           "json": "~/Library/Application Support/Code/User/settings.json",
           "key": "telemetry.telemetryLevel",
           "equals": "off"
+        },
+        {
+          "json": "~/Library/Application Support/Code/User/settings.json",
+          "key": "telemetry.enableTelemetry",
+          "equals": "false"
         }
       ],
       "sources": [
@@ -597,7 +653,7 @@
       "name": "Docker Desktop",
       "telemetry": "opt-out",
       "summary": "Sends diagnostics, crash reports and usage data to Docker. 'Send usage statistics' is enabled by default and Docker may periodically prompt for more information.",
-      "policyURL": "https://docs.docker.com/desktop/settings-and-maintenance/settings/",
+      "policyURL": "https://www.docker.com/legal/docker-privacy-policy/",
       "optOut": {
         "instructions": "In Docker Desktop Settings, turn off 'Send usage statistics'. Administrators can set analyticsEnabled to false in admin-settings.json.",
         "url": "https://docs.docker.com/desktop/settings-and-maintenance/settings/"
@@ -611,7 +667,8 @@
       ],
       "sources": [
         "https://docs.docker.com/desktop/settings-and-maintenance/settings/",
-        "https://docs.docker.com/enterprise/security/hardened-desktop/settings-management/configure-json-file/"
+        "https://docs.docker.com/enterprise/security/hardened-desktop/settings-management/configure-json-file/",
+        "https://www.docker.com/legal/docker-privacy-policy/"
       ]
     },
     {
@@ -622,7 +679,7 @@
       "name": "Codex CLI (OpenAI)",
       "telemetry": "opt-out",
       "summary": "Periodically sends a small amount of anonymous usage and health data to OpenAI (feature and configuration usage, model, auth mode). OpenTelemetry log export is separate and disabled by default.",
-      "policyURL": "https://developers.openai.com/codex/config-advanced",
+      "policyURL": "https://openai.com/policies/row-privacy-policy/",
       "optOut": {
         "instructions": "Add [analytics] with enabled = false to ~/.codex/config.toml. Set otel.metrics_exporter = \"none\" to disable a custom OTLP metrics exporter as well.",
         "url": "https://developers.openai.com/codex/config-advanced"
@@ -634,7 +691,8 @@
         }
       ],
       "sources": [
-        "https://developers.openai.com/codex/config-advanced"
+        "https://developers.openai.com/codex/config-advanced",
+        "https://openai.com/policies/row-privacy-policy/"
       ]
     },
     {
@@ -679,7 +737,7 @@
       "summary": "Collects anonymous metrics by default: selected OS URL, category and name, Imager version, desktop or network installer, host OS version, architecture and locale. Stored only as aggregate counters.",
       "policyURL": "https://github.com/raspberrypi/rpi-imager#anonymous-metrics-telemetry",
       "optOut": {
-        "instructions": "Open App Options and untoggle 'Enable anonymous statistics (telemetry) collection', then Save. The command line flag --disable-telemetry also persists the setting.",
+        "instructions": "Open App Options and untoggle 'Enable anonymous statistics (telemetry) collection', then Save.",
         "url": "https://github.com/raspberrypi/rpi-imager#anonymous-metrics-telemetry"
       },
       "sources": [
@@ -689,19 +747,21 @@
     {
       "match": [
         "app:dev.zed.Zed",
-        "cask:zed"
+        "app:dev.zed.Zed-Preview"
       ],
       "name": "Zed",
       "telemetry": "opt-out",
       "summary": "Sends diagnostics (crash reports and debug info, via Sentry) and anonymized usage metrics by default. Server-side data is collected when using Zed's hosted AI or collaboration services.",
-      "policyURL": "https://zed.dev/docs/telemetry",
+      "policyURL": "https://zed.dev/privacy-policy",
       "optOut": {
         "instructions": "In settings.json set \"telemetry\": {\"diagnostics\": false, \"metrics\": false}. Both must be false to stop all client-side telemetry, so this app does not check the state.",
         "url": "https://github.com/zed-industries/zed/blob/main/docs/src/telemetry.md"
       },
       "sources": [
         "https://github.com/zed-industries/zed/blob/main/docs/src/telemetry.md",
-        "https://github.com/zed-industries/zed/blob/main/assets/settings/default.json"
+        "https://github.com/zed-industries/zed/blob/main/assets/settings/default.json",
+        "https://zed.dev/docs/telemetry",
+        "https://zed.dev/privacy-policy"
       ]
     },
     {
@@ -756,7 +816,7 @@
       "policyURL": "https://github.com/cloudflare/workers-sdk/blob/main/packages/wrangler/telemetry.md",
       "optOut": {
         "instructions": "Run npx wrangler telemetry disable, set send_metrics=false in the project's wrangler.toml, or set WRANGLER_SEND_METRICS=false or DO_NOT_TRACK=1.",
-        "command": "export WRANGLER_SEND_METRICS=false",
+        "command": "echo 'export WRANGLER_SEND_METRICS=false' >> ~/.zshrc",
         "url": "https://github.com/cloudflare/workers-sdk/blob/main/packages/wrangler/telemetry.md"
       },
       "disabledWhen": [
@@ -781,10 +841,10 @@
       "name": "Shopify CLI",
       "telemetry": "opt-out",
       "summary": "Collects usage data by default: commands and flags run, timing, errors, and identifiers such as Shopify account ID, app API key and store domain.",
-      "policyURL": "https://shopify.dev/docs/api/shopify-cli",
+      "policyURL": "https://www.shopify.com/legal/privacy",
       "optOut": {
         "instructions": "Set SHOPIFY_CLI_NO_ANALYTICS=1 or OPT_OUT_INSTRUMENTATION=true.",
-        "command": "export SHOPIFY_CLI_NO_ANALYTICS=1",
+        "command": "echo 'export SHOPIFY_CLI_NO_ANALYTICS=1' >> ~/.zshrc",
         "url": "https://shopify.dev/docs/api/shopify-cli"
       },
       "disabledWhen": [
@@ -798,7 +858,8 @@
         }
       ],
       "sources": [
-        "https://shopify.dev/docs/api/shopify-cli"
+        "https://shopify.dev/docs/api/shopify-cli",
+        "https://www.shopify.com/legal/privacy"
       ]
     },
     {
@@ -818,6 +879,11 @@
           "json": "~/Library/Application Support/Code/User/settings.json",
           "key": "telemetry.telemetryLevel",
           "equals": "off"
+        },
+        {
+          "json": "~/Library/Application Support/Code/User/settings.json",
+          "key": "telemetry.enableTelemetry",
+          "equals": "false"
         }
       ],
       "sources": [
@@ -842,6 +908,11 @@
           "json": "~/Library/Application Support/Code/User/settings.json",
           "key": "telemetry.telemetryLevel",
           "equals": "off"
+        },
+        {
+          "json": "~/Library/Application Support/Code/User/settings.json",
+          "key": "telemetry.enableTelemetry",
+          "equals": "false"
         }
       ],
       "sources": [
@@ -866,6 +937,11 @@
           "json": "~/Library/Application Support/Code/User/settings.json",
           "key": "telemetry.telemetryLevel",
           "equals": "off"
+        },
+        {
+          "json": "~/Library/Application Support/Code/User/settings.json",
+          "key": "telemetry.enableTelemetry",
+          "equals": "false"
         }
       ],
       "sources": [
@@ -890,6 +966,11 @@
           "json": "~/Library/Application Support/Code/User/settings.json",
           "key": "telemetry.telemetryLevel",
           "equals": "off"
+        },
+        {
+          "json": "~/Library/Application Support/Code/User/settings.json",
+          "key": "telemetry.enableTelemetry",
+          "equals": "false"
         }
       ],
       "sources": [
@@ -939,6 +1020,39 @@
         "https://raw.githubusercontent.com/continuedev/continue/main/docs/customize/telemetry.mdx",
         "https://github.com/continuedev/continue/blob/main/extensions/vscode/package.json",
         "https://github.com/continuedev/continue/blob/main/core/config/load.ts"
+      ],
+      "disabledWhen": [
+        {
+          "json": "~/Library/Application Support/Code/User/settings.json",
+          "key": "continue.telemetryEnabled",
+          "equals": "false"
+        }
+      ]
+    },
+    {
+      "match": [
+        "brew:terraform"
+      ],
+      "name": "Terraform",
+      "telemetry": "opt-out",
+      "summary": "Checks HashiCorp's Checkpoint service for updates and security bulletins and sends an anonymous ID.",
+      "policyURL": "https://developer.hashicorp.com/terraform/cli/commands",
+      "optOut": {
+        "instructions": "Set CHECKPOINT_DISABLE in your shell profile, or put disable_checkpoint = true in ~/.terraformrc.",
+        "command": "echo 'export CHECKPOINT_DISABLE=1' >> ~/.zshrc",
+        "url": "https://developer.hashicorp.com/terraform/cli/commands"
+      },
+      "disabledWhen": [
+        {
+          "env": "CHECKPOINT_DISABLE"
+        },
+        {
+          "file": "~/.terraformrc",
+          "contains": "disable_checkpoint = true"
+        }
+      ],
+      "sources": [
+        "https://developer.hashicorp.com/terraform/cli/commands"
       ]
     }
   ]

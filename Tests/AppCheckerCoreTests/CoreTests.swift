@@ -89,6 +89,19 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         #expect(Verdict(item: item, rules: [], aiRules: [:], sdks: [], probe: probe()).status == .unknown)
     }
 
+    @Test func anExtensionIsGreenOnlyWhenEveryEditorThatHasItIsOff() {
+        let check = Check(json: "~/Library/Application Support/Code/User/settings.json", key: "telemetry.telemetryLevel", equals: "off")
+        let rules = [rule(.optOut, disabledWhen: [check])]
+        var item = Item(id: "brew:x", name: "x", version: "1", path: "/x")
+        item.editors = ["Code", "Cursor"]
+        let off = #"{"telemetry.telemetryLevel": "off"}"#
+        let onlyCode = probe(files: ["~/Library/Application Support/Code/User/settings.json": off])
+        let mixed = Verdict(item: item, rules: rules, aiRules: [:], sdks: [], probe: onlyCode)
+        #expect(mixed.status == .warn && mixed.state.hasPrefix("In Cursor: "))
+        let both = probe(files: ["~/Library/Application Support/Code/User/settings.json": off, "~/Library/Application Support/Cursor/User/settings.json": off])
+        #expect(Verdict(item: item, rules: rules, aiRules: [:], sdks: [], probe: both).status == .ok)
+    }
+
     @Test func onlyHTTPLinksAreSafe() {
         #expect(safeURL("https://example.com/a") != nil)
         #expect(safeURL("file:///etc/passwd") == nil)
@@ -129,6 +142,8 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
             let reply = #"{"telemetry": "opt-out", "summary": "s", "optOut": {"instructions": "i", "command": "export A=0\#(hidden)"}}"#
             #expect(throws: LLM.Failure.self) { try LLM.parseRule(from: reply, itemID: "npm:tool") }
         }
+        // Yellow means "there is a way out", so an AI answer that names none is refused.
+        #expect(rule(.optOut).problems(curated: false) == ["an opt-out needs instructions"])
     }
 }
 
@@ -156,6 +171,8 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         try write("brew/Caskroom/cli/0.9/cli", "")
         try write("brew/Caskroom/gui/.metadata/INSTALL_RECEIPT.json", #"{"uninstall_artifacts": [{"app": ["Gui.app"]}, {"binary": ["gui"]}]}"#)
         try write("brew/Caskroom/gui/1.0/x", "")
+        try write("brew/Caskroom/sdk/.metadata/INSTALL_RECEIPT.json", #"{"uninstall_artifacts": [{"suite": ["sdk"]}, {"binary": ["sdk/bin/sdk"]}]}"#)
+        try write("brew/Caskroom/sdk/3.1/x", "")
         try write("node_modules/plain/package.json", #"{"name": "plain", "version": "1.0.0"}"#)
         try write("node_modules/@scope/pkg/package.json", #"{"name": "@scope/pkg", "version": "2.0.0"}"#)
         try write("code/extensions.json", #"[{"identifier": {"id": "Pub.Ext"}, "version": "1.0", "relativeLocation": "pub.ext-1.0"}]"#)
@@ -168,12 +185,27 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         #expect(SDKScan.scan(apps[1]) == [])
 
         let brew = Scanner.brew(prefix: dir.appendingPathComponent("brew"))
-        #expect(brew.map(\.id) == ["brew:homebrew", "brew:wanted", "cask:cli"])
+        #expect(brew.map(\.id) == ["brew:homebrew", "brew:wanted", "cask:cli", "cask:sdk"])
         #expect(brew[1].version == "1.2" && brew[2].version == "0.9")
         #expect(Scanner.brew(prefix: dir.appendingPathComponent("missing")).isEmpty)
 
         #expect(Scanner.npm(roots: [dir.appendingPathComponent("node_modules")]).map(\.id) == ["npm:@scope/pkg", "npm:plain"])
-        #expect(Scanner.extensions(in: [dir.appendingPathComponent("code"), dir.appendingPathComponent("cursor")]).map(\.id) == ["ext:pub.ext", "ext:other.ext"])
+        let extensions = Scanner.extensions(in: [(editor: "Code", dir: dir.appendingPathComponent("code")), (editor: "Cursor", dir: dir.appendingPathComponent("cursor"))])
+        #expect(extensions.map(\.id) == ["ext:pub.ext", "ext:other.ext"])
+        #expect(extensions.map(\.editors) == [["Code", "Cursor"], ["Cursor"]])
+
+        // A command that links to a versioned file reports that version; folders and plain data files are not commands.
+        try write("bin/versions/2.1.3", "#!/bin/sh")
+        try write("bin/notes.txt", "")
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: dir.appendingPathComponent("bin/versions/2.1.3").path)
+        try FileManager.default.createSymbolicLink(at: dir.appendingPathComponent("bin/tool"), withDestinationURL: dir.appendingPathComponent("bin/versions/2.1.3"))
+        try FileManager.default.createSymbolicLink(at: dir.appendingPathComponent("bin/alias"), withDestinationURL: dir.appendingPathComponent("bin/tool"))
+        try write("bin/other/real", "#!/bin/sh")
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: dir.appendingPathComponent("bin/other/real").path)
+        try FileManager.default.createSymbolicLink(at: dir.appendingPathComponent("bin/linked"), withDestinationURL: dir.appendingPathComponent("bin/other/real"))
+        let binaries = Scanner.binaries(in: [dir.appendingPathComponent("bin")])
+        #expect(binaries.map(\.id) == ["bin:alias", "bin:linked", "bin:tool"])
+        #expect(binaries.map(\.version) == ["2.1.3", "", "2.1.3"])
     }
 }
 

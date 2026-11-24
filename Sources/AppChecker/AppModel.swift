@@ -32,6 +32,8 @@ final class AppModel {
     private var env: [String: String] = [:]
     private var watcher: Watcher?
     private var rescanQueued = false
+    private var shell: ShellInfo?
+    private var refreshShell = false
     private var batchID = UUID()
 
     nonisolated static func loadSaved() -> Saved {
@@ -82,39 +84,62 @@ final class AppModel {
 
     // MARK: Scanning
 
-    struct Snapshot: Sendable {
+    /// What the login shell reports. Asked at launch and on Rescan only, not on every file system change:
+    /// starting the shell runs the user's startup files, and npm and pnpm are real programs too.
+    struct ShellInfo: Sendable {
         var env: [String: String]
-        var shellFailed: Bool
+        var failed: Bool
+        var npmRoots: [URL]
+
+        static func current() -> ShellInfo {
+            let shellEnv = Shell.loginEnvironment()
+            let env = shellEnv ?? ProcessInfo.processInfo.environment
+            // Without this npm uses the occasion to ask the registry for a newer npm.
+            let quiet = env.merging(["npm_config_update_notifier": "false", "pnpm_config_update_notifier": "false"]) { $1 }
+            let npmRoots = ["npm", "pnpm"].compactMap { tool -> URL? in
+                guard let path = Shell.which(tool, env: env), let out = try? Shell.run(path, ["root", "-g"], env: quiet, timeout: 20) else { return nil }
+                // Node version managers hand every shell its own symlink: list and watch the folder behind it.
+                return URL(fileURLWithPath: String(decoding: out, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)).resolvingSymlinksInPath()
+            }
+            return ShellInfo(env: env, failed: shellEnv == nil, npmRoots: npmRoots)
+        }
+    }
+
+    struct Snapshot: Sendable {
+        var shell: ShellInfo
         var items: [Item]
         var watch: [String]
     }
 
-    nonisolated static func scan() -> Snapshot {
-        let shellEnv = Shell.loginEnvironment()
-        let env = shellEnv ?? ProcessInfo.processInfo.environment
+    nonisolated static func scan(shell: ShellInfo?) -> Snapshot {
+        let shell = shell ?? .current()
         let home = FileManager.default.homeDirectoryForCurrentUser
         let appDirs = [URL(fileURLWithPath: "/Applications"), home.appendingPathComponent("Applications")]
         let brewPrefixes = ["/opt/homebrew", "/usr/local"].map { URL(fileURLWithPath: $0) }
-        let npmRoots = ["npm", "pnpm"].compactMap { tool -> URL? in
-            guard let path = Shell.which(tool, env: env), let out = try? Shell.run(path, ["root", "-g"], env: env, timeout: 20) else { return nil }
-            return URL(fileURLWithPath: String(decoding: out, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines))
-        }
-        let extensionDirs = [".vscode", ".vscode-insiders", ".vscode-oss", ".cursor", ".windsurf"].map { home.appendingPathComponent("\($0)/extensions") }
+        let binDirs = [home.appendingPathComponent(".local/bin")]
+        // Extensions folder in the home folder, and the editor's settings folder in Application Support.
+        let editors = [(".vscode", "Code"), (".vscode-insiders", "Code - Insiders"), (".vscode-oss", "VSCodium"), (".cursor", "Cursor"), (".windsurf", "Windsurf"), (".kiro", "Kiro")]
+            .map { (editor: $0.1, dir: home.appendingPathComponent("\($0.0)/extensions")) }
         var seen = Set<String>()
-        let items = (Scanner.apps(in: appDirs) + brewPrefixes.flatMap(Scanner.brew) + Scanner.npm(roots: npmRoots) + Scanner.extensions(in: extensionDirs))
+        let items = (Scanner.apps(in: appDirs) + brewPrefixes.flatMap(Scanner.brew) + Scanner.binaries(in: binDirs)
+            + Scanner.npm(roots: shell.npmRoots) + Scanner.extensions(in: editors))
             .filter { seen.insert($0.id).inserted }
-        let watch = (appDirs + brewPrefixes.flatMap { [$0.appendingPathComponent("Cellar"), $0.appendingPathComponent("Caskroom")] } + npmRoots + extensionDirs)
+        let watch = (appDirs + brewPrefixes.flatMap { [$0.appendingPathComponent("Cellar"), $0.appendingPathComponent("Caskroom")] }
+            + binDirs + shell.npmRoots + editors.map(\.dir))
             .map(\.path).filter { FileManager.default.fileExists(atPath: $0) }
-        return Snapshot(env: env, shellFailed: shellEnv == nil, items: items, watch: watch)
+        return Snapshot(shell: shell, items: items, watch: watch)
     }
 
     /// `userInitiated` also retries files macOS blocked earlier, in case access was granted since.
     func rescan(userInitiated: Bool = false) async {
-        if userInitiated { Probe.blockedFiles = [] }
+        if userInitiated { (Probe.blockedFiles, refreshShell) = ([], true) }
         guard !scanning else { rescanQueued = true; return }
         scanning = true
-        let snapshot = await Task.detached { Self.scan() }.value
-        (env, shellFailed, items) = (snapshot.env, snapshot.shellFailed, snapshot.items)
+        let known = refreshShell ? nil : shell
+        refreshShell = false
+        let snapshot = await Task.detached { Self.scan(shell: known) }.value
+        shell = snapshot.shell
+        (env, shellFailed, items) = (snapshot.shell.env, snapshot.shell.failed, snapshot.items)
         evaluate()
 
         // Slow part, once per item version: look for telemetry SDKs in items nothing else is known about.

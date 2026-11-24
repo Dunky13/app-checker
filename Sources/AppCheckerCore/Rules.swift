@@ -71,14 +71,16 @@ public struct Rule: Codable, Sendable, Hashable {
     /// bundled and downloaded ones as `curated`, AI answers with the safety checks only.
     public func problems(curated: Bool) -> [String] {
         var found: [String] = []
-        if match.isEmpty || !match.allSatisfy({ id in ["app", "brew", "cask", "npm", "ext"].contains { id.hasPrefix("\($0):") } }) {
-            found.append("match needs ids starting with app:, brew:, cask:, npm: or ext:")
+        if match.isEmpty || !match.allSatisfy({ id in ["app", "brew", "cask", "bin", "npm", "ext"].contains { id.hasPrefix("\($0):") } }) {
+            found.append("match needs ids starting with app:, brew:, cask:, bin:, npm: or ext:")
         }
         if !((disabledWhen ?? []) + (enabledWhen ?? [])).allSatisfy(\.isWellFormed) { found.append("malformed check") }
         // The command is offered for copying, so nothing invisible (control or formatting characters, line breaks) may ride along.
         if optOut?.command?.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains) == true {
             found.append("the command contains hidden characters or line breaks")
         }
+        // Yellow promises a way out, so an opt-out verdict without one is not usable.
+        if telemetry == .optOut, (optOut?.instructions ?? "").isEmpty { found.append("an opt-out needs instructions") }
         guard curated else { return found }
         if telemetry == .unknown { found.append("unknown telemetry does not belong in the curated rules") }
         if summary.isEmpty { found.append("no summary") }
@@ -102,11 +104,14 @@ public struct Rule: Codable, Sendable, Hashable {
             if results.contains(nil) { return (.warn, "Telemetry is on by default. \(Self.blockedNote)") }
             return (.warn, results.isEmpty
                 ? "Telemetry is on by default. The current setting cannot be read from this Mac."
-                : "Telemetry is on. You can switch it off.")
+                : "No opt-out setting was found on this Mac, so telemetry is on by default. You can switch it off.")
         case .optIn:
             let results = (enabledWhen ?? []).map { $0.result(probe) }
             if results.contains(true) { return (.warn, "Telemetry has been switched on. You can switch it off.") }
-            return (.ok, "Telemetry stays off unless you enable it." + (results.contains(nil) ? " \(Self.blockedNote)" : ""))
+            if results.contains(nil) { return (.ok, "Telemetry stays off unless you enable it. \(Self.blockedNote)") }
+            return (.ok, results.isEmpty
+                ? "Telemetry is off unless you agreed to it. App Checker cannot read that choice on this Mac."
+                : "Telemetry stays off unless you enable it.")
         }
     }
 
@@ -190,6 +195,14 @@ public struct Probe: Sendable {
         )
     }
 
+    /// Extension rules name VS Code's settings file. In another editor the same extension follows that editor's own file.
+    func forEditor(_ folder: String) -> Probe {
+        var copy = self
+        let code = "~/Library/Application Support/Code/"
+        copy.file = { [file] path in file(path.hasPrefix(code) ? "~/Library/Application Support/\(folder)/\(path.dropFirst(code.count))" : path) }
+        return copy
+    }
+
     /// Files macOS refused to let the app read. Persisted by the app so the refusal, and the system
     /// notification that comes with it, happens once rather than at every launch. Clear it to try again.
     public static var blockedFiles: Set<String> {
@@ -231,11 +244,19 @@ public struct Verdict: Sendable, Equatable {
 
     /// Curated rules win over AI lookups. Without either the item is unknown; SDK scan hits only add a hint.
     public init(item: Item, rules: [Rule], aiRules: [String: Rule], sdks: [String], probe: Probe) {
+        func judge(_ rule: Rule) -> (Status, String) {
+            guard !item.editors.isEmpty else { return rule.evaluate(probe) }
+            // Green only when every editor that has the extension is off: show the first one that is not.
+            let results = item.editors.map { (editor: $0, result: rule.evaluate(probe.forEditor($0))) }
+            let shown = results.first { $0.result.status != .ok } ?? results[0]
+            let editor = shown.editor == "Code" ? "VS Code" : shown.editor
+            return (shown.result.status, results.count > 1 && shown.result.status != .ok ? "In \(editor): \(shown.result.state)" : shown.result.state)
+        }
         if let rule = rules.first(where: { $0.match.contains(item.id) }) {
-            (status, state) = rule.evaluate(probe)
+            (status, state) = judge(rule)
             (self.rule, source) = (rule, .rules)
         } else if let rule = aiRules[item.id] {
-            (status, state) = rule.evaluate(probe)
+            (status, state) = judge(rule)
             (self.rule, source) = (rule, .ai)
         } else if !sdks.isEmpty {
             // A string match is a lead, not evidence: bundled dependencies and domain lists contain these names too. So it stays grey.

@@ -1,12 +1,14 @@
 import Foundation
 
 /// One installed thing. `id` is what rules match on:
-/// "app:<bundle id>", "brew:<formula>", "cask:<token>", "npm:<package>", "ext:<publisher.name>".
+/// "app:<bundle id>", "brew:<formula>", "cask:<token>", "bin:<command>", "npm:<package>", "ext:<publisher.name>".
 public struct Item: Sendable, Identifiable, Hashable {
     public var id: String
     public var name: String
     public var version: String
     public var path: String
+    /// For extensions: the settings folder name ("Code", "Cursor") of every editor that has it installed.
+    public var editors: [String] = []
 
     public var kind: String { String(id.prefix { $0 != ":" }) }
 
@@ -47,7 +49,7 @@ public enum Scanner {
             }
     }
 
-    /// Homebrew itself, formulae installed on request (not pulled in as dependencies), and casks that only install CLI binaries.
+    /// Homebrew itself, formulae installed on request (not pulled in as dependencies), and casks that install CLI binaries but no app.
     /// Casks that install an .app are already covered by `apps`.
     public static func brew(prefix: URL) -> [Item] {
         let cellar = prefix.appendingPathComponent("Cellar"), caskroom = prefix.appendingPathComponent("Caskroom")
@@ -63,7 +65,7 @@ public enum Scanner {
             guard let receipt = json(cask.appendingPathComponent(".metadata/INSTALL_RECEIPT.json")) as? [String: Any],
                   let artifacts = receipt["uninstall_artifacts"] as? [[String: Any]] else { continue }
             let kinds = Set(artifacts.flatMap(\.keys))
-            guard kinds.contains("binary"), kinds.isDisjoint(with: ["app", "pkg", "suite"]),
+            guard kinds.contains("binary"), kinds.isDisjoint(with: ["app", "pkg"]),
                   let version = children(cask).last(where: { !$0.lastPathComponent.hasPrefix(".") }) else { continue }
             items.append(Item(id: "cask:\(cask.lastPathComponent)", name: cask.lastPathComponent, version: version.lastPathComponent, path: version.path))
         }
@@ -80,18 +82,35 @@ public enum Scanner {
             }
     }
 
-    /// Editor extensions from each editor's extensions.json.
-    /// shortcut: an extension installed in two editors is listed once, so its state reflects whichever editor has telemetry off; split per editor if that matters.
-    public static func extensions(in dirs: [URL]) -> [Item] {
-        var seen = Set<String>()
-        return dirs.flatMap { dir -> [Item] in
-            (json(dir.appendingPathComponent("extensions.json")) as? [[String: Any]] ?? []).compactMap { entry in
-                guard let id = ((entry["identifier"] as? [String: Any])?["id"] as? String)?.lowercased(),
-                      seen.insert(id).inserted else { return nil }
+    /// Standalone command-line tools, such as the native Claude Code install in ~/.local/bin.
+    /// shortcut: the version is only known when the command links to a versioned file (claude -> versions/2.1.3); other tools update without a notification.
+    public static func binaries(in dirs: [URL]) -> [Item] {
+        dirs.flatMap(children).compactMap { url in
+            let target = url.resolvingSymlinksInPath(), name = url.lastPathComponent
+            guard (try? target.resourceValues(forKeys: [.isRegularFileKey]))?.isRegularFile == true, fm.isExecutableFile(atPath: target.path) else { return nil }
+            // A link to another command (bunx -> bun) names no version.
+            let version = target.lastPathComponent.first?.isNumber == true ? target.lastPathComponent : ""
+            return Item(id: "bin:\(name)", name: name, version: version, path: url.path)
+        }
+    }
+
+    /// Editor extensions from each editor's extensions.json. An extension installed in several editors is one item that remembers all of them.
+    public static func extensions(in dirs: [(editor: String, dir: URL)]) -> [Item] {
+        var items: [Item] = []
+        for (editor, dir) in dirs {
+            for entry in json(dir.appendingPathComponent("extensions.json")) as? [[String: Any]] ?? [] {
+                guard let id = ((entry["identifier"] as? [String: Any])?["id"] as? String)?.lowercased() else { continue }
+                if let index = items.firstIndex(where: { $0.id == "ext:\(id)" }) {
+                    if !items[index].editors.contains(editor) { items[index].editors.append(editor) }
+                    continue
+                }
                 let location = entry["relativeLocation"] as? String ?? ""
-                return Item(id: "ext:\(id)", name: id, version: entry["version"] as? String ?? "", path: dir.appendingPathComponent(location).path)
+                var item = Item(id: "ext:\(id)", name: id, version: entry["version"] as? String ?? "", path: dir.appendingPathComponent(location).path)
+                item.editors = [editor]
+                items.append(item)
             }
         }
+        return items
     }
 }
 
@@ -117,7 +136,7 @@ public enum SDKScan {
     ]
 
     /// Names of SDKs whose endpoints appear in the item's own code.
-    /// shortcut: reads the main executable, Electron's app.asar and a formula's bin/ only; frameworks and npm packages are not searched (Chromium alone would false-positive).
+    /// shortcut: reads the main executable, Electron's app.asar, a formula's bin/ and standalone commands only; frameworks, npm packages and extensions are not searched (Chromium alone would false-positive).
     public static func scan(_ item: Item) -> [String] {
         let root = URL(fileURLWithPath: item.path)
         var files: [URL] = []
@@ -128,6 +147,8 @@ public enum SDKScan {
             files.append(root.appendingPathComponent("Contents/Resources/app.asar"))
         case "brew", "cask":
             files = Scanner.children(root.appendingPathComponent("bin"))
+        case "bin":
+            files = [root.resolvingSymlinksInPath()]
         default:
             return []
         }
