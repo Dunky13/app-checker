@@ -100,18 +100,56 @@ public enum Submission {
         return SourceCheck(found: found, missing: names.filter { !found.contains($0) }, fetched: pages.count, cited: cited)
     }
 
-    /// The text of the pages a finding cites. A page that cannot be fetched is left out, and `cited` says how many were asked for.
+    /// The text of the pages a finding cites. A page that cannot be fetched, or is not on the public internet, is left out, and `cited` says how many were asked for.
     public static func pages(for rule: Rule) async -> (texts: [String], cited: Int) {
         let links = ((rule.sources ?? []) + [rule.optOut?.url].compactMap(\.self)).compactMap { safeURL($0) }
         let urls = links.enumerated().filter { links.firstIndex(of: $0.element) == $0.offset }.map(\.element).prefix(8)
         let configuration = URLSessionConfiguration.ephemeral
         configuration.timeoutIntervalForRequest = 20
-        let session = URLSession(configuration: configuration)
+        let session = URLSession(configuration: configuration, delegate: PublicOnly(), delegateQueue: nil)
         var texts: [String] = []
-        for url in urls {
+        for url in urls where isPublic(url.host) {
             if let data = try? await session.data(from: url, limit: 3_000_000) { texts.append(String(decoding: data, as: UTF8.self)) }
         }
         return (texts, urls.count)
+    }
+
+    /// Whether every address of a host is on the public internet. The cited links come from an AI lookup or a form,
+    /// so they must not make this Mac ask itself or its own network: a router or a local service answers a request too.
+    /// shortcut: the name is looked up again when the page is fetched, so a host that changes its answer in between gets through; connect to the checked address if that ever matters.
+    static func isPublic(_ host: String?) -> Bool {
+        var hints = addrinfo(), list: UnsafeMutablePointer<addrinfo>?
+        hints.ai_socktype = SOCK_STREAM
+        guard let host, getaddrinfo(host, nil, &hints, &list) == 0, let first = list else { return false }
+        defer { freeaddrinfo(list) }
+        return sequence(first: first, next: { $0.pointee.ai_next }).allSatisfy { info in
+            switch info.pointee.ai_family {
+            case AF_INET: isPublic(address: info.pointee.ai_addr.withMemoryRebound(to: sockaddr_in.self, capacity: 1) { withUnsafeBytes(of: $0.pointee.sin_addr) { Array($0) } })
+            case AF_INET6: isPublic(address: info.pointee.ai_addr.withMemoryRebound(to: sockaddr_in6.self, capacity: 1) { withUnsafeBytes(of: $0.pointee.sin6_addr) { Array($0) } })
+            default: false
+            }
+        }
+    }
+
+    static func isPublic(address bytes: [UInt8]) -> Bool {
+        if bytes.count == 16 {
+            // An IPv4 address inside an IPv6 one (::ffff:a.b.c.d, ::a.b.c.d and the NAT64 prefix 64:ff9b::) is judged as IPv4.
+            let embedded = bytes.prefix(10).allSatisfy { $0 == 0 } && bytes[10] == bytes[11] && [0, 0xff].contains(bytes[10])
+                || Array(bytes.prefix(12)) == [0, 0x64, 0xff, 0x9b, 0, 0, 0, 0, 0, 0, 0, 0]
+            // Everything else must be a global address (2000::/3), which leaves out loopback, link-local, private and multicast.
+            return embedded ? isPublic(address: Array(bytes[12...])) : bytes[0] & 0xe0 == 0x20
+        }
+        switch (bytes[0], bytes[1]) {
+        case (0, _), (10, _), (127, _), (169, 254), (192, 168), (100, 64...127), (172, 16...31), (198, 18...19), (224..., _): return false
+        default: return true
+        }
+    }
+
+    /// Keeps a cited page from redirecting to an address that `isPublic` refuses.
+    private final class PublicOnly: NSObject, URLSessionTaskDelegate {
+        func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest) async -> URLRequest? {
+            safeURL(request.url?.absoluteString).flatMap { isPublic($0.host) ? request : nil }
+        }
     }
 
     /// The prefilled GitHub issue. A body too long for a link comes back as `clipboard`, and the issue then asks to paste it.

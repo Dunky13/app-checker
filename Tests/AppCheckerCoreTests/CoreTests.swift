@@ -478,6 +478,15 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
 }
 
 @Suite struct Submissions {
+    @Test func citedPagesAreOnlyFetchedFromThePublicInternet() {
+        let local = ["127.0.0.1", "localhost", "2130706433", "0.0.0.0", "10.0.0.1", "192.168.1.1", "172.16.0.1", "169.254.169.254", "100.64.0.1",
+                     "::1", "::", "::ffff:127.0.0.1", "::ffff:192.168.1.1", "fe80::1", "fd00::1", "64:ff9b::7f00:1", "no such host.invalid"]
+        for host in local { #expect(!Submission.isPublic(host), "\(host)") }
+        for host in ["1.1.1.1", "172.32.0.1", "2606:4700:4700::1111", "::ffff:1.1.1.1", "64:ff9b::101:101"] { #expect(Submission.isPublic(host), "\(host)") }
+        #expect(!Submission.isPublic(nil))
+        #expect(URL(string: "http://[::1]:8080/x")?.host == "::1")
+    }
+
     let item = Item(id: "brew:x", name: "Example CLI", version: "1.2", path: "/x")
 
     func draft(_ change: (inout Submission.Draft) -> Void = { _ in }) -> Submission.Draft {

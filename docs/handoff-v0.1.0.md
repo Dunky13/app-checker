@@ -20,7 +20,7 @@ Checked by running it, on one Mac (macOS 27, Apple Silicon):
 - Search, the filter menu, the detail pane, the copy button, the "Data Access Blocked" note, and the AI marker in the list.
 - A real lookup through the Claude Code CLI with web search, and a lookup through the OpenAI-compatible backend against a local stub (key read from the keychain, no redirect followed).
 - The findings download, with a test build that read the `findings-folder` branch and shipped an older bundled copy (serial 1, one changed file): it fetched the signed index, replaced its copy, and its cache was identical to the committed folder. A relaunch with nothing new left the cache untouched. A cached file changed by hand to claim "no telemetry" was not used (the item stayed yellow) and was replaced at the next launch. With the cache deleted and the saved serial set above the published one, the published index was refused.
-- The submit form, with a seeded AI result that named an invented variable: the form showed what its check read on the Mac, the source check fetched the cited page and reported the name as not found, and Continue Anyway opened a GitHub issue page with the title and the finding filled in. An item without any finding opened an empty form that listed what was missing and kept Continue disabled.
+- The submit form, with a seeded AI result that named an invented variable: the form showed what its check read on the Mac, the source check fetched the cited page and reported the name as not found, and Continue Anyway opened a GitHub issue page with the title and the finding filled in. An item without any finding opened an empty form that listed what was missing and kept Continue disabled. With a local web server running, cited links to `127.0.0.1`, to `localhost` and to a public address that redirects to the local server were all left out (the server logged no request, and did log one when `curl` followed the same redirect), while a public page in the same list was fetched.
 - `AppChecker --list` on that Mac: 216 items, of which 15 yellow, 3 green and 198 grey. The native Claude Code install is found as `bin:claude`.
 
 Reviewed independently (Claude Opus, high effort), each round followed by fixes:
@@ -66,7 +66,7 @@ After any change below `findings/`: run `scripts/sign-findings.sh` and commit `i
 
 ## Known limits, left open on purpose
 
-- The submit form keeps the checks of the finding it started from and can add one variable by hand; other checks are written by the maintainer. Its source check reads the page as served, so a name on a page that is built in the browser is reported as not found.
+- The submit form keeps the checks of the finding it started from and can add one variable by hand; other checks are written by the maintainer. Its source check reads the page as served, so a name on a page that is built in the browser is reported as not found. It refuses addresses that are not public by looking the host up before the fetch; a host that changes its answer between that lookup and the fetch is not caught.
 - A yellow item whose switch cannot be read (a setting inside an app, or a tool's own `telemetry disable` command) stays yellow. There is no "mark as done".
 - Opt-in tools without a readable state (Angular, Aider, Google Cloud CLI) are green with a note that the choice cannot be read.
 - No notification when a verdict changes without a version change, and none for a reinstall at the same version.
