@@ -1,0 +1,24 @@
+{
+  "match": [
+    "npm:storybook",
+    "npm:@storybook/cli"
+  ],
+  "name": "Storybook",
+  "telemetry": "opt-out",
+  "summary": "Sends anonymous usage data. Crash reports are a separate setting that is off by default. A content-free boot event is sent before the config file is read, so only the environment variable fully prevents telemetry.",
+  "policyURL": "https://storybook.js.org/docs/configure/telemetry",
+  "optOut": {
+    "instructions": "Set core.disableTelemetry: true in .storybook/main.ts, pass --disable-telemetry, or set STORYBOOK_DISABLE_TELEMETRY=true (the only option that also stops the early boot event).",
+    "command": "echo 'export STORYBOOK_DISABLE_TELEMETRY=true' >> ~/.zshrc",
+    "url": "https://storybook.js.org/docs/configure/telemetry"
+  },
+  "disabledWhen": [
+    {
+      "env": "STORYBOOK_DISABLE_TELEMETRY",
+      "equals": "true"
+    }
+  ],
+  "sources": [
+    "https://storybook.js.org/docs/configure/telemetry"
+  ]
+}

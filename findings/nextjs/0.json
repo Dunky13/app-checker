@@ -1,0 +1,23 @@
+{
+  "match": [
+    "npm:next"
+  ],
+  "name": "Next.js",
+  "telemetry": "opt-out",
+  "summary": "Sends anonymous usage data: command invoked, Next.js version, general machine info (CPU count, OS, CI or not), detected plugins, build duration and page count, and Next.js MCP tool names with counts during development.",
+  "policyURL": "https://nextjs.org/telemetry",
+  "optOut": {
+    "instructions": "Run next telemetry disable in the project root, or set NEXT_TELEMETRY_DISABLED=1.",
+    "command": "echo 'export NEXT_TELEMETRY_DISABLED=1' >> ~/.zshrc",
+    "url": "https://nextjs.org/telemetry"
+  },
+  "disabledWhen": [
+    {
+      "env": "NEXT_TELEMETRY_DISABLED",
+      "equals": "1"
+    }
+  ],
+  "sources": [
+    "https://nextjs.org/telemetry"
+  ]
+}

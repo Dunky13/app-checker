@@ -1,0 +1,26 @@
+{
+  "match": [
+    "brew:terraform"
+  ],
+  "name": "Terraform",
+  "telemetry": "opt-out",
+  "summary": "Checks HashiCorp's Checkpoint service for updates and security bulletins and sends an anonymous ID.",
+  "policyURL": "https://developer.hashicorp.com/terraform/cli/commands",
+  "optOut": {
+    "instructions": "Set CHECKPOINT_DISABLE in your shell profile, or put disable_checkpoint = true in ~/.terraformrc.",
+    "command": "echo 'export CHECKPOINT_DISABLE=1' >> ~/.zshrc",
+    "url": "https://developer.hashicorp.com/terraform/cli/commands"
+  },
+  "disabledWhen": [
+    {
+      "env": "CHECKPOINT_DISABLE"
+    },
+    {
+      "file": "~/.terraformrc",
+      "contains": "disable_checkpoint = true"
+    }
+  ],
+  "sources": [
+    "https://developer.hashicorp.com/terraform/cli/commands"
+  ]
+}

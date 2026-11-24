@@ -1,0 +1,16 @@
+{
+  "match": [
+    "app:com.raspberrypi.rpi-imager"
+  ],
+  "name": "Raspberry Pi Imager",
+  "telemetry": "opt-out",
+  "summary": "Collects anonymous metrics by default: selected OS URL, category and name, Imager version, desktop or network installer, host OS version, architecture and locale. Stored only as aggregate counters.",
+  "policyURL": "https://github.com/raspberrypi/rpi-imager#anonymous-metrics-telemetry",
+  "optOut": {
+    "instructions": "Open App Options and untoggle 'Enable anonymous statistics (telemetry) collection', then Save.",
+    "url": "https://github.com/raspberrypi/rpi-imager#anonymous-metrics-telemetry"
+  },
+  "sources": [
+    "https://raw.githubusercontent.com/raspberrypi/rpi-imager/main/README.md"
+  ]
+}

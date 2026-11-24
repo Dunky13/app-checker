@@ -1,0 +1,24 @@
+{
+  "match": [
+    "npm:bun",
+    "brew:bun"
+  ],
+  "name": "Bun",
+  "telemetry": "opt-out",
+  "summary": "Bun states it does not currently collect usage telemetry. Anonymous crash reports are sent by default and are controlled by the telemetry setting, which is equivalent to DO_NOT_TRACK. Collection of API usage and build timing is planned.",
+  "policyURL": "https://bun.sh/docs/runtime/bunfig",
+  "optOut": {
+    "instructions": "Set telemetry = false in bunfig.toml, or set DO_NOT_TRACK=1.",
+    "command": "echo 'export DO_NOT_TRACK=1' >> ~/.zshrc",
+    "url": "https://bun.sh/docs/runtime/bunfig"
+  },
+  "disabledWhen": [
+    {
+      "env": "DO_NOT_TRACK",
+      "equals": "1"
+    }
+  ],
+  "sources": [
+    "https://bun.sh/docs/runtime/bunfig"
+  ]
+}

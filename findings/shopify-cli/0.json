@@ -1,0 +1,28 @@
+{
+  "match": [
+    "npm:@shopify/cli"
+  ],
+  "name": "Shopify CLI",
+  "telemetry": "opt-out",
+  "summary": "Collects usage data by default: commands and flags run, timing, errors, and identifiers such as Shopify account ID, app API key and store domain.",
+  "policyURL": "https://www.shopify.com/legal/privacy",
+  "optOut": {
+    "instructions": "Set SHOPIFY_CLI_NO_ANALYTICS=1 or OPT_OUT_INSTRUMENTATION=true.",
+    "command": "echo 'export SHOPIFY_CLI_NO_ANALYTICS=1' >> ~/.zshrc",
+    "url": "https://shopify.dev/docs/api/shopify-cli"
+  },
+  "disabledWhen": [
+    {
+      "env": "SHOPIFY_CLI_NO_ANALYTICS",
+      "equals": "1"
+    },
+    {
+      "env": "OPT_OUT_INSTRUMENTATION",
+      "equals": "true"
+    }
+  ],
+  "sources": [
+    "https://shopify.dev/docs/api/shopify-cli",
+    "https://www.shopify.com/legal/privacy"
+  ]
+}

@@ -1,4 +1,3 @@
-import CryptoKit
 import Foundation
 import Synchronization
 
@@ -75,6 +74,17 @@ public struct Rule: Codable, Sendable, Hashable {
     public var disabledWhen: [Check]?
     public var enabledWhen: [Check]?
     public var sources: [String]?
+    /// The first version this finding applies to. Comes from the file name, not from the file.
+    public var since: String?
+
+    /// The finding for `version` among those for one item: the newest one that starts at or below it.
+    /// An item without a readable version gets the newest finding.
+    public static func pick(_ candidates: [Rule], version: String) -> Rule? {
+        let start = { (rule: Rule) in rule.since.flatMap(Version.init) ?? .zero }
+        let sorted = candidates.sorted { start($0) < start($1) }
+        guard let version = Version(version) else { return sorted.last }
+        return sorted.last { start($0) <= version }
+    }
 
     /// What is wrong with this rule, first problem first. Every rule passes through here before it is used:
     /// bundled and downloaded ones as `curated`, AI answers with the safety checks only.
@@ -130,38 +140,6 @@ public struct Rule: Codable, Sendable, Hashable {
     }
 
     static let blockedNote = "macOS did not let App Checker read this app's setting. To allow it, open System Settings > Privacy & Security > Files & Folders, then rescan."
-}
-
-public struct RuleSet: Codable, Sendable {
-    public static let supportedVersion = 1
-    public var version: Int
-    public var rules: [Rule]
-
-    static func failure(_ message: String) -> CocoaError {
-        CocoaError(.fileReadCorruptFile, userInfo: [NSLocalizedDescriptionKey: message])
-    }
-
-    /// Decodes and validates a rules file. One invalid rule rejects the whole file.
-    public static func decode(_ data: Data) throws -> RuleSet {
-        let set = try JSONDecoder().decode(RuleSet.self, from: data)
-        guard set.version <= supportedVersion else { throw failure("Rules version \(set.version) needs a newer App Checker.") }
-        var seen = Set<String>()
-        for rule in set.rules {
-            let label = rule.name ?? rule.match.first ?? "?"
-            if let problem = rule.problems(curated: true).first { throw failure("\(label): \(problem)") }
-            for id in rule.match where !seen.insert(id).inserted { throw failure("\(id) is matched by two rules") }
-        }
-        return set
-    }
-
-    /// For downloaded rules: they must carry the maintainer's Ed25519 signature (made with the Sparkle update key),
-    /// so a tampered file can never change a verdict or put a command behind the Copy button.
-    public static func decode(_ data: Data, signature: String, publicKey: String) throws -> RuleSet {
-        guard let signature = Data(base64Encoded: signature.trimmingCharacters(in: .whitespacesAndNewlines)),
-              let key = Data(base64Encoded: publicKey).flatMap({ try? Curve25519.Signing.PublicKey(rawRepresentation: $0) }),
-              key.isValidSignature(signature, for: data) else { throw failure("The rules file is not signed by App Checker.") }
-        return try decode(data)
-    }
 }
 
 /// Local state the checks read. Injected so the rule engine is testable.
@@ -268,7 +246,8 @@ public struct Verdict: Sendable, Equatable {
             let notable = shown.result.status != .ok || shown.result.state.contains(Rule.blockedNote)
             return (shown.result.status, results.count > 1 && notable ? "In \(editor): \(shown.result.state)" : shown.result.state)
         }
-        if let rule = rules.first(where: { $0.match.contains(item.id) }) {
+        // shortcut: an extension with a different version per editor is judged by the first editor's version; pick per editor if an extension ever gets version files.
+        if let rule = Rule.pick(rules.filter({ $0.match.contains(item.id) }), version: item.version) {
             (status, state) = judge(rule)
             (self.rule, source) = (rule, .rules)
         } else if let rule = aiRules[item.id] {

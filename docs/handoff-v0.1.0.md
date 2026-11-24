@@ -5,9 +5,9 @@ Status on 2026-11-24: the app is built, tested, reviewed and pushed to `main`. T
 ## What exists
 
 - A menu bar app (no Dock icon, starts at login) that lists apps, Homebrew formulae and casks, commands in `~/.local/bin`, global npm and pnpm packages and editor extensions, with a green, yellow, red or grey verdict per item. See the [README](../README.md).
-- Verdicts from a signed rules file ([rules.json](../rules.json), 43 rules), an on-demand AI lookup (Claude Code CLI or an OpenAI-compatible endpoint such as OpenRouter) and an offline hint that stays grey.
-- Sparkle 2 for updates, fed from `appcast.xml` on `main`. The same EdDSA key signs `rules.json` (`rules.json.sig`), and the app refuses a downloaded rules file without that signature.
-- `scripts/build-app.sh`, `scripts/sign-rules.sh`, `scripts/release.sh`, and CI that runs the tests and a release build on every push.
+- Verdicts from the curated findings ([findings/](../findings), one folder per app and one file per version from which a finding holds, 44 apps), an on-demand AI lookup (Claude Code CLI or an OpenAI-compatible endpoint such as OpenRouter) and an offline hint that stays grey.
+- Sparkle 2 for updates, fed from `appcast.xml` on `main`. The same EdDSA key signs `findings/index.json`, which lists every finding file with its hash, and the app refuses downloaded findings that do not match a signed index or whose index is older than the one it has.
+- `scripts/build-app.sh`, `scripts/sign-findings.sh`, `scripts/release.sh`, and CI that runs the tests and a release build on every push.
 
 ## Evidence
 
@@ -59,7 +59,7 @@ Expected: Sparkle offers 0.1.0, installs it and relaunches.
 
 Back up the Sparkle private key (`.build/artifacts/sparkle/Sparkle/bin/generate_keys -x <file>`, then store the file in a password manager and delete it). Without it no update and no rules change can be signed.
 
-After any change to `rules.json`: run `scripts/sign-rules.sh` and commit `rules.json.sig` with it, otherwise the test fails and installed apps keep their old rules.
+After any change below `findings/`: run `scripts/sign-findings.sh` and commit `index.json` and `index.json.sig` with it, otherwise the test fails and installed apps keep their old findings.
 
 ## Known limits, left open on purpose
 
@@ -70,8 +70,10 @@ After any change to `rules.json`: run `scripts/sign-rules.sh` and commit `rules.
 - A block comment (`/* … */`) around a setting is not recognised as a comment; `#`, `//` and `;` lines are.
 - GitHub CLI: unusual spellings of an "off" value (`GH_TELEMETRY=FALSE`) show yellow, not green. That is the safe direction. The rule reads `~/.config/gh/config.yml` only, so with a custom `GH_CONFIG_DIR` or `XDG_CONFIG_HOME` a leftover file there can wrongly show green.
 - Variables are read from the login shell at launch and on Rescan, so a change to a shell profile shows up after Rescan.
-- The rules file format is still version 1 although it gained `notIn` and the `enabledWhen` override. No build was released before that, so no older app can misread it. Raise `version` and `supportedVersion` together for the next format change.
-- An older, validly signed rules file would be accepted if someone could serve it in place of the current one.
+- The findings format is version 1. No build was released before the move from one rules file to the findings folder, so no older app can misread it. Raise `version` in the index and `supportedVersion` together for the next format change.
+- A word after the version numbers is read as a pre-release, so a version such as OpenSSL's `1.1.1w` sorts before `1.1.1`. No app with such versions has more than one file yet.
+- An extension with a different version in each editor is judged by the first editor's version.
+- If the findings change on the server between the download of the index and of a file, that download is rejected and tried again the next day.
 - Stopping a batch of AI lookups lets the running lookup finish. A lookup that times out stops the CLI but not programs the CLI started.
 - Verdicts are computed on the main thread, which is fine for a few hundred items.
 - The model object that ties scanning, saving and notifications together has no unit tests; it was checked by running the app.

@@ -1,0 +1,27 @@
+{
+  "match": [
+    "npm:prisma"
+  ],
+  "name": "Prisma CLI",
+  "telemetry": "opt-out",
+  "summary": "Sends one anonymous event per prisma command, with a random installation ID and the Prisma version. Telemetry is on by default and off in CI. A first-run notice is printed.",
+  "policyURL": "https://www.prisma.io/docs/cli/telemetry",
+  "optOut": {
+    "instructions": "Run npx prisma telemetry disable, or set PRISMA_DISABLE_TELEMETRY=1 or DO_NOT_TRACK=1.",
+    "command": "echo 'export PRISMA_DISABLE_TELEMETRY=1' >> ~/.zshrc",
+    "url": "https://www.prisma.io/docs/cli/telemetry"
+  },
+  "disabledWhen": [
+    {
+      "env": "PRISMA_DISABLE_TELEMETRY",
+      "equals": "1"
+    },
+    {
+      "env": "DO_NOT_TRACK",
+      "equals": "1"
+    }
+  ],
+  "sources": [
+    "https://www.prisma.io/docs/cli/telemetry"
+  ]
+}

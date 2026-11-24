@@ -1,0 +1,23 @@
+{
+  "match": [
+    "brew:aws-sam-cli"
+  ],
+  "name": "AWS SAM CLI",
+  "telemetry": "opt-out",
+  "summary": "Collects generic usage metrics, system and environment information (OS, runtime environment) and errors. No personal information such as user names or emails is collected.",
+  "policyURL": "https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-telemetry.html",
+  "optOut": {
+    "instructions": "Set SAM_CLI_TELEMETRY=0 in your shell profile (~/.zshrc).",
+    "command": "echo 'export SAM_CLI_TELEMETRY=0' >> ~/.zshrc",
+    "url": "https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-telemetry.html"
+  },
+  "disabledWhen": [
+    {
+      "env": "SAM_CLI_TELEMETRY",
+      "equals": "0"
+    }
+  ],
+  "sources": [
+    "https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-telemetry.html"
+  ]
+}

@@ -265,17 +265,17 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
     }
 }
 
-/// Guards the curated database: every contributed rule must be usable by the app.
-@Suite struct BundledRules {
-    let rules = repoRoot.appendingPathComponent("rules.json")
+/// Guards the curated database: every contributed finding must be usable by the app.
+@Suite struct BundledFindings {
+    let folder = repoRoot.appendingPathComponent("findings")
 
-    @Test func rulesFileIsValid() throws {
-        #expect(try !RuleSet.decode(Data(contentsOf: rules)).rules.isEmpty)
+    @Test func everyFindingIsValid() throws {
+        #expect(try !Findings.rules(from: Findings.read(folder: folder)).isEmpty)
     }
 
     /// gh reads any GH_TELEMETRY value but a few "off" spellings as on, and that beats DO_NOT_TRACK and the config file.
     @Test func gitHubCLIIsNotGreenWhenItsOwnVariableSwitchesTelemetryOn() throws {
-        let all = try RuleSet.decode(Data(contentsOf: rules)).rules
+        let all = try Findings.rules(from: Findings.read(folder: folder))
         let gh = try #require(all.first { $0.match.contains("brew:gh") })
         #expect(gh.evaluate(probe(env: ["DO_NOT_TRACK": "1"])).status == .ok)
         #expect(gh.evaluate(probe(env: ["DO_NOT_TRACK": "1", "GH_TELEMETRY": " Enabled"])).status == .warn)
@@ -283,28 +283,66 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         #expect(gh.evaluate(probe(env: ["DO_NOT_TRACK": "1", "GH_TELEMETRY": "log"])).status == .ok)
         #expect(gh.evaluate(probe(env: ["DO_NOT_TRACK": "1", "GH_TELEMETRY": "0\n"])).status == .ok)
         #expect(gh.evaluate(probe(env: ["GH_TELEMETRY": "off"])).status == .ok)
-        // Each Homebrew install has its own rule, so one install's switch cannot turn the other green.
+        // Each Homebrew install has its own finding, so one install's switch cannot turn the other green.
         #expect(all.contains { $0.match == ["brew:homebrew"] } && all.contains { $0.match == ["brew:homebrew-usr-local"] })
     }
 
-    /// The app ignores a downloaded rules.json without a valid signature, so an unsigned change would silently never reach users.
-    /// Pull requests cannot sign; the maintainer runs scripts/sign-rules.sh when merging.
+    /// Before the fix the desktop app ignored the shell profile for relay tracing, so the variable must not turn those builds green.
+    @Test func t3CodeIsOnlyGreenFromTheBuildThatHonoursTheVariable() throws {
+        let all = try Findings.rules(from: Findings.read(folder: folder))
+        let off = probe(env: ["T3CODE_TELEMETRY_ENABLED": "false"])
+        let status = { (version: String) in
+            Verdict(item: Item(id: "app:com.t3tools.t3code", name: "T3 Code", version: version, path: "/x"), rules: all, aiRules: [:], sdks: [], probe: off).status
+        }
+        for version in ["0.1.10", "0.1.10-nightly.20261116.4800", "0.1.11-nightly.20261116.4799"] { #expect(status(version) == .warn, "\(version)") }
+        for version in ["0.1.11-nightly.20261117.4814", "0.1.11", "0.1.12-nightly.20261124.5191", "1.0", "not a version"] { #expect(status(version) == .ok, "\(version)") }
+    }
+
+    /// The app only takes downloaded findings that its signed index lists, so an unsigned change would silently never reach users.
+    /// Pull requests cannot sign; the maintainer runs scripts/sign-findings.sh when merging.
     @Test(.enabled(if: ProcessInfo.processInfo.environment["GITHUB_EVENT_NAME"] != "pull_request"))
-    func rulesFileIsSignedWithTheUpdateKey() throws {
+    func indexIsSignedWithTheUpdateKeyAndListsEveryFile() throws {
         let info = try #require(NSDictionary(contentsOf: repoRoot.appendingPathComponent("Info.plist")))
-        let signature = try String(contentsOf: rules.appendingPathExtension("sig"), encoding: .utf8)
-        #expect(throws: Never.self, "run scripts/sign-rules.sh") {
-            try RuleSet.decode(Data(contentsOf: rules), signature: signature, publicKey: info["SUPublicEDKey"] as? String ?? "")
+        #expect(throws: Never.self, "run scripts/sign-findings.sh") {
+            try Findings.verified(folder: folder, publicKey: info["SUPublicEDKey"] as? String ?? "")
         }
     }
 }
 
-@Suite struct RuleValidation {
-    func set(_ rule: String) -> Data { Data(#"{"version": 1, "rules": [\#(rule)]}"#.utf8) }
+@Suite struct Versions {
+    @Test func ordersWhatInstallersWrite() throws {
+        // Each one is lower than the next.
+        let ordered = [
+            "0", "0.1.9", "v0.1.10", "0.1.11-nightly.20261116.4799", "0.1.11-nightly.20261117.4814", "0.1.11-rc.1", "0.1.11",
+            "0.1.11_1", "0.1.12-alpha", "0.1.12-beta.2", "0.1.12-beta.10", "0.1.12", "1.9", "1.10 (4521)", "2", "3.0.0_1", "7.1.2-5", "2026.11.24",
+        ]
+        for (lower, higher) in zip(ordered, ordered.dropFirst()) {
+            let (a, b) = (try #require(Version(lower)), try #require(Version(higher)))
+            #expect(a < b && !(b < a) && a != b, "\(lower) < \(higher)")
+        }
+        #expect(Version("1.0") == Version("1.0.0+build.5") && Version("V2.1") == Version("2.1,0"))
+        #expect(Version("") == nil && Version("latest") == nil)
+    }
+
+    @Test func aFindingHoldsUntilTheNextOne() {
+        var (first, second, third) = (rule(.optOut), rule(.none), rule(.forced))
+        (first.since, second.since, third.since) = ("0", "2.0-beta.3", "3")
+        let pick = { (version: String) in Rule.pick([third, first, second], version: version)?.since }
+        #expect(pick("1.4") == "0" && pick("2.0-beta.2") == "0")
+        #expect(pick("2.0-beta.3") == "2.0-beta.3" && pick("2.0") == "2.0-beta.3" && pick("2.99") == "2.0-beta.3")
+        #expect(pick("3") == "3" && pick("10.1") == "3")
+        // An unreadable version gets the current finding, and a version from before the first finding gets none.
+        #expect(pick("unknown") == "3")
+        #expect(Rule.pick([second, third], version: "1.0") == nil && Rule.pick([], version: "1.0") == nil)
+    }
+}
+
+@Suite struct FindingValidation {
     let good = #"{"match": ["brew:x"], "telemetry": "opt-out", "summary": "s", "sources": ["https://example.com"], "optOut": {"instructions": "i", "command": "export X=0", "url": "https://example.com"}}"#
 
-    @Test func oneBadRuleRejectsTheFile() throws {
-        #expect(try RuleSet.decode(set(good)).rules.count == 1)
+    @Test func oneBadFindingRejectsThemAll() throws {
+        let rules = try Findings.rules(from: ["x/0.json": Data(good.utf8), "x/v2.1-beta.json": Data(good.utf8)])
+        #expect(rules.map(\.since) == ["0", "v2.1-beta"])
         for (from, to) in [
             (#""brew:x""#, #""x""#),                                  // id without a kind
             ("export X=0", "export X=0\\u202e"),                      // invisible character in the command
@@ -313,9 +351,14 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
             (#""summary": "s""#, #""summary": "s", "disabledWhen": [{"json": "/Volumes/share/x.json", "key": "k", "equals": "v"}]"#),
         ] {
             #expect(good.contains(from))
-            #expect(throws: CocoaError.self, "\(to)") { try RuleSet.decode(set(good.replacingOccurrences(of: from, with: to))) }
+            #expect(throws: CocoaError.self, "\(to)") { try Findings.rules(from: ["x/0.json": Data(good.replacingOccurrences(of: from, with: to).utf8)]) }
         }
-        #expect(throws: CocoaError.self) { try RuleSet.decode(set(good + "," + good)) }  // same id twice
+        // The same item and version twice, also when spelled differently or filed under two apps.
+        #expect(throws: CocoaError.self) { try Findings.rules(from: ["x/1.json": Data(good.utf8), "y/1.0.json": Data(good.utf8)]) }
+        // File names that are no version, or that could leave the folder.
+        for path in ["x/latest.json", "x/.json", "0.json", "x/y/0.json", "../x/0.json", "x/..json", "X y/0.json", "x/1 2.json"] {
+            #expect(throws: CocoaError.self, "\(path)") { try Findings.rules(from: [path: Data(good.utf8)]) }
+        }
     }
 
     @Test func checksNeedAnExpectedValueAndAPathInsideHomeOrHomebrew() {
@@ -329,15 +372,28 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         #expect(!Check(file: "~/../other/x", contains: "t").isWellFormed)
     }
 
-    @Test func downloadedRulesNeedTheMaintainersSignature() throws {
-        let key = Curve25519.Signing.PrivateKey(), data = set(good)
+    @Test func downloadedFindingsMustBeExactlyWhatTheMaintainerSigned() throws {
+        let key = Curve25519.Signing.PrivateKey(), file = Data(good.utf8)
         let publicKey = key.publicKey.rawRepresentation.base64EncodedString()
+        let data = try JSONEncoder().encode(Findings.Index(version: 1, serial: 7, files: ["x/0.json": Findings.sha256(file)]))
         let signature = try key.signature(for: data).base64EncodedString()
-        #expect(try RuleSet.decode(data, signature: signature + "\n", publicKey: publicKey).rules.count == 1)
-        #expect(throws: CocoaError.self) { try RuleSet.decode(data + Data(" ".utf8), signature: signature, publicKey: publicKey) }
-        #expect(throws: CocoaError.self) { try RuleSet.decode(data, signature: "", publicKey: publicKey) }
+        let index = try Findings.index(data, signature: signature + "\n", publicKey: publicKey)
+        #expect(index.serial == 7)
+        #expect(try Findings.rules(from: ["x/0.json": file], matching: index).count == 1)
+        // A changed, missing or extra file does not match the index.
+        #expect(throws: CocoaError.self) { try Findings.rules(from: ["x/0.json": file + Data(" ".utf8)], matching: index) }
+        #expect(throws: CocoaError.self) { try Findings.rules(from: [:], matching: index) }
+        #expect(throws: CocoaError.self) { try Findings.rules(from: ["x/0.json": file, "y/0.json": file], matching: index) }
+        // A changed index, no signature, or somebody else's signature.
+        #expect(throws: CocoaError.self) { try Findings.index(data + Data(" ".utf8), signature: signature, publicKey: publicKey) }
+        #expect(throws: CocoaError.self) { try Findings.index(data, signature: "", publicKey: publicKey) }
         let other = Curve25519.Signing.PrivateKey().publicKey.rawRepresentation.base64EncodedString()
-        #expect(throws: CocoaError.self) { try RuleSet.decode(data, signature: signature, publicKey: other) }
+        #expect(throws: CocoaError.self) { try Findings.index(data, signature: signature, publicKey: other) }
+        // A signed index for a newer format, or one that names a file outside the folder.
+        for bad in [Findings.Index(version: 2, serial: 8, files: [:]), Findings.Index(version: 1, serial: 8, files: ["../x/0.json": "00"])] {
+            let data = try JSONEncoder().encode(bad)
+            #expect(throws: CocoaError.self) { try Findings.index(data, signature: key.signature(for: data).base64EncodedString(), publicKey: publicKey) }
+        }
     }
 }
 

@@ -1,0 +1,28 @@
+{
+  "match": [
+    "app:com.microsoft.VSCode"
+  ],
+  "name": "Visual Studio Code",
+  "telemetry": "opt-out",
+  "summary": "Sends crash reports, error telemetry and usage data to Microsoft by default. The telemetry.telemetryLevel setting controls this: all, error, crash or off. Extensions may send their own data.",
+  "policyURL": "https://privacy.microsoft.com/privacystatement",
+  "optOut": {
+    "instructions": "Set telemetry.telemetryLevel to off in Settings (Cmd+, then search telemetry).",
+    "url": "https://code.visualstudio.com/docs/configure/telemetry"
+  },
+  "disabledWhen": [
+    {
+      "json": "~/Library/Application Support/Code/User/settings.json",
+      "key": "telemetry.telemetryLevel",
+      "equals": "off"
+    },
+    {
+      "json": "~/Library/Application Support/Code/User/settings.json",
+      "key": "telemetry.enableTelemetry",
+      "equals": "false"
+    }
+  ],
+  "sources": [
+    "https://code.visualstudio.com/docs/configure/telemetry"
+  ]
+}

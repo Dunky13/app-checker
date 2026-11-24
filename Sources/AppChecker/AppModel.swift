@@ -6,9 +6,12 @@ import UserNotifications
 
 @MainActor @Observable
 final class AppModel {
-    nonisolated static let rulesURL = URL(string: "https://raw.githubusercontent.com/Dunky13/app-checker/main/rules.json")!
+    nonisolated static let findingsURL = URL(string: "https://raw.githubusercontent.com/Dunky13/app-checker/main/findings/")!
     nonisolated static let supportDir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("App Checker")
-    nonisolated static let stateFile = supportDir.appendingPathComponent("state.json"), cachedRules = supportDir.appendingPathComponent("rules.json")
+    nonisolated static let stateFile = supportDir.appendingPathComponent("state.json"), cachedFindings = supportDir.appendingPathComponent("findings")
+    /// Same key as the app's own updates: only findings the maintainer signed are accepted.
+    nonisolated static var publicKey: String { Bundle.main.infoDictionary?["SUPublicEDKey"] as? String ?? "" }
+    nonisolated static var bundledFindings: URL? { Bundle.main.url(forResource: "findings", withExtension: nil) }
 
     /// Everything that survives a restart.
     struct Saved: Codable {
@@ -28,6 +31,7 @@ final class AppModel {
     private(set) var shellFailed = false
 
     private var rules: [Rule] = []
+    private var serial = 0
     private var saved = Saved()
     private var env: [String: String] = [:]
     private var watcher: Watcher?
@@ -48,12 +52,20 @@ final class AppModel {
         }
     }
 
-    /// Uses whichever rules file is newer: the one shipped in the app or the last download.
-    nonisolated static func loadRules() -> [Rule] {
-        let modified = { (url: URL) in (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate ?? .distantPast }
-        return [Bundle.main.url(forResource: "rules", withExtension: "json"), cachedRules].compactMap(\.self)
-            .sorted { modified($0) > modified($1) }
-            .lazy.compactMap { try? RuleSet.decode(Data(contentsOf: $0)).rules }.first ?? []
+    /// The findings shipped in the app, or the last verified download when that one is newer.
+    nonisolated static func loadFindings() -> (serial: Int, rules: [Rule]) {
+        var best: (serial: Int, rules: [Rule]) = (0, [])
+        if let folder = bundledFindings {
+            // The app's own code signature covers the bundled copy, so its index is only read for the serial.
+            let index = try? JSONDecoder().decode(Findings.Index.self, from: Data(contentsOf: folder.appendingPathComponent("index.json")))
+            do { best = (index?.serial ?? 0, try Findings.rules(from: Findings.read(folder: folder))) } catch {
+                NSLog("App Checker: the bundled findings are invalid: \(error.localizedDescription)")
+            }
+        }
+        if let cached = try? Findings.verified(folder: cachedFindings, publicKey: publicKey), cached.index.serial > best.serial {
+            best = (cached.index.serial, cached.rules)
+        }
+        return best
     }
 
     init() {
@@ -62,7 +74,7 @@ final class AppModel {
         // Answers saved by an older version must pass today's checks too.
         saved.aiRules = saved.aiRules.filter { $0.value.problems(curated: false).isEmpty }
         Probe.blockedFiles = Set(saved.blocked ?? [])
-        rules = Self.loadRules()
+        (serial, rules) = Self.loadFindings()
         UserDefaults.standard.register(defaults: [
             "refreshRules": true, "backend": "claude", "claudeModel": "sonnet",
             "apiBaseURL": "https://openrouter.ai/api/v1", "apiModel": "~anthropic/claude-sonnet-latest",
@@ -76,7 +88,7 @@ final class AppModel {
         Task {
             await rescan()
             while true {
-                await refreshRules()
+                await refreshFindings()
                 try? await Task.sleep(for: .seconds(86400))
             }
         }
@@ -197,20 +209,45 @@ final class AppModel {
         do { try JSONEncoder().encode(saved).write(to: Self.stateFile, options: .atomic) } catch { NSLog("App Checker: could not save state: \(error)") }
     }
 
-    private func refreshRules() async {
+    private func refreshFindings() async {
         guard UserDefaults.standard.bool(forKey: "refreshRules") else { return }
         do {
             let session = URLSession(configuration: .ephemeral)
-            let (data, response) = try await session.data(from: Self.rulesURL)
-            let (signature, _) = try await session.data(from: Self.rulesURL.appendingPathExtension("sig"))
-            guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw URLError(.badServerResponse) }
-            // Same key as the app's own updates: only rules the maintainer signed are accepted.
-            let key = Bundle.main.infoDictionary?["SUPublicEDKey"] as? String ?? ""
-            rules = try RuleSet.decode(data, signature: String(decoding: signature, as: UTF8.self), publicKey: key).rules
-            try data.write(to: Self.cachedRules, options: .atomic)
+            func fetch(_ path: String) async throws -> Data {
+                let (data, response) = try await session.data(from: Self.findingsURL.appendingPathComponent(path))
+                guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw URLError(.badServerResponse) }
+                return data
+            }
+            let (indexData, signature) = (try await fetch("index.json"), try await fetch("index.json.sig"))
+            let index = try Findings.index(indexData, signature: String(decoding: signature, as: UTF8.self), publicKey: Self.publicKey)
+            // Nothing newer. This also refuses an older index that someone plays back.
+            guard index.serial > serial else { return }
+            // Files the app already has are reused by their hash and every other listed file is fetched,
+            // whether or not the app is installed here: the requests say nothing about this Mac.
+            var have: [String: Data] = [:]
+            for folder in [Self.bundledFindings, Self.cachedFindings].compactMap(\.self) {
+                for data in Findings.read(folder: folder).values { have[Findings.sha256(data)] = data }
+            }
+            var files: [String: Data] = [:]
+            for (path, hash) in index.files {
+                if let data = have[hash] { files[path] = data } else { files[path] = try await fetch(path) }
+            }
+            let rules = try Findings.rules(from: files, matching: index)
+
+            // Keep the download, with its index and signature, so the next launch can verify and use it.
+            let fm = FileManager.default, fresh = Self.supportDir.appendingPathComponent("findings.new")
+            try? fm.removeItem(at: fresh)
+            for (path, data) in files.merging(["index.json": indexData, "index.json.sig": signature], uniquingKeysWith: { $1 }) {
+                let file = fresh.appendingPathComponent(path)
+                try fm.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+                try data.write(to: file)
+            }
+            try? fm.removeItem(at: Self.cachedFindings)
+            try fm.moveItem(at: fresh, to: Self.cachedFindings)
+            (self.rules, serial) = (rules, index.serial)
             evaluate()
         } catch {
-            NSLog("App Checker: rules not updated, keeping the current ones: \(error.localizedDescription)")
+            NSLog("App Checker: findings not updated, keeping the current ones: \(error.localizedDescription)")
         }
     }
 

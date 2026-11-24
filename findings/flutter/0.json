@@ -1,0 +1,24 @@
+{
+  "match": [
+    "cask:flutter"
+  ],
+  "name": "Flutter CLI",
+  "telemetry": "opt-out",
+  "summary": "Sends anonymous feature usage statistics and crash reports to Google unless you have opted out. A review log is kept at ~/.dart-tool/dart-flutter-telemetry.log.",
+  "policyURL": "https://docs.flutter.dev/reference/crash-reporting",
+  "optOut": {
+    "instructions": "Run flutter --disable-analytics. flutter config shows the current setting.",
+    "command": "flutter --disable-analytics",
+    "url": "https://docs.flutter.dev/reference/crash-reporting"
+  },
+  "sources": [
+    "https://docs.flutter.dev/reference/crash-reporting",
+    "https://github.com/dart-lang/tools/blob/main/pkgs/unified_analytics/lib/src/constants.dart"
+  ],
+  "disabledWhen": [
+    {
+      "file": "~/.dart-tool/dart-flutter-telemetry.config",
+      "contains": "reporting=0"
+    }
+  ]
+}

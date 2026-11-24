@@ -1,0 +1,18 @@
+{
+  "match": [
+    "npm:@yarnpkg/cli-dist"
+  ],
+  "name": "Yarn (Berry)",
+  "telemetry": "opt-out",
+  "summary": "Periodically sends anonymous usage data to Yarn's servers (for example number of dependencies and installs run). Never runs on CI. Default is enabled outside CI.",
+  "policyURL": "https://yarnpkg.com/advanced/telemetry",
+  "optOut": {
+    "instructions": "For one project run yarn config set enableTelemetry 0. For the whole machine run yarn config set --home enableTelemetry 0.",
+    "command": "yarn config set --home enableTelemetry 0",
+    "url": "https://yarnpkg.com/advanced/telemetry"
+  },
+  "sources": [
+    "https://yarnpkg.com/advanced/telemetry",
+    "https://yarnpkg.com/configuration/yarnrc"
+  ]
+}

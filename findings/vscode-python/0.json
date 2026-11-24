@@ -1,0 +1,29 @@
+{
+  "match": [
+    "ext:ms-python.python"
+  ],
+  "name": "Python (VS Code extension)",
+  "telemetry": "opt-out",
+  "summary": "Collects usage data and sends it to Microsoft. Honours VS Code's telemetry.telemetryLevel setting, which defaults to all.",
+  "policyURL": "https://github.com/microsoft/vscode-python#data-and-telemetry",
+  "optOut": {
+    "instructions": "Set telemetry.telemetryLevel to off in VS Code settings.",
+    "url": "https://code.visualstudio.com/docs/configure/telemetry"
+  },
+  "disabledWhen": [
+    {
+      "json": "~/Library/Application Support/Code/User/settings.json",
+      "key": "telemetry.telemetryLevel",
+      "equals": "off"
+    },
+    {
+      "json": "~/Library/Application Support/Code/User/settings.json",
+      "key": "telemetry.enableTelemetry",
+      "equals": "false"
+    }
+  ],
+  "sources": [
+    "https://raw.githubusercontent.com/microsoft/vscode-python/main/README.md",
+    "https://code.visualstudio.com/docs/configure/telemetry"
+  ]
+}

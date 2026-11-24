@@ -1,0 +1,17 @@
+{
+  "match": [
+    "app:com.google.Chrome"
+  ],
+  "name": "Google Chrome",
+  "telemetry": "opt-out",
+  "summary": "Sends usage statistics and crash reports to Google by default. Crash reports may include site URLs and memory contents. Page URLs are shared only if 'Make searches and browsing better' is also on.",
+  "policyURL": "https://support.google.com/chrome/answer/14746339",
+  "optOut": {
+    "instructions": "Open Chrome Settings > You and Google > Google services and turn off 'Help improve Chrome's features and performance'.",
+    "url": "https://support.google.com/chrome/answer/14746339"
+  },
+  "sources": [
+    "https://support.google.com/chrome/answer/14746339",
+    "https://support.google.com/chrome/answer/96817"
+  ]
+}

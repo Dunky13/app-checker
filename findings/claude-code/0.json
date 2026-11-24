@@ -1,0 +1,31 @@
+{
+  "match": [
+    "npm:@anthropic-ai/claude-code",
+    "cask:claude-code",
+    "bin:claude"
+  ],
+  "name": "Claude Code",
+  "telemetry": "opt-out",
+  "summary": "Sends usage metrics (latency, reliability, usage patterns; no code, prompts or file paths) to Anthropic and third-party logging infrastructure. Sends error reports (stack traces, with redaction) to a third-party error tracker, on by default only for Pro, Max and Ultra sign-ins on v2.1.198 or later that connect directly to the Claude API. Metrics are off by default on Bedrock, Vertex and Foundry.",
+  "policyURL": "https://www.anthropic.com/legal/privacy",
+  "optOut": {
+    "instructions": "Set CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 to turn off metrics, error reports and surveys at once. Individually: DISABLE_TELEMETRY=1 turns off metrics, DISABLE_ERROR_REPORTING=1 turns off error reports. These variables can also be put in the env block of ~/.claude/settings.json.",
+    "command": "echo 'export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1' >> ~/.zshrc",
+    "url": "https://code.claude.com/docs/en/data-usage"
+  },
+  "disabledWhen": [
+    {
+      "env": "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
+      "equals": "1"
+    },
+    {
+      "json": "~/.claude/settings.json",
+      "key": "env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
+      "equals": "1"
+    }
+  ],
+  "sources": [
+    "https://code.claude.com/docs/en/data-usage",
+    "https://www.anthropic.com/legal/privacy"
+  ]
+}

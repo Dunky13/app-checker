@@ -2,7 +2,7 @@
 
 A macOS menu bar app that lists the software on your Mac and tells you whether it sends telemetry, whether you have switched that off, and how to switch it off.
 
-Many tools collect usage data unless you opt out, and the opt-out is often an environment variable that is only mentioned in an issue tracker. App Checker keeps those switches in one rules file and checks them against your Mac.
+Many tools collect usage data unless you opt out, and the opt-out is often an environment variable that is only mentioned in an issue tracker. App Checker keeps those switches in one folder of findings, one per app, and checks them against your Mac.
 
 ## What it checks
 
@@ -27,7 +27,7 @@ Not covered: apps kept anywhere else, iPhone and iPad apps running on a Mac, and
 
 A verdict comes from, in this order:
 
-1. **The rules database** ([rules.json](rules.json)), curated by hand with sources.
+1. **The findings** ([findings/](findings)), curated by hand with sources, per app and per version.
 2. **An AI lookup**, only when you ask for one. The result is marked as unverified and lists its sources.
 3. **An offline hint.** For other apps, Homebrew items and commands, the app searches the program file for the names of well-known analytics services. A match stays grey: it is a lead worth looking up, not proof. npm packages and extensions are not searched.
 
@@ -54,7 +54,7 @@ The Claude Code CLI is started without your Claude settings, and with its own me
 
 App Checker has no telemetry. It talks to the network in three cases:
 
-- At launch and then once a day it downloads `rules.json` from this repository (can be switched off in Settings). The file is only used if it carries the maintainer's signature.
+- At launch and then once a day it downloads the findings from this repository (can be switched off in Settings). It fetches every file that changed, not only those for apps you have, so the requests say nothing about your Mac. Files are only used if they match the list the maintainer signed.
 - Sparkle checks this repository for updates, after asking you once. The anonymous system profile is disabled.
 - AI lookups, when you ask for them.
 
@@ -64,9 +64,21 @@ At launch and when you choose Rescan, the app starts your login shell once to re
 
 Some apps keep their settings in a protected folder, for example Docker Desktop. macOS can then stop App Checker from reading the setting and show a "Data Access Blocked" notice. The item says so instead of guessing. To allow the read, open System Settings > Privacy & Security > Files & Folders, then choose Rescan. App Checker does not retry a blocked file until you rescan.
 
-## Rules
+## Findings
 
-Each rule in [rules.json](rules.json) matches one or more item IDs:
+Every app has its own folder below [findings/](findings), with one file per version from which a finding holds:
+
+```
+findings/t3-code/0.json                              from the first version
+findings/t3-code/0.1.11-nightly.20261117.4814.json   from that build onward
+findings/t3-code/NOTES.md                            optional: why the files differ
+```
+
+A file is named after the first version it applies to and stays valid until a file with a higher version exists, so a range of versions needs one file and no end. Add a file only when something changed: the opt-out, the default, or what is collected. Each file is complete on its own; nothing is inherited from the file before it.
+
+Versions are compared the way people read them: `1.10` is after `1.9`, a leading `v` is ignored, `3.0.0_1` and `7.1.2-5` are after `3.0.0` and `7.1.2`, and a pre-release such as `0.1.11-nightly.20261117.4814`, `2.0-beta.3` or `1.0-rc.1` is before its release and after the release before it. An installed item whose version cannot be read gets the newest finding. An item older than the first file gets none, so start every folder with `0.json`.
+
+Each file is one finding. It matches one or more item IDs:
 
 | Prefix | Example |
 | --- | --- |
@@ -105,9 +117,9 @@ File paths must start with `~/` or a Homebrew prefix. Rules cannot run commands,
 
 A `command` is one line, and it should make the change permanent: `echo 'export NAME=1' >> ~/.zshrc`, not `export NAME=1`.
 
-Found a wrong or missing rule? [Open an issue](https://github.com/Dunky13/app-checker/issues/new) or a pull request with a source. `swift test` validates the file.
+Found a wrong or missing finding? [Open an issue](https://github.com/Dunky13/app-checker/issues/new) or a pull request with a source. `swift test` validates every file.
 
-The app only accepts a downloaded `rules.json` that is signed with the same key as app updates. The maintainer signs after merging a rules change with `scripts/sign-rules.sh`, which writes `rules.json.sig`. Until then the app keeps the rules it already has.
+The app only accepts downloaded findings that match `findings/index.json`, the list of every file with its SHA-256, and only when that list is signed with the same key as app updates. The maintainer runs `scripts/sign-findings.sh` after merging a change, which writes the index and `index.json.sig`. Until then the app keeps the findings it already has. Every signing gives the index a higher serial number, and the app never goes back to a lower one.
 
 ## Build
 
@@ -131,7 +143,7 @@ Print the verdicts without the interface:
 
 - a Developer ID Application certificate in the keychain,
 - notarization credentials: `NOTARY_KEYCHAIN_PROFILE`, or `NOTARY_KEY_FILE` with `NOTARY_KEY_ID` and `NOTARY_ISSUER_ID`,
-- the Sparkle EdDSA private key in the login keychain (or `SPARKLE_KEY_FILE`). Keep a backup: without it no update or rules file can be signed,
+- the Sparkle EdDSA private key in the login keychain (or `SPARKLE_KEY_FILE`). Keep a backup: without it no update and no findings can be signed,
 - the `gh` CLI, signed in.
 
 ## License

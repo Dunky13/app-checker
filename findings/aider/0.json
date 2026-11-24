@@ -1,0 +1,17 @@
+{
+  "match": [
+    "brew:aider"
+  ],
+  "name": "Aider",
+  "telemetry": "opt-in",
+  "summary": "Analytics (LLMs used and token counts, no code, chat or keys) are collected only if you agree. A random subset of users is asked once whether to opt in.",
+  "policyURL": "https://aider.chat/docs/more/analytics.html",
+  "optOut": {
+    "instructions": "If you opted in, run aider --analytics-disable once to disable analytics permanently.",
+    "command": "aider --analytics-disable",
+    "url": "https://aider.chat/docs/more/analytics.html"
+  },
+  "sources": [
+    "https://raw.githubusercontent.com/Aider-AI/aider/main/aider/website/docs/more/analytics.md"
+  ]
+}

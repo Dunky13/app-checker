@@ -1,0 +1,46 @@
+{
+  "match": [
+    "app:com.t3tools.t3code"
+  ],
+  "name": "T3 Code",
+  "telemetry": "opt-out",
+  "summary": "Sends product usage events (provider, model, reasoning effort, permission mode, turn results, durations, token counts, release channel) tied to hashed account or install identifiers to ingest.t3.codes, which forwards them to PostHog. Also sends relay connection traces to Axiom. Prompts, responses and file contents are not included. Stable and Nightly desktop builds share this bundle ID.",
+  "policyURL": "https://t3.codes/privacy-policy",
+  "optOut": {
+    "instructions": "Set the environment variable T3CODE_TELEMETRY_ENABLED=false. The desktop app reads it from your shell profile (for example ~/.zshrc), so export it there and restart the app. For the t3 CLI or a server, set it in the server's environment before starting it. Opt-out of relay tracing also follows OTEL_SDK_DISABLED / T3CODE_OTEL_SDK_DISABLED. The browser web app and the mobile apps send their own connection traces that this variable does not control.",
+    "command": "echo 'export T3CODE_TELEMETRY_ENABLED=false' >> ~/.zshrc",
+    "url": "https://github.com/pingdotgg/t3code/blob/main/docs/user/telemetry.md"
+  },
+  "disabledWhen": [
+    {
+      "env": "T3CODE_TELEMETRY_ENABLED",
+      "equals": "false"
+    },
+    {
+      "env": "T3CODE_TELEMETRY_ENABLED",
+      "equals": "0"
+    },
+    {
+      "env": "T3CODE_TELEMETRY_ENABLED",
+      "equals": "no"
+    },
+    {
+      "env": "T3CODE_TELEMETRY_ENABLED",
+      "equals": "off"
+    },
+    {
+      "env": "T3CODE_TELEMETRY_ENABLED",
+      "equals": "n"
+    }
+  ],
+  "sources": [
+    "https://github.com/pingdotgg/t3code/blob/main/docs/user/telemetry.md",
+    "https://github.com/pingdotgg/t3code/blob/main/apps/server/src/telemetry/AnalyticsService.ts",
+    "https://github.com/pingdotgg/t3code/blob/main/apps/marketing/src/pages/privacy-policy.astro",
+    "https://github.com/pingdotgg/t3code/blob/main/scripts/build-desktop-artifact.ts",
+    "https://github.com/pingdotgg/t3code/blob/main/packages/shared/src/otelEnvironment.ts",
+    "https://github.com/pingdotgg/t3code/issues/37772",
+    "https://t3.codes/privacy-policy",
+    "https://github.com/pingdotgg/t3code/pull/37792"
+  ]
+}

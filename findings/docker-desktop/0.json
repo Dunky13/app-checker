@@ -1,0 +1,25 @@
+{
+  "match": [
+    "app:com.docker.docker"
+  ],
+  "name": "Docker Desktop",
+  "telemetry": "opt-out",
+  "summary": "Sends diagnostics, crash reports and usage data to Docker. 'Send usage statistics' is enabled by default and Docker may periodically prompt for more information.",
+  "policyURL": "https://www.docker.com/legal/docker-privacy-policy/",
+  "optOut": {
+    "instructions": "In Docker Desktop Settings, turn off 'Send usage statistics'. Administrators can set analyticsEnabled to false in admin-settings.json.",
+    "url": "https://docs.docker.com/desktop/settings-and-maintenance/settings/"
+  },
+  "disabledWhen": [
+    {
+      "json": "~/Library/Group Containers/group.com.docker/settings-store.json",
+      "key": "AnalyticsEnabled",
+      "equals": "false"
+    }
+  ],
+  "sources": [
+    "https://docs.docker.com/desktop/settings-and-maintenance/settings/",
+    "https://docs.docker.com/enterprise/security/hardened-desktop/settings-management/configure-json-file/",
+    "https://www.docker.com/legal/docker-privacy-policy/"
+  ]
+}

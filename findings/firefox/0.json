@@ -1,0 +1,16 @@
+{
+  "match": [
+    "app:org.mozilla.firefox"
+  ],
+  "name": "Firefox",
+  "telemetry": "opt-out",
+  "summary": "Sends technical and interaction data to Mozilla by default, plus a separate Daily Usage Ping with de-identified information that Firefox is in use. Both can be turned off in settings.",
+  "policyURL": "https://www.mozilla.org/en-US/privacy/firefox/",
+  "optOut": {
+    "instructions": "In Firefox settings, clear 'Allow Firefox to send technical and interaction data to Mozilla'. The Daily Usage Ping is a separate opt-out in settings and is not affected by that checkbox. The on/off state is stored in a per-profile file, so this app does not check it.",
+    "url": "https://www.mozilla.org/en-US/privacy/firefox/"
+  },
+  "sources": [
+    "https://www.mozilla.org/en-US/privacy/firefox/"
+  ]
+}
