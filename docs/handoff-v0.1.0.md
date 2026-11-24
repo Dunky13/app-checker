@@ -13,12 +13,12 @@ Status on 2026-11-24: the app is built, tested, reviewed and pushed to `main`. T
 
 Checked by running it, on one Mac (macOS 27, Apple Silicon):
 
-- `swift test`: 24 tests in 8 suites pass locally. CI passed on every pushed commit up to `6b8d09d`; the run for a later commit is linked from its commit page.
+- `swift test`: 27 tests in 9 suites pass locally. CI results are linked from each commit and pull request page.
 - First run: window opens, login item is registered, notification permission is requested. Second launch is silent and Sparkle asks once about automatic checks.
 - A new app bundle dropped into `~/Applications` was detected in about 12 seconds and produced a notification.
 - Search, the filter menu, the detail pane, the copy button, the "Data Access Blocked" note, and the AI marker in the list.
 - A real lookup through the Claude Code CLI with web search, and a lookup through the OpenAI-compatible backend against a local stub (key read from the keychain, no redirect followed).
-- The signed rules download: the app fetched `rules.json` and its signature from `main`, accepted it and cached it.
+- The findings download, with a test build that read the `findings-folder` branch and shipped an older bundled copy (serial 1, one changed file): it fetched the signed index, replaced its copy, and its cache was identical to the committed folder. A relaunch with nothing new left the cache untouched. A cached file changed by hand to claim "no telemetry" was not used (the item stayed yellow) and was replaced at the next launch.
 - `AppChecker --list` on that Mac: 216 items, of which 15 yellow, 3 green and 198 grey. The native Claude Code install is found as `bin:claude`.
 
 Reviewed independently (Claude Opus, high effort), each round followed by fixes:
