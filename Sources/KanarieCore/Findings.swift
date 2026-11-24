@@ -7,10 +7,13 @@ import Foundation
 public struct Version: Comparable, Hashable, Sendable {
     var release: [Int] = []
     var pre: [String] = []
-    /// The release numbers in front of a "-number" part, when there is one: "1.2.0-1" is a pre-release of 1.2.0 for npm
-    /// and a later build of it elsewhere, so against a plain 1.2.0 it has no known order.
-    var dashed: [Int]?
+    /// With a "-number" part: the release numbers in front of it and the numbers from it on. "1.2.0-1" is a pre-release
+    /// of 1.2.0 for npm and a later build of it elsewhere. `release` holds the build reading, `asPreRelease` gives npm's.
+    var base: [Int]?
+    var tail: [Int] = []
     static let zero = Version(release: [], pre: [])
+    /// Words that mark a version as coming before its release. Any other word may be a patch level or a packager's label.
+    static let preReleaseWords: Set = ["alpha", "beta", "rc", "pre", "preview", "dev", "nightly", "canary", "snapshot", "next", "insider", "insiders"]
 
     private init(release: [Int], pre: [String]) { (self.release, self.pre) = (release, pre) }
 
@@ -19,7 +22,7 @@ public struct Version: Comparable, Hashable, Sendable {
         // Only the first word counts ("1.2 (345)"), and build metadata after "+" says nothing about order.
         let word = text.lowercased().split(whereSeparator: { $0.isWhitespace || $0 == "+" || $0 == "," }).first ?? ""
         // Runs of digits and runs of letters; anything else only separates them.
-        var runs: [(text: String, afterDash: Bool)] = [], joined = false, dash = false
+        var runs: [(text: String, afterDash: Bool)] = [], joined = false, dash = false, dashAt: Int?
         for character in word {
             guard character.isASCII, character.isLetter || character.isNumber else { (joined, dash) = (false, character == "-"); continue }
             if joined, runs.last?.text.last?.isNumber == character.isNumber { runs[runs.count - 1].text.append(character) } else { runs.append((String(character), dash)) }
@@ -28,10 +31,11 @@ public struct Version: Comparable, Hashable, Sendable {
         // A leading word is a prefix such as "v" or "release-".
         for run in runs.drop(while: { $0.text.first?.isNumber != true }) {
             guard pre.isEmpty, run.text.first?.isNumber == true else { pre.append(Int(run.text).map(String.init) ?? run.text); continue }  // beta.01 is beta.1
-            if run.afterDash, dashed == nil, !release.isEmpty { dashed = Self.trimmed(release) }
+            if run.afterDash, dashAt == nil, !release.isEmpty { dashAt = release.count }
             release.append(Int(run.text) ?? .max)
         }
         guard !release.isEmpty else { return nil }
+        if let dashAt { (base, tail) = (Self.trimmed(Array(release[..<dashAt])), Array(release[dashAt...])) }
         release = Self.trimmed(release)
     }
 
@@ -56,19 +60,13 @@ public struct Version: Comparable, Hashable, Sendable {
         return a.pre.count < b.pre.count
     }
 
-    /// The lowest place a dash-number version may have: "1.2.0-1" read as a pre-release sits just below 1.2.0, read as a build at 1.2.0.1.
-    private var floor: Version { dashed.map { Version(release: $0, pre: []) } ?? self }
+    /// The same version read the way npm does: "1.2.0-1" sits just below 1.2.0, and "1.2.0-1.rc" after "1.2.0-1".
+    var asPreRelease: Version { base.map { Version(release: $0, pre: tail.map(String.init) + pre) } ?? self }
 
-    /// Whether nothing says which of the two came first.
-    func hasNoOrder(with other: Version) -> Bool {
-        // A dash number may sit anywhere from its base up to itself, so whatever lies in that range has no order with it.
-        // Two dash numbers on one base follow the same scheme, whichever it is.
-        if dashed != other.dashed {
-            let mayReach = { (a: Version, b: Version) in a.floor <= b || a.floor.release == b.release }
-            if mayReach(self, other), mayReach(other, self) { return true }
-        }
-        // Pre-releases of one release on different channels ("nightly", "preview", "rc"): rc.1 may be older or newer than nightly.20261117.
-        return release == other.release && !pre.isEmpty && !other.pre.isEmpty && pre.first != other.pre.first
+    /// Pre-releases of one release on different channels ("nightly", "preview", "rc"): nothing says which came first,
+    /// rc.1 may be older or newer than nightly.20261117.
+    func isOnAnotherChannel(than other: Version) -> Bool {
+        release == other.release && !pre.isEmpty && !other.pre.isEmpty && pre.first != other.pre.first
     }
 }
 
