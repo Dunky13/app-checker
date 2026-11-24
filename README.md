@@ -76,14 +76,14 @@ Lookups run only when you ask for them:
 - Select several items in the list (Shift or Command click, or Command-A) and look them up together. Items the Kanarie findings already cover are left out.
 - The sparkles button in the toolbar, for every item in the current list that has no verdict yet.
 
-Several items go out in groups of five per request, which costs less than one request for each, and a running batch can be stopped. The price is that the model reads the pages for all five in one conversation: a page written to mislead it could colour the answers for the other items of that group, where a lookup of one item can only spoil its own. Choose the backend in Settings:
+Several items go out in groups of five per request, which costs less than one request for each. Stopping a batch ends the request that is running, and its items get no answer. The price of a group is that the model reads the names and the pages for all five in one conversation: a page or an item name written to mislead it could colour the answers for the other items of that group, where a lookup of one item can only spoil its own. An answer is filed under an item only when it carries both that item's number in the list and its identifier. Choose the backend in Settings:
 
 - **Claude Code CLI** (default): runs your local `claude` command with web search, using your own Claude login.
 - **OpenAI-compatible API**: any chat completions endpoint, for example [OpenRouter](https://openrouter.ai). The API key is stored in your keychain. On OpenRouter the web search plugin is switched on; other endpoints answer from what the model already knows.
 
 A lookup sends the item's name, identifier and version to that backend. Answers can be wrong, so check the listed sources before relying on one. Items judged by a lookup carry a sparkles mark in the list.
 
-The search field looks in names and identifiers. The filter menu next to it narrows the list by status (red, yellow, green, grey), by where the verdict comes from (Kanarie findings, AI lookup, analytics code found, nothing known) and by kind. Filters and search work together, and both bulk lookups follow them.
+The search field looks in names and identifiers. The filter menu next to it narrows the list by status (red, yellow, green, grey), by where the verdict comes from (Kanarie findings, AI lookup, analytics code found, nothing known, or everything that is not from an AI lookup) and by kind. Filters and search work together, and both bulk lookups follow them.
 
 **Show Lookup Log…** on an item shows what the lookup behind its verdict asked and what came back, as a small chat log: the prompt, the model's messages and, folded away between them, its web searches and page fetches with their results. JSON is set as a code block and spread over lines, with nothing else about it changed. A later lookup that failed follows under its own heading, with the reason. The logs, failure reasons included, are kept on your Mac only (an API endpoint's own words are left out when it refuses the key, because such a message tends to quote part of it), in `~/Library/Application Support/Kanarie/lookups`. A long tool result is shortened. With the API backend a log holds the prompt and the answer or the error: Kanarie does not read the searches an endpoint may report.
 

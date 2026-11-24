@@ -285,8 +285,13 @@ final class AppModel {
         batch = Task {
             var rest = items[...]
             while !rest.isEmpty, !Task.isCancelled {
-                let group = Array(rest.prefix(LLM.batchSize))
+                // The list was made when the batch began. By now a rescan may have removed an item, the findings may
+                // cover it, or a lookup of its own may be running.
+                let group = rest.prefix(LLM.batchSize).filter { item in
+                    self.items.contains { $0.id == item.id } && verdicts[item.id]?.source != .rules && !analysing.contains(item.id)
+                }
                 rest = rest.dropFirst(LLM.batchSize)
+                if group.isEmpty { continue }
                 await analyse(group)
                 if group.allSatisfy({ errors[$0.id] != nil }) { break }
             }

@@ -141,14 +141,17 @@ public enum LLM {
     /// lets the model search for its entries side by side; a larger group makes one request slow and one failure costly.
     public static let batchSize = 5
 
+    /// Name, identifier and version come from files on disk, so each is kept to one short printable line.
+    private static func clean(_ text: String) -> String {
+        String(String.UnicodeScalarView(text.unicodeScalars.filter { !CharacterSet.controlCharacters.contains($0) }.prefix(100)))
+    }
+
+    /// An item's identifier as the prompt shows it, and as an answer has to repeat it.
+    static func identifier(of id: String) -> String { clean(id.split(separator: ":", maxSplits: 1).last.map(String.init) ?? id) }
+
     public static func prompt(for items: [Item]) -> String {
-        // Name, identifier and version come from files on disk, so keep each to one short printable line.
-        func clean(_ text: String) -> String {
-            String(String.UnicodeScalarView(text.unicodeScalars.filter { !CharacterSet.controlCharacters.contains($0) }.prefix(100)))
-        }
         let entries = items.enumerated().map { index, item in
-            let identifier = item.id.split(separator: ":", maxSplits: 1).last.map(String.init) ?? item.id
-            return "\(index + 1). \(clean(item.name)) (\(kinds[item.kind] ?? item.kind) \"\(clean(identifier))\", installed version \(clean(item.version)))"
+            "\(index + 1). \(clean(item.name)) (\(kinds[item.kind] ?? item.kind) \"\(identifier(of: item.id))\", installed version \(clean(item.version)))"
         }
         return """
         You are researching the telemetry behaviour of software for a macOS privacy tool.
@@ -166,6 +169,7 @@ public enum LLM {
         Reply with exactly one JSON array and nothing else, with one object for every entry:
         [{
           "entry": 1,
+          "identifier": "the entry's identifier",
           "name": "product name",
           "telemetry": "none" | "opt-in" | "opt-out" | "forced" | "unknown",
           "summary": "One or two plain sentences: what is collected and who receives it.",
@@ -176,7 +180,8 @@ public enum LLM {
           "sources": ["https://... every page you relied on for this entry"]
         }]
 
-        entry: the number of the entry in the list above.
+        entry and identifier: the number of the entry in the list above and its identifier, the text in quotes, copied exactly. \
+        An object where the two do not belong together is thrown away.
         telemetry: "none" = the vendor or maintainers state there is no telemetry, analytics or automatic crash reporting \
         (update checks do not count). "opt-in" = off until the user enables it. "opt-out" = on by default, can be turned off. \
         "forced" = on with no supported way to turn it off. "unknown" = you found no reliable evidence. Classify by the worst default.
@@ -194,20 +199,20 @@ public enum LLM {
     /// Reads a model reply for the items with these ids, in the order they were asked: a rule for each, or why there is none.
     /// One item may be answered with a bare object instead of an array.
     public static func parseRules(from text: String, ids: [String]) -> [Result<Rule, any Error>] {
-        // Fenced parts first: the words around a fenced answer may hold brackets of their own.
-        let candidates = blocks(of: text).filter(\.isCode).map(\.text) + [text]
-        let objects = candidates.lazy.compactMap { text -> [[String: Any]]? in
-            guard let start = text.firstIndex(where: { $0 == "[" || $0 == "{" }), let end = text.lastIndex(of: text[start] == "[" ? "]" : "}"), start < end,
-                  let json = try? JSONSerialization.jsonObject(with: Data(text[start...end].utf8)) else { return nil }
-            return json as? [[String: Any]] ?? (json as? [String: Any]).map { [$0] }
-        }.first ?? []
+        let objects = answers(in: text)
+        let entry = { (object: [String: Any]) in object["entry"] as? Int ?? (object["entry"] as? String).flatMap(Int.init) }
         return ids.enumerated().map { index, id in
             Result {
                 guard !objects.isEmpty else { throw Failure(errorDescription: "The model did not answer with JSON.") }
-                guard var object = objects.first(where: { $0["entry"] as? Int == index + 1 }) ?? (ids.count == 1 ? objects[0] : nil) else {
-                    throw Failure(errorDescription: "The model gave no answer for this item.")
+                // One item asked and one answered needs no number.
+                let mine = ids.count == 1 && objects.count == 1 ? objects : objects.filter { entry($0) == index + 1 }
+                guard var object = mine.first else { throw Failure(errorDescription: "The model gave no answer for this item.") }
+                guard mine.count == 1 else { throw Failure(errorDescription: "The model answered more than once for this item.") }
+                // Several items: number and identifier have to agree, so a miscounted answer is not filed under another item.
+                guard (object["identifier"] as? String).map({ $0 == identifier(of: id) }) ?? (ids.count == 1) else {
+                    throw Failure(errorDescription: "The model's answer for this item names another one.")
                 }
-                (object["match"], object["entry"]) = ([id], nil)
+                (object["match"], object["entry"], object["identifier"]) = ([id], nil, nil)
                 // Models also write "no opt-out" as the object with every field null.
                 if let optOut = object["optOut"] as? [String: Any], (optOut["instructions"] as? String ?? "").isEmpty { object["optOut"] = nil }
                 guard var rule = try? JSONDecoder().decode(Rule.self, from: JSONSerialization.data(withJSONObject: object)) else {
@@ -221,6 +226,38 @@ public enum LLM {
         }
     }
 
+    /// The objects of the answer in a reply. Models put words around it: a citation like [1], an example in a fence of
+    /// its own. So fenced parts are tried first, then every bracket in turn, and the first JSON that holds a verdict wins.
+    static func answers(in text: String) -> [[String: Any]] {
+        // From an opening bracket to the one that closes it, minding strings.
+        func span(_ text: Substring) -> Substring? {
+            var depth = 0, inString = false, escaped = false
+            for index in text.indices {
+                let character = text[index]
+                if inString {
+                    if escaped { escaped = false } else if character == "\\" { escaped = true } else if character == "\"" { inString = false }
+                } else if character == "\"" {
+                    inString = true
+                } else if character == "[" || character == "{" {
+                    depth += 1
+                } else if character == "]" || character == "}" {
+                    depth -= 1
+                    if depth == 0 { return text[...index] }
+                }
+            }
+            return nil
+        }
+        for candidate in blocks(of: text).filter(\.isCode).map(\.text) + [text] {
+            for start in candidate.indices where candidate[start] == "[" || candidate[start] == "{" {
+                guard let json = span(candidate[start...]).flatMap({ try? JSONSerialization.jsonObject(with: Data($0.utf8)) }) else { continue }
+                let objects = json as? [[String: Any]] ?? (json as? [String: Any]).map { [$0] } ?? []
+                if objects.contains(where: { $0["telemetry"] != nil }) { return objects }
+            }
+        }
+        return []
+    }
+
+    /// For one item, as the tests use it.
     public static func parseRule(from text: String, itemID: String) throws -> Rule {
         try parseRules(from: text, ids: [itemID])[0].get()
     }
@@ -253,6 +290,7 @@ public enum LLM {
     private static func ask(_ prompt: String, backend: Backend, env: [String: String], timeout: TimeInterval, log: inout [Turn]) async throws -> String {
         switch backend {
         case let .claudeCLI(path, model):
+            let stop = Shell.Stop()
             let run = Task.detached {
                 // Empty working directory, no settings, CLAUDE.md, skills, hooks or MCP servers, web tools only:
                 // the model reads untrusted web pages, so it gets nothing personal and nothing it could act with.
@@ -266,11 +304,12 @@ public enum LLM {
                 if !model.isEmpty { arguments += ["--model", model] }
                 // No settings are loaded, so an opt-out in the user's Claude settings would not apply: a lookup must not cause telemetry itself.
                 let quiet = env.merging(["DISABLE_TELEMETRY": "1", "DISABLE_ERROR_REPORTING": "1"]) { $1 }
-                return try Shell.run(path, arguments, env: quiet, cwd: cwd, timeout: timeout, acceptFailure: true)
+                return try Shell.run(path, arguments, env: quiet, cwd: cwd, timeout: timeout, acceptFailure: true, stop: stop)
             }
             let data: Data
-            do { data = try await run.value } catch let failure as Shell.Failure {
-                // A lookup that ran out of time still shows how far it got.
+            // Stopping a batch ends the CLI, so it does not go on using quota for an answer nobody waits for.
+            do { data = try await withTaskCancellationHandler { try await run.value } onCancel: { stop.now() } } catch let failure as Shell.Failure {
+                // A lookup that ran out of time or was stopped still shows how far it got.
                 log += transcript(ofStream: failure.output).turns
                 throw failure
             }

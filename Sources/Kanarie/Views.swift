@@ -94,21 +94,44 @@ struct MenuView: View {
     }
 }
 
+/// Where a verdict comes from, as the filter offers it.
+private enum SourceFilter: Hashable {
+    case any, only(Verdict.Source), notAI
+
+    func allows(_ source: Verdict.Source?) -> Bool {
+        switch self {
+        case .any: true
+        case .only(let wanted): source == wanted
+        case .notAI: source != .ai
+        }
+    }
+
+    var label: String? {
+        switch self {
+        case .any: nil
+        case .only(let source): source.label
+        case .notAI: "Not from an AI lookup"
+        }
+    }
+}
+
 struct MainView: View {
     var model: AppModel
     @State private var selection: Set<Item.ID> = []
     @State private var search = ""
     @State private var filter: Status?
-    @State private var source: Verdict.Source?
+    @State private var source = SourceFilter.any
     @State private var kind: String?
     @State private var showSettings = false
     @State private var confirmBatch = false
+    /// What the open confirmation is about. Kept, because the list can change while it is open.
+    @State private var pending: [Item] = []
 
     private var shown: [Item] {
         model.items
             .filter { item in
                 (filter == nil || model.verdicts[item.id]?.status == filter)
-                    && (source == nil || model.verdicts[item.id]?.source == source)
+                    && source.allows(model.verdicts[item.id]?.source)
                     && (kind == nil || item.kind == kind)
                     && (search.isEmpty || item.name.localizedCaseInsensitiveContains(search) || item.id.localizedCaseInsensitiveContains(search))
             }
@@ -118,26 +141,25 @@ struct MainView: View {
             }
     }
 
-    /// The selected items that are in the list: a filter or a search can hide a selected one.
-    private var picked: [Item] { shown.filter { selection.contains($0.id) } }
-
     /// What the lookup button works on. Several selected items: those, as far as the findings do not cover them, also
     /// when a lookup judged them before. Otherwise every listed item an AI lookup could still say something about.
-    private var lookupCandidates: [Item] {
-        let several = picked.count > 1
-        return shown.filter { item in
-            let from = model.verdicts[item.id]?.source
-            return several ? selection.contains(item.id) && from != .rules : [.sdk, Verdict.Source.none].contains(from)
-        }
+    private func lookupCandidates(shown: [Item], picked: [Item]) -> [Item] {
+        guard picked.count > 1 else { return shown.filter { [.sdk, Verdict.Source.none].contains(model.verdicts[$0.id]?.source) } }
+        return picked.filter { model.verdicts[$0.id]?.source != .rules }
     }
 
     private var filterLabel: String {
-        let active = [filter?.label, source?.label, kind.map { kindNames[$0] ?? $0 }].compactMap { $0 }
+        let active = [filter?.label, source.label, kind.map { kindNames[$0] ?? $0 }].compactMap { $0 }
         // Several names in a row push the search field out of the toolbar.
         return active.isEmpty ? "All items" : active.count == 1 ? active[0] : "\(active.count) filters"
     }
 
     var body: some View {
+        // Once per redraw: filtering and sorting a few hundred items is too much to repeat for every use below.
+        let shown = shown
+        // The selected items that are in the list: a filter or a search can hide a selected one.
+        let picked = shown.filter { selection.contains($0.id) }
+        let lookupCandidates = lookupCandidates(shown: shown, picked: picked)
         NavigationSplitView {
             List(shown, selection: $selection) { item in
                 HStack {
@@ -178,7 +200,7 @@ struct MainView: View {
                 } description: {
                     Text(lookupCandidates.isEmpty ? "The Kanarie findings cover all of them." : "\(lookupCandidates.count) of them can be looked up with AI.")
                 } actions: {
-                    Button("Look Up \(lookupCandidates.count) Items with AI", systemImage: "sparkles") { confirmBatch = true }
+                    Button("Look Up \(lookupCandidates.count) Items with AI", systemImage: "sparkles") { (pending, confirmBatch) = (lookupCandidates, true) }
                         .disabled(lookupCandidates.isEmpty || model.batch != nil)
                 }
             // A single selected item stays open when its new verdict moves it out of the filtered list.
@@ -201,8 +223,9 @@ struct MainView: View {
                         }
                     }
                     Picker("Verdict from", selection: $source) {
-                        Text("Any source").tag(Verdict.Source?.none)
-                        ForEach([Verdict.Source.rules, .ai, .sdk, .none], id: \.self) { Text($0.label).tag(Verdict.Source?.some($0)) }
+                        Text("Any source").tag(SourceFilter.any)
+                        ForEach([Verdict.Source.rules, .ai, .sdk, .none], id: \.self) { Text($0.label).tag(SourceFilter.only($0)) }
+                        Text(SourceFilter.notAI.label ?? "").tag(SourceFilter.notAI)
                     }
                     Picker("Kind", selection: $kind) {
                         Text("Any kind").tag(String?.none)
@@ -218,17 +241,17 @@ struct MainView: View {
                 if model.batch != nil {
                     Button("Stop Lookups", systemImage: "stop.circle") { model.stopBatch() }
                 } else {
-                    Button(picked.count > 1 ? "Look Up Selected Items with AI" : "Look Up Listed Items with AI", systemImage: "sparkles") { confirmBatch = true }
+                    Button(picked.count > 1 ? "Look Up Selected Items with AI" : "Look Up Listed Items with AI", systemImage: "sparkles") { (pending, confirmBatch) = (lookupCandidates, true) }
                         .disabled(lookupCandidates.isEmpty)
                 }
                 Button("Rescan", systemImage: "arrow.clockwise") { Task { await model.rescan(userInitiated: true) } }.disabled(model.scanning)
                 Button("Settings", systemImage: "gearshape") { showSettings = true }
             }
         }
-        .confirmationDialog("Look up \(lookupCandidates.count) items with AI?", isPresented: $confirmBatch) {
-            Button("Look Up \(lookupCandidates.count) Items") { model.analyseAll(lookupCandidates) }
+        .confirmationDialog("Look up \(pending.count) items with AI?", isPresented: $confirmBatch) {
+            Button("Look Up \(pending.count) Items") { model.analyseAll(pending) }
         } message: {
-            Text("A lookup sends each item's name, identifier and version to the AI backend chosen in Settings and uses your quota or credits. The items go out in groups of \(LLM.batchSize), one group at a time, and the lookups can be stopped.")
+            Text("A lookup sends each item's name, identifier and version to the AI backend chosen in Settings and uses your quota or credits. The items go out in groups of \(LLM.batchSize), one group at a time. Stopping ends the group that is running without an answer.")
         }
         .sheet(isPresented: $showSettings) { SettingsView() }
     }
