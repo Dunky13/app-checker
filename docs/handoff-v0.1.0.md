@@ -23,6 +23,7 @@ Checked by running it, on one Mac (macOS 27, Apple Silicon):
 - The findings download, with a test build that read the `findings-folder` branch and shipped an older bundled copy (serial 1, one changed file): it fetched the signed index, replaced its copy, and its cache was identical to the committed folder. A relaunch with nothing new left the cache untouched. A cached file changed by hand to claim "no telemetry" was not used (the item stayed yellow) and was replaced at the next launch. With the cache deleted and the saved serial set above the published one, the published index was refused.
 - The submit form, with a seeded AI result that named an invented variable: the form showed what its check read on the Mac, the source check fetched the cited page and reported the name as not found, and Continue Anyway opened a GitHub issue page with the title and the finding filled in. An item without any finding opened an empty form that listed what was missing and kept Continue disabled. With a local web server running, cited links to `127.0.0.1`, to `localhost` and to a public address that redirects to the local server were all left out (the server logged no request, and did log one when `curl` followed the same redirect), while a public page in the same list was fetched. After the HTTPS rule: a plain HTTP link and an HTTPS link that redirects to plain HTTP or to this Mac were not fetched; an HTTPS link and an HTTPS link redirecting to another HTTPS page were.
 - The submit form after the review fixes, as a correction of the Homebrew finding: Cancel during the fetch closed the form and opened no browser tab. Continue fetched 2 of the 3 cited pages (GitHub answered the third request with an error at that moment), reported `HOMEBREW_NO_ANALYTICS` as found and `analyticsdisabled = true` as not found, and Continue Anyway opened an issue that says which finding it corrects and from which version, with every name and reading in a code span. Replace These Checks swapped the two kept checks for the variable fields.
+- The Homebrew cask, from a throwaway local tap with a locally built archive and the release script's own substitution of version and hash: `brew style` and `brew audit --cask --strict` reported nothing, `brew install --cask` put the app in the chosen folder, and `brew uninstall --cask --zap` removed it, together with a stand-in keychain item, and also when there was none. A zap after a plain uninstall was refused ("untrusted tap"), which is why the README gives one command. Installing the published archive is checked after the release.
 - `Kanarie --list` on that Mac: 216 items, of which 15 yellow, 3 green and 198 grey. The native Claude Code install is found as `bin:claude`.
 
 Reviewed independently (Claude Opus, high effort), each round followed by fixes:
@@ -48,13 +49,22 @@ Reviewed independently (Claude Opus, high effort), each round followed by fixes:
 On the maintainer's Mac, with the Developer ID certificate and the Sparkle key in the login keychain, from a clean and pushed `main`:
 
 ```sh
-# Once. Asks for an app-specific password from account.apple.com and stores it in the keychain.
-xcrun notarytool store-credentials kanarie-notary --apple-id <apple id> --team-id <team id>
+# Once, and done on the maintainer's Mac on 2026-11-24 with the team's App Store Connect API key.
+xcrun notarytool store-credentials kanarie-notary --key <AuthKey.p8> --key-id <key id> --issuer <issuer id>
 
 NOTARY_KEYCHAIN_PROFILE=kanarie-notary scripts/release.sh 0.1.0
 ```
 
-Expected: tests pass, notarization status `Accepted`, the app is stapled and passes `spctl`, a GitHub release `v0.1.0` with `Kanarie-0.1.0-universal.zip` exists, and a commit `Release 0.1.0` adds `appcast.xml`. macOS may ask once for permission to use the Sparkle key: choose Always Allow. If notarization times out, do not submit again: continue with `xcrun notarytool wait <id>` using the receipt in `build/notary/`.
+Expected: tests pass, notarization status `Accepted`, the app is stapled and passes `spctl`, a GitHub release `v0.1.0` with `Kanarie-0.1.0-universal.zip` exists, and a commit `Release 0.1.0` adds `appcast.xml` and writes the version and hash into `Casks/kanarie.rb`. macOS may ask once for permission to use the Sparkle key: choose Always Allow. If notarization times out, do not submit again: continue with `xcrun notarytool wait <id>` using the receipt in `build/notary/`.
+
+Then check the Homebrew install (the full name is needed, Homebrew refuses a short name from an untrusted tap):
+
+```sh
+brew tap dunky13/kanarie https://github.com/Dunky13/kanarie
+brew install --cask dunky13/kanarie/kanarie
+```
+
+Expected: Kanarie is in `/Applications` at the released version and opens without a Gatekeeper warning.
 
 Then check updating end to end:
 
@@ -71,6 +81,8 @@ After any change below `findings/`: run `scripts/sign-findings.sh` and commit `i
 
 ## Known limits, left open on purpose
 
+- The Homebrew cask is not signed, unlike updates and findings: whoever can push to `main` decides what Homebrew runs each time it loads the cask, which is at install and at every `brew upgrade` after that, also when there is no new version. Only the maintainer, and so any token of the maintainer's, has write access, and `main` is not protected because `scripts/release.sh` pushes the release commit to it. Changes below `Casks/` in a pull request from someone else need the same care as code.
+- `brew upgrade --greedy` reinstalls the version the tap names, which can be older than what Sparkle already installed until the tap refreshes. Plain `brew upgrade` upgrades it only when the installed app is older than the version the tap names.
 - The source check gives every page 20 seconds and starts no page after a minute, so it can take up to 80 seconds. The name lookup of a host cannot be interrupted by Cancel; the form closes and the lookup ends on its own.
 - Names that a command only carries as a flag, a `git config` key or a JSON key are not looked for on the cited pages.
 - The submit form keeps the checks of the finding it started from, or drops them all ("Replace These Checks") so one variable can be named by hand; other checks are written by the maintainer.
