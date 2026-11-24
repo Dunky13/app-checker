@@ -9,6 +9,8 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 VERSION="${1:?usage: scripts/release.sh <version>}"
+# Checked first: the version ends up in a file name, a tag, the feed and the cask.
+[[ "$VERSION" =~ ^[0-9]+(\.[0-9]+){1,2}$ ]] || { echo "Not a version like 1.2 or 1.2.3: $VERSION" >&2; exit 1; }
 REPO="Dunky13/kanarie"
 APP="build/Kanarie.app"
 OUT="build/release"
@@ -64,7 +66,9 @@ grep -F "$ZIP" appcast.xml | grep -q "sparkle:edSignature" || { echo "The appcas
 # Homebrew installs the same archive: the cask in this repository names the version and its hash.
 SHA="$(shasum -a 256 "$OUT/$ZIP" | cut -d' ' -f1)"
 perl -pi -e "s/^  version \".*\"/  version \"$VERSION\"/; s/^  sha256 \".*\"/  sha256 \"$SHA\"/" Casks/kanarie.rb
-grep -q "version \"$VERSION\"" Casks/kanarie.rb && grep -q "sha256 \"$SHA\"" Casks/kanarie.rb || { echo "Casks/kanarie.rb was not updated." >&2; exit 1; }
+if ! grep -qxF "  version \"$VERSION\"" Casks/kanarie.rb || ! grep -qxF "  sha256 \"$SHA\"" Casks/kanarie.rb; then
+  echo "Casks/kanarie.rb was not updated." >&2; exit 1
+fi
 
 # The download must exist before the feed and the cask point at it.
 gh release create "v$VERSION" "$OUT/$ZIP" --repo "$REPO" --target "$COMMIT" --title "Kanarie $VERSION" --generate-notes

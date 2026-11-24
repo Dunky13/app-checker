@@ -20,10 +20,18 @@ cask "kanarie" do
 
   uninstall quit: "io.went.kanarie"
 
-  zap trash: [
-    "~/Library/Application Support/Kanarie",
-    "~/Library/Caches/io.went.kanarie",
-    "~/Library/HTTPStorages/io.went.kanarie",
-    "~/Library/Preferences/io.went.kanarie.plist",
-  ]
+  # The script removes the API key of the AI lookup from the keychain; there is none when it was never set.
+  zap script: {
+        executable: "/bin/sh",
+        args:       ["-c",
+                     "/usr/bin/security delete-generic-password -s io.went.kanarie -a llm-api-key " \
+                     ">/dev/null 2>&1 || true"],
+      },
+      trash:  [
+        "~/Library/Application Support/Kanarie",
+        "~/Library/Caches/io.went.kanarie",
+        "~/Library/HTTPStorages/io.went.kanarie",
+        "~/Library/Preferences/io.went.kanarie.plist",
+        "~/Library/Saved Application State/io.went.kanarie.savedState",
+      ]
 end

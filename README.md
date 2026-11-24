@@ -58,7 +58,13 @@ brew install --cask dunky13/kanarie/kanarie
 
 Or download the latest `Kanarie-<version>-universal.zip` from [Releases](https://github.com/Dunky13/kanarie/releases), unzip it and move Kanarie to Applications.
 
-Either way it needs macOS 15 or later and updates itself through [Sparkle](https://sparkle-project.org). The cask lives in this repository ([Casks/kanarie.rb](Casks/kanarie.rb)), which is why the tap needs the address. Use the full name as shown: Homebrew refuses a short name from a tap it has not been told to trust.
+Either way it needs macOS 15 or later and updates itself through [Sparkle](https://sparkle-project.org). The cask lives in this repository ([Casks/kanarie.rb](Casks/kanarie.rb)), which is why the tap needs the address. Use the full name as shown for the first install: Homebrew refuses a short name from a tap it has not been told to trust.
+
+To remove it again, with its settings and the API key of the AI lookup, in one go:
+
+```sh
+brew uninstall --cask --zap dunky13/kanarie/kanarie && brew untap dunky13/kanarie
+```
 
 The app has no Dock icon. Look for the bird in the menu bar. If you use a menu bar manager, or your Mac has a notch and a full menu bar, the icon may be hidden: opening the app again from Finder shows the list.
 
