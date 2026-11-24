@@ -66,7 +66,11 @@ struct MenuBarLabel: View {
     }
 
     private func open() {
+        // Before activating: an app that becomes an ordinary one while already active can be left without its menu bar.
+        NSApp.setActivationPolicy(.regular)
         openWindow(id: "main")
+        // Opening a window that sits minimised in the Dock does not bring it back.
+        for window in NSApp.windows where window.isMiniaturized { window.deminiaturize(nil) }
         NSApp.activate(ignoringOtherApps: true)
     }
 }
@@ -91,7 +95,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     }
 }
 
-/// Sparkle wiring. A menu bar app has no Dock icon, so scheduled update alerts are announced with a
+/// Sparkle wiring. With its list closed Kanarie has no Dock icon, so scheduled update alerts are announced with a
 /// notification and a button in the menu instead of a window that could open unseen behind other apps.
 @MainActor @Observable
 final class Updater: NSObject, @preconcurrency SPUStandardUserDriverDelegate {
