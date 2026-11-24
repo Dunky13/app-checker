@@ -34,6 +34,17 @@ extension Status {
     var rank: Int { [.bad, .warn, .unknown, .ok].firstIndex(of: self) ?? 0 }
 }
 
+extension Verdict.Source {
+    var label: String {
+        switch self {
+        case .rules: "Kanarie findings"
+        case .ai: "AI lookup"
+        case .sdk: "Analytics code found, no finding"
+        case .none: "Nothing known"
+        }
+    }
+}
+
 struct StatusIcon: View {
     var status: Status
 
@@ -85,9 +96,11 @@ struct MenuView: View {
 
 struct MainView: View {
     var model: AppModel
-    @State private var selection: Item.ID?
+    @State private var selection: Set<Item.ID> = []
     @State private var search = ""
     @State private var filter: Status?
+    @State private var source: Verdict.Source?
+    @State private var kind: String?
     @State private var showSettings = false
     @State private var confirmBatch = false
 
@@ -95,6 +108,8 @@ struct MainView: View {
         model.items
             .filter { item in
                 (filter == nil || model.verdicts[item.id]?.status == filter)
+                    && (source == nil || model.verdicts[item.id]?.source == source)
+                    && (kind == nil || item.kind == kind)
                     && (search.isEmpty || item.name.localizedCaseInsensitiveContains(search) || item.id.localizedCaseInsensitiveContains(search))
             }
             .sorted { a, b in
@@ -103,9 +118,23 @@ struct MainView: View {
             }
     }
 
-    /// Items an AI lookup could still say something about.
+    /// The selected items that are in the list: a filter or a search can hide a selected one.
+    private var picked: [Item] { shown.filter { selection.contains($0.id) } }
+
+    /// What the lookup button works on. Several selected items: those, as far as the findings do not cover them, also
+    /// when a lookup judged them before. Otherwise every listed item an AI lookup could still say something about.
     private var lookupCandidates: [Item] {
-        shown.filter { [.sdk, Verdict.Source.none].contains(model.verdicts[$0.id]?.source) }
+        let several = picked.count > 1
+        return shown.filter { item in
+            let from = model.verdicts[item.id]?.source
+            return several ? selection.contains(item.id) && from != .rules : [.sdk, Verdict.Source.none].contains(from)
+        }
+    }
+
+    private var filterLabel: String {
+        let active = [filter?.label, source?.label, kind.map { kindNames[$0] ?? $0 }].compactMap { $0 }
+        // Several names in a row push the search field out of the toolbar.
+        return active.isEmpty ? "All items" : active.count == 1 ? active[0] : "\(active.count) filters"
     }
 
     var body: some View {
@@ -143,7 +172,17 @@ struct MainView: View {
                 }
             }
         } detail: {
-            if let item = model.items.first(where: { $0.id == selection }), let verdict = model.verdicts[item.id] {
+            if picked.count > 1 {
+                ContentUnavailableView {
+                    Label("\(picked.count) items selected", systemImage: "checklist")
+                } description: {
+                    Text(lookupCandidates.isEmpty ? "The Kanarie findings cover all of them." : "\(lookupCandidates.count) of them can be looked up with AI.")
+                } actions: {
+                    Button("Look Up \(lookupCandidates.count) Items with AI", systemImage: "sparkles") { confirmBatch = true }
+                        .disabled(lookupCandidates.isEmpty || model.batch != nil)
+                }
+            // A single selected item stays open when its new verdict moves it out of the filtered list.
+            } else if let item = picked.first ?? (selection.count == 1 ? model.items.first { selection.contains($0.id) } : nil), let verdict = model.verdicts[item.id] {
                 DetailView(model: model, item: item, verdict: verdict)
             } else {
                 ContentUnavailableView("Select an item", systemImage: "bird", description: Text("\(model.items.count) apps, packages and extensions checked."))
@@ -155,24 +194,31 @@ struct MainView: View {
             ToolbarItem(placement: .principal) {
                 // A Menu with an explicit title: a bare toolbar Picker collapses to an unlabeled chevron.
                 Menu {
-                    Picker("Show", selection: $filter) {
-                        Text("All items (\(model.items.count))").tag(Status?.none)
+                    Picker("Status", selection: $filter) {
+                        Text("Any status (\(model.items.count))").tag(Status?.none)
                         ForEach([Status.bad, .warn, .ok, .unknown], id: \.self) { status in
                             Label("\(status.label) (\(model.count(status)))", systemImage: status.symbol).tag(Status?.some(status))
                         }
                     }
-                    .pickerStyle(.inline)
-                    .labelsHidden()
+                    Picker("Verdict from", selection: $source) {
+                        Text("Any source").tag(Verdict.Source?.none)
+                        ForEach([Verdict.Source.rules, .ai, .sdk, .none], id: \.self) { Text($0.label).tag(Verdict.Source?.some($0)) }
+                    }
+                    Picker("Kind", selection: $kind) {
+                        Text("Any kind").tag(String?.none)
+                        ForEach(kindNames.sorted { $0.value < $1.value }, id: \.key) { Text($0.value).tag(String?.some($0.key)) }
+                    }
                 } label: {
-                    Label(filter?.label ?? "All items", systemImage: "line.3.horizontal.decrease.circle").labelStyle(.titleAndIcon)
+                    Label(filterLabel, systemImage: "line.3.horizontal.decrease.circle").labelStyle(.titleAndIcon)
                 }
-                .accessibilityLabel("Filter by status")
+                .pickerStyle(.inline)
+                .accessibilityLabel("Filter")
             }
             ToolbarItemGroup {
                 if model.batch != nil {
                     Button("Stop Lookups", systemImage: "stop.circle") { model.stopBatch() }
                 } else {
-                    Button("Look Up Listed Items with AI", systemImage: "sparkles") { confirmBatch = true }
+                    Button(picked.count > 1 ? "Look Up Selected Items with AI" : "Look Up Listed Items with AI", systemImage: "sparkles") { confirmBatch = true }
                         .disabled(lookupCandidates.isEmpty)
                 }
                 Button("Rescan", systemImage: "arrow.clockwise") { Task { await model.rescan(userInitiated: true) } }.disabled(model.scanning)
@@ -182,7 +228,7 @@ struct MainView: View {
         .confirmationDialog("Look up \(lookupCandidates.count) items with AI?", isPresented: $confirmBatch) {
             Button("Look Up \(lookupCandidates.count) Items") { model.analyseAll(lookupCandidates) }
         } message: {
-            Text("Each lookup sends the item's name, identifier and version to the AI backend chosen in Settings and uses your quota or credits. Lookups run one at a time and can be stopped.")
+            Text("A lookup sends each item's name, identifier and version to the AI backend chosen in Settings and uses your quota or credits. The items go out in groups of \(LLM.batchSize), one group at a time, and the lookups can be stopped.")
         }
         .sheet(isPresented: $showSettings) { SettingsView() }
     }
@@ -262,7 +308,7 @@ struct DetailView: View {
                 if verdict.source != .rules {
                     HStack {
                         Button(verdict.source == .ai ? "Look Up Again with AI" : "Look Up with AI", systemImage: "sparkles") {
-                            Task { await model.analyse(item) }
+                            Task { await model.analyse([item]) }
                         }
                         .disabled(model.analysing.contains(item.id))
                         if model.analysing.contains(item.id) {
