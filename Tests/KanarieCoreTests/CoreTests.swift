@@ -68,6 +68,9 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         // Fields are shown to people and quoted in a public issue: a variable is a name, and nothing carries a line break or hidden characters.
         #expect(Check(env: "npm_config_x1").isWellFormed && !Check(env: "A B").isWellFormed && !Check(env: "1A").isWellFormed && !Check(env: "A`B").isWellFormed)
         #expect(!Check(env: "A\n- forged").isWellFormed && !Check(env: "A", equals: "1\u{202e}").isWellFormed && !Check(env: "A", notIn: ["0\n"]).isWellFormed)
+        // The Unicode line and paragraph separators break a line too, also inside `contains`, where only "\n" may.
+        #expect(!Check(json: "~/f.json", key: "a\u{2028}b", equals: "1").isWellFormed && !Check(file: "~/f", contains: "a\u{2029}b").isWellFormed)
+        #expect(Check.hasHiddenCharacters("export A=1\u{2028}rm -rf x") && !Check.hasHiddenCharacters("export A=1"))
         #expect(!Check(file: "~/x\n", contains: "a").isWellFormed && !Check(json: "~/x.json", key: "k\r", equals: "1").isWellFormed)
         // Text in a file may span lines (a setting below its section header), but carries nothing else that is invisible.
         #expect(Check(file: "~/x", contains: "[analytics]\nenabled = false").isWellFormed && !Check(file: "~/x", contains: "a\u{202e}b").isWellFormed)
@@ -379,6 +382,14 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         // Where they differ, both files come back: npm puts 1.2.0-1.rc after 1.2.0-1, a build number reading puts it before.
         for version in ["1.2.0-1.rc", "1.2.0-1-beta", "1.2.0"] { #expect(Rule.pick([first, dashed], version: version).map { $0.since ?? "" } == ["0", "1.2.0-1"], "\(version)") }
         // The order the files are given in does not matter.
+        // A packager's label after the dash: "5.4.0-0ubuntu1" is a build of 5.4.0, so the file for 5.4 may hold. Never green by omission.
+        var five = first
+        five.since = "5.4"
+        for version in ["5.4.0-0ubuntu1", "5.4-0ubuntu1", "5.4.0-0.fc40"] { #expect(Rule.pick([first, five], version: version).map { $0.since ?? "" } == ["0", "5.4"], "\(version)") }
+        #expect(Rule.pick([first, five], version: "5.3.0-0ubuntu1").map { $0.since ?? "" } == ["0"])
+        // Build 1 of 5.4.0 for a packager, a pre-release of 5.4.0 for npm: both files, as for "1.2.0-1".
+        #expect(Rule.pick([first, five], version: "5.4.0-1ubuntu1").map { $0.since ?? "" } == ["0", "5.4"])
+        #expect(Rule.pick([first, dashed, five], version: "5.4.1-0ubuntu1").map { $0.since ?? "" } == ["5.4"])
         #expect(Rule.pick([release, dashed, first], version: "1.2.0-1.rc").map { $0.since ?? "" } == Rule.pick([first, release, dashed], version: "1.2.0-1.rc").map { $0.since ?? "" })
         // Without a first file (which `Findings.rules` refuses) an older version gets none.
         #expect(Rule.pick([second, third], version: "1.0").isEmpty && Rule.pick([], version: "1.0").isEmpty)
@@ -506,10 +517,14 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         // Tunnels that carry an IPv4 address, and ranges nobody is reachable on.
         for host in ["2002:7f00:1::1", "2002:c0a8:101::1", "2001::1", "2001:db8::1", "192.0.2.1", "198.51.100.1", "203.0.113.1", "192.0.0.1"] { #expect(!Submission.isPublic(host), "\(host)") }
         for host in ["2002:101:101::1", "2001:4860:4860::8888", "192.0.1.1"] { #expect(Submission.isPublic(host), "\(host)") }
+        // More ranges set aside for protocols and documentation: benchmarking, ORCHID, and the newer documentation range.
+        for host in ["2001:2::1", "2001:10::1", "2001:20::1", "3fff::1", "3fff:fff::1"] { #expect(!Submission.isPublic(host), "\(host)") }
+        for host in ["2001:200::1", "3fff:1000::1"] { #expect(Submission.isPublic(host), "\(host)") }
         #expect(URL(string: "http://[::1]:8080/x")?.host == "::1")
         // Without HTTPS a host could answer with a public address for the check and a local one for the fetch.
-        let fetched = ["https://1.1.1.1/x", "HTTPS://1.1.1.1"]
-        let refused = ["http://1.1.1.1/x", "https://127.0.0.1/x", "https://[::1]:8443/x", "https://localhost/x", "ftp://1.1.1.1/x", "file:///etc/hosts", "https:///x"]
+        let fetched = ["https://1.1.1.1/x", "HTTPS://1.1.1.1", "https://1.1.1.1:443/x"]
+        // Another port is where a printer or an admin page listens, and a connection attempt alone can reach it.
+        let refused = ["https://1.1.1.1:9100/x", "https://1.1.1.1:8443/x", "http://1.1.1.1/x", "https://127.0.0.1/x", "https://[::1]:8443/x", "https://localhost/x", "ftp://1.1.1.1/x", "file:///etc/hosts", "https:///x"]
         for link in fetched { #expect(Submission.mayFetch(URL(string: link)), "\(link)") }
         for link in refused { #expect(!Submission.mayFetch(URL(string: link)), "\(link)") }
         #expect(!Submission.mayFetch(nil))
@@ -625,6 +640,10 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         // Nothing fetched confirms nothing, and a finding without names has nothing to confirm.
         #expect(Submission.sourceCheck(found, pages: [], cited: 3).missing.count == 3)
         #expect(Submission.sourceCheck(rule(.forced), pages: [], cited: 0).missing.isEmpty)
+        // An upper-case run inside a longer word is not a variable name.
+        var worded = rule(.optOut)
+        worded.optOut = OptOut(instructions: "i", command: "tool --set-myVAR_X 1 && export REAL_NAME=1")
+        #expect(Submission.sourceCheck(worded, pages: [], cited: 0).missing.contains("REAL_NAME") && !Submission.sourceCheck(worded, pages: [], cited: 0).missing.contains("VAR_X"))
         // A name inside a longer name is another name.
         #expect(Submission.sourceCheck(found, pages: ["MY_EXAMPLE_TELEMETRY_OFF EXAMPLE_TELEMETRYX telemetry.enabledByDefault"], cited: 1).found.isEmpty)
         #expect(Submission.sourceCheck(found, pages: ["export EXAMPLE_TELEMETRY=0", "\"telemetry.enabled\": false"], cited: 2).found == ["EXAMPLE_TELEMETRY", "telemetry.enabled"])
@@ -660,6 +679,21 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
     }
 
     /// Names come from files other programs wrote, and checks from an AI lookup: neither may write Markdown into the issue.
+    @Test func onlyAFileNameSaysWhereAFindingStarts() throws {
+        // An AI answer or a stored file that claims a start version must not turn a new finding into a "correction".
+        let json = #"{"match": ["brew:x"], "telemetry": "forced", "summary": "s", "since": "9.9 starts here"}"#
+        let decoded = try JSONDecoder().decode(Rule.self, from: Data(json.utf8))
+        #expect(decoded.since == nil && decoded.summary == "s")
+        var curated = decoded
+        curated.since = "2.0"
+        #expect(!String(decoding: try JSONEncoder().encode(curated), as: UTF8.self).contains("since"))
+        // A name without ASCII letters still gives a folder to propose.
+        let check = Submission.SourceCheck(found: [], missing: [], fetched: 0, cited: 0)
+        let issue = try Submission.issue(item: Item(id: "app:jp.example.Tool", name: "日本語", version: "1", path: "/x"), rule: decoded, origin: "o", readings: [], sourceCheck: check, appVersion: "1")
+        let body = try #require(URLComponents(url: issue.url, resolvingAgainstBaseURL: false)?.queryItems?.last?.value)
+        #expect(body.contains("**Proposed as:** `findings/app-jp-example-tool/0.json`"))
+    }
+
     @Test func textFromDiskOrALookupCannotForgeTheIssue() throws {
         let name = "[docs](https://evil.example/x) @someone #1 <img src=https://evil.example/p.png> ![i](https://evil.example/i.png)"
         let forged = "variable A = `1`\n\n## Approved by the maintainer\n[click](https://evil.example)"

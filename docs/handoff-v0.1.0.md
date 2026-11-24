@@ -15,7 +15,7 @@ Status on 2026-11-24: the app is built, tested, reviewed and pushed to `main`. T
 
 Checked by running it, on one Mac (macOS 27, Apple Silicon):
 
-- `swift test`: 38 tests in 10 suites pass locally. CI results are linked from each commit and pull request page.
+- `swift test`: 39 tests in 10 suites pass locally. CI results are linked from each commit and pull request page.
 - First run: window opens, login item is registered, notification permission is requested. Second launch is silent and Sparkle asks once about automatic checks.
 - A new app bundle dropped into `~/Applications` was detected in about 12 seconds and produced a notification.
 - Search, the filter menu, the detail pane, the copy button, the "Data Access Blocked" note, and the AI marker in the list.
@@ -31,6 +31,7 @@ Reviewed independently (Claude Opus, high effort), each round followed by fixes:
 2. Spec and rules accuracy review: every rule compared with the vendor's documentation or source.
 3. Three re-reviews of the fixes, which closed the remaining false-green cases (GitHub CLI precedence, two Homebrew installs, commented-out settings, extensions in several editors). The last one found no false green.
 4. Review of the submit form and of version selection: its findings (forged Markdown in the issue, corrections always proposed as the first file, no total time limit, part-of-a-word matches, address ranges, a dropped file for a dashed pre-release) are fixed and covered by tests.
+5. Re-review of those fixes: it found that a version with a packager's label after the dash (`5.4.0-0ubuntu1`) lost the file for `5.4` and could show green by omission, that any port could be named in a cited link, and that an AI answer could claim to correct a finding. All three are fixed and covered by tests, together with its smaller findings.
 
 ## Not verified
 
@@ -69,6 +70,8 @@ After any change below `findings/`: run `scripts/sign-findings.sh` and commit `i
 
 ## Known limits, left open on purpose
 
+- The source check gives every page 20 seconds and starts no page after a minute, so it can take up to 80 seconds. The name lookup of a host cannot be interrupted by Cancel; the form closes and the lookup ends on its own.
+- Names that a command only carries as a flag, a `git config` key or a JSON key are not looked for on the cited pages.
 - The submit form keeps the checks of the finding it started from, or drops them all ("Replace These Checks") so one variable can be named by hand; other checks are written by the maintainer.
 - The form's source check reads the page as served, so a name on a page that is built in the browser is reported as not found. A short name that is also a common word (a settings key such as `enabled`) is found on almost any page. It fetches only HTTPS pages from public addresses, so a cited page that is only served over plain HTTP counts as not fetched.
 - What "public address" cannot catch: this Mac's or the router's own public address, and a host inside a company network that uses public addresses and a certificate from a company-installed authority. For the first, the certificate check still has to pass before a request is sent.

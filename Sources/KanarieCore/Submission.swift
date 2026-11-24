@@ -102,7 +102,7 @@ public enum Submission {
         var names = ((rule.disabledWhen ?? []) + (rule.enabledWhen ?? [])).compactMap { $0.env ?? $0.key ?? $0.contains }
         // Variables and preference keys in the command count too: that line is copied straight into a shell.
         let command = rule.optOut?.command ?? ""
-        names += command.matches(of: /[A-Z][A-Z0-9]*_[A-Z0-9_]+/).map { String($0.output) }
+        names += command.matches(of: /\b[A-Z][A-Z0-9]*_[A-Z0-9_]+/).map { String($0.output) }
         names += command.matches(of: /(?:^|[\s'";])([A-Za-z_]\w*)=/).map { String($0.output.1) }
         names += command.matches(of: /defaults\s+write\s+\S+\s+["']?([\w.-]+)/).map { String($0.output.1) }
         names = names.enumerated().filter { !$0.element.isEmpty && names.firstIndex(of: $0.element) == $0.offset }.map(\.element)
@@ -128,8 +128,11 @@ public enum Submission {
         // The first stops a server that goes quiet, the second one that keeps sending a byte now and then.
         (configuration.timeoutIntervalForRequest, configuration.timeoutIntervalForResource) = (20, 20)
         let session = URLSession(configuration: configuration, delegate: PublicOnly(), delegateQueue: nil)
+        defer { session.finishTasksAndInvalidate() }   // a session keeps its delegate until it is told to let go
+        // No page is started after a minute, so eight slow pages cannot keep the form waiting for eight times the limit.
+        let deadline = Date.now.addingTimeInterval(60)
         var texts: [String] = []
-        for url in urls.prefix(pageLimit) where !Task.isCancelled && mayFetch(url) {
+        for url in urls.prefix(pageLimit) where !Task.isCancelled && Date.now < deadline && mayFetch(url) {
             if let data = try? await session.data(from: url, limit: 3_000_000) { texts.append(String(decoding: data, as: UTF8.self)) }
         }
         return (texts, urls.count)
@@ -137,8 +140,10 @@ public enum Submission {
 
     /// Whether a cited page may be fetched. The links come from an AI lookup or a form, so they must not make this Mac
     /// ask itself or its own network: a router or a local service answers a request too.
-    /// HTTPS covers the time between this lookup and the fetch: a host that answers with a local address by then has no certificate for its name there, so no request is sent.
-    static func mayFetch(_ url: URL?) -> Bool { url?.scheme?.lowercased() == "https" && isPublic(url?.host) }
+    /// HTTPS covers the time between this lookup and the fetch: a host that answers with a local address by then has no
+    /// certificate for its name there, so the request itself is never sent. A connection attempt can still reach that
+    /// address, which is why only the standard port is allowed: other ports are where printers and admin pages listen.
+    static func mayFetch(_ url: URL?) -> Bool { url?.scheme?.lowercased() == "https" && (url?.port ?? 443) == 443 && isPublic(url?.host) }
 
     /// Whether every address of a host is on the public internet.
     static func isPublic(_ host: String?) -> Bool {
@@ -163,8 +168,11 @@ public enum Submission {
             if embedded { return isPublic(address: Array(bytes[12...])) }
             if bytes[0] == 0x20, bytes[1] == 0x02 { return isPublic(address: Array(bytes[2..<6])) }
             // Everything else must be a global address (2000::/3), which leaves out loopback, link-local, private and multicast,
-            // and not Teredo (2001::/32), which tunnels to an IPv4 address, or the range for documentation (2001:db8::/32).
-            return bytes[0] & 0xe0 == 0x20 && ![[0x20, 0x01, 0, 0], [0x20, 0x01, 0x0d, 0xb8]].contains(Array(bytes.prefix(4)))
+            // and not a range set aside for protocols (2001::/23, which holds Teredo, a tunnel to an IPv4 address)
+            // or for documentation (2001:db8::/32 and 3fff::/20).
+            let reserved = bytes[0] == 0x20 && bytes[1] == 0x01 && (bytes[2] < 2 || (bytes[2] == 0x0d && bytes[3] == 0xb8))
+                || bytes[0] == 0x3f && bytes[1] == 0xff && bytes[2] < 0x10
+            return bytes[0] & 0xe0 == 0x20 && !reserved
         }
         switch (bytes[0], bytes[1], bytes[2]) {
         case (0, _, _), (10, _, _), (127, _, _), (169, 254, _), (192, 168, _), (100, 64...127, _), (172, 16...31, _), (198, 18...19, _), (224..., _, _): return false
@@ -183,14 +191,14 @@ public enum Submission {
     /// The prefilled GitHub issue. A body too long for a link comes back as `clipboard`, and the issue then asks to paste it.
     /// `readings` is nil when they must stay on the Mac: see `SubmitView`.
     public static func issue(item: Item, rule: Rule, origin: String, readings: [String]?, sourceCheck: SourceCheck, appVersion: String) throws -> (url: URL, clipboard: String?) {
-        var clean = rule
-        clean.since = nil
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
-        let json = String(decoding: try encoder.encode(clean), as: UTF8.self)
-        let folder = (rule.name ?? item.name).lowercased().split { !($0.isASCII && ($0.isLetter || $0.isNumber)) }.joined(separator: "-")
+        let json = String(decoding: try encoder.encode(rule), as: UTF8.self)
+        // A name without ASCII letters gives no folder name, so the id stands in.
+        let slug = { (text: String) in text.lowercased().split { !($0.isASCII && ($0.isLetter || $0.isNumber)) }.joined(separator: "-") }
+        let folder = [rule.name ?? item.name, item.id].map(slug).first { !$0.isEmpty } ?? ""
         let file = rule.since.map { "a correction of the finding for \(rule.match.map { "`\(plain($0))`" }.joined(separator: ", ")) that starts at version `\(plain($0))`" }
-            ?? "`findings/\(folder.isEmpty ? "app" : folder)/0.json`"
+            ?? "`findings/\(folder)/0.json`"
         let read = readings.map { $0.map { "- `\(plain($0, limit: 300))`" } }
             ?? ["- Not included: the checks came from an AI lookup, so what they read stays on the submitter's Mac."]
         let body = """

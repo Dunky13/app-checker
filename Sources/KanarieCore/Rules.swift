@@ -17,11 +17,14 @@ public struct Check: Codable, Sendable, Hashable {
     /// For tools that read every other value as "on", whatever its spelling.
     public var notIn: [String]?
 
+    /// Control and formatting characters and every kind of line break, including the Unicode separators.
+    static func hasHiddenCharacters(_ text: String) -> Bool { text.unicodeScalars.contains(where: CharacterSet.controlCharacters.union(.newlines).contains) }
+
     public var isWellFormed: Bool {
         // Every field is shown to people and can end up in a public issue, so nothing invisible and no line breaks.
         // Only `contains` may span lines: a setting below its section header in a config file.
         let fields = [env, defaults, json, file, key, equals, contains?.replacingOccurrences(of: "\n", with: "")].compactMap(\.self) + (notIn ?? [])
-        guard !fields.contains(where: { $0.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains) }) else { return false }
+        guard !fields.contains(where: Self.hasHiddenCharacters) else { return false }
         return switch (env, defaults, json, file) {
         case let (.some(name), nil, nil, nil): Self.isName(name) && key == nil && contains == nil && (equals == nil || notIn == nil)
         // A stored false reads as "0" or "false", so "any value" would mistake it for a switch that is on.
@@ -83,8 +86,9 @@ public struct Rule: Codable, Sendable, Hashable {
     public var disabledWhen: [Check]?
     public var enabledWhen: [Check]?
     public var sources: [String]?
-    /// The first version this finding applies to. Comes from the file name, not from the file.
+    /// The first version this finding applies to. Comes from the file name only: it is not read from a file or an AI answer.
     public var since: String?
+    private enum CodingKeys: String, CodingKey { case match, name, telemetry, summary, policyURL, optOut, disabledWhen, enabledWhen, sources }
 
     static let unsureNote = "The installed version does not say which finding applies, so the strictest one is shown."
 
@@ -105,7 +109,10 @@ public struct Rule: Codable, Sendable, Hashable {
             // A version below every file, such as "0.0.0-dev", gets the first file: no version may be left without a finding.
             return known.filter { place($0) <= version[keyPath: reading] }.max { place($0) < place($1) } ?? known.first { start(sorted[$0]) == .zero }
         }
-        return sorted.enumerated().filter { certain.contains($0.offset) || unsure($0.element) }.map(\.element)
+        // The part after the dash can also be a packager's label: "5.4.0-0ubuntu1" is a build of 5.4.0, not something before it.
+        // So the file for exactly the release in front of the dash may hold as well.
+        let labelled = { (rule: Rule) in version.base == start(rule).release && start(rule).pre.isEmpty }
+        return sorted.enumerated().filter { certain.contains($0.offset) || unsure($0.element) || labelled($0.element) }.map(\.element)
     }
 
     /// What is wrong with this rule, first problem first. Every rule passes through here before it is used:
@@ -117,7 +124,7 @@ public struct Rule: Codable, Sendable, Hashable {
         }
         if !((disabledWhen ?? []) + (enabledWhen ?? [])).allSatisfy(\.isWellFormed) { found.append("malformed check") }
         // The command is offered for copying, so nothing invisible (control or formatting characters, line breaks) may ride along.
-        if optOut?.command?.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains) == true {
+        if optOut?.command.map(Check.hasHiddenCharacters) == true {
             found.append("the command contains hidden characters or line breaks")
         }
         // Yellow promises a way out, so an opt-out verdict without one is not usable.
