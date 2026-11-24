@@ -1,8 +1,12 @@
-# App Checker
+<img src="Resources/logo.png" width="128" alt="Kanarie logo: a yellow canary on a perch">
 
-A macOS menu bar app that lists the software on your Mac and tells you whether it sends telemetry, whether you have switched that off, and how to switch it off.
+# Kanarie
 
-Many tools collect usage data unless you opt out, and the opt-out is often an environment variable that is only mentioned in an issue tracker. App Checker keeps those switches in one folder of findings, one per app, and checks them against your Mac.
+Kanarie is Dutch for canary, as in the canary in a coal mine: it lets you know which apps have set up telemetry on your system.
+
+It is a macOS menu bar app that lists the software on your Mac and tells you whether it sends telemetry, whether you have switched that off, and how to switch it off.
+
+Many tools collect usage data unless you opt out, and the opt-out is often an environment variable that is only mentioned in an issue tracker. Kanarie keeps those switches in one folder of findings, one per app, and checks them against your Mac.
 
 ## What it checks
 
@@ -31,13 +35,13 @@ A verdict comes from, in this order:
 2. **An AI lookup**, only when you ask for one. The result is marked as unverified and lists its sources.
 3. **An offline hint.** For other apps, Homebrew items and commands, the app searches the program file for the names of well-known analytics services. A match stays grey: it is a lead worth looking up, not proof. npm packages and extensions are not searched.
 
-App Checker never changes a setting for you. A yellow item stays yellow until the app can see the switch: variables are read from your login shell, so a variable must be in your shell profile, and some switches (a setting inside an app, or a tool's own `telemetry disable` command) cannot be read at all. The item says which case applies.
+Kanarie never changes a setting for you. A yellow item stays yellow until the app can see the switch: variables are read from your login shell, so a variable must be in your shell profile, and some switches (a setting inside an app, or a tool's own `telemetry disable` command) cannot be read at all. The item says which case applies.
 
 ## Install
 
-Download the latest `AppChecker-<version>-universal.zip` from [Releases](https://github.com/Dunky13/app-checker/releases), unzip it and move App Checker to Applications. It needs macOS 15 or later and updates itself through [Sparkle](https://sparkle-project.org).
+Download the latest `Kanarie-<version>-universal.zip` from [Releases](https://github.com/Dunky13/kanarie/releases), unzip it and move Kanarie to Applications. It needs macOS 15 or later and updates itself through [Sparkle](https://sparkle-project.org).
 
-The app has no Dock icon. Look for the shield in the menu bar. If you use a menu bar manager, or your Mac has a notch and a full menu bar, the icon may be hidden: opening the app again from Finder shows the list.
+The app has no Dock icon. Look for the bird in the menu bar. If you use a menu bar manager, or your Mac has a notch and a full menu bar, the icon may be hidden: opening the app again from Finder shows the list.
 
 ## AI lookup
 
@@ -52,7 +56,7 @@ The Claude Code CLI is started without your Claude settings, and with its own me
 
 ## Privacy
 
-App Checker has no telemetry. It talks to the network in three cases:
+Kanarie has no telemetry. It talks to the network in three cases:
 
 - At launch and then once a day it downloads the findings from this repository (can be switched off in Settings). It fetches every file that changed, not only those for apps you have, so the requests say nothing about your Mac. Files are only used if they match the list the maintainer signed.
 - Sparkle checks this repository for updates, after asking you once. The anonymous system profile is disabled.
@@ -63,7 +67,7 @@ At launch and when you choose Rescan, the app starts your login shell once to re
 
 ## macOS "Data Access Blocked"
 
-Some apps keep their settings in a protected folder, for example Docker Desktop. macOS can then stop App Checker from reading the setting and show a "Data Access Blocked" notice. The item says so instead of guessing. To allow the read, open System Settings > Privacy & Security > Files & Folders, then choose Rescan. App Checker does not retry a blocked file until you rescan.
+Some apps keep their settings in a protected folder, for example Docker Desktop. macOS can then stop Kanarie from reading the setting and show a "Data Access Blocked" notice. The item says so instead of guessing. To allow the read, open System Settings > Privacy & Security > Files & Folders, then choose Rescan. Kanarie does not retry a blocked file until you rescan.
 
 ## Findings
 
@@ -139,13 +143,13 @@ Requires Xcode 16 or later.
 ```sh
 swift test
 scripts/build-app.sh            # ad-hoc signed app in build/
-open "build/App Checker.app"
+open "build/Kanarie.app"
 ```
 
 Print the verdicts without the interface:
 
 ```sh
-"build/App Checker.app/Contents/MacOS/AppChecker" --list
+"build/Kanarie.app/Contents/MacOS/Kanarie" --list
 ```
 
 ## Release

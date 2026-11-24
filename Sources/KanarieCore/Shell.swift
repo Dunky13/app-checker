@@ -38,7 +38,7 @@ public enum Shell {
     /// variables exported in .zshrc/.zprofile, and that is where telemetry opt-outs live.
     /// nil when the shell could not be asked, so the caller can say that variable-based verdicts may be wrong.
     public static func loginEnvironment() -> [String: String]? {
-        let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh", marker = "__APP_CHECKER_ENV__"
+        let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh", marker = "__KANARIE_ENV__"
         guard let data = try? run(shell, ["-ilc", "printf \(marker); /usr/bin/env -0"], timeout: 15),
               let start = data.range(of: Data(marker.utf8)) else { return nil }
         var env: [String: String] = [:]

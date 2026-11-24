@@ -2,19 +2,19 @@
 import PackageDescription
 
 let package = Package(
-    name: "AppChecker",
+    name: "Kanarie",
     platforms: [.macOS(.v15)],
     dependencies: [
         .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.10.1")
     ],
     targets: [
-        .target(name: "AppCheckerCore"),
+        .target(name: "KanarieCore"),
         .executableTarget(
-            name: "AppChecker",
-            dependencies: ["AppCheckerCore", .product(name: "Sparkle", package: "Sparkle")],
+            name: "Kanarie",
+            dependencies: ["KanarieCore", .product(name: "Sparkle", package: "Sparkle")],
             // The app bundle keeps Sparkle.framework in Contents/Frameworks.
             linkerSettings: [.unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"])]
         ),
-        .testTarget(name: "AppCheckerCoreTests", dependencies: ["AppCheckerCore"]),
+        .testTarget(name: "KanarieCoreTests", dependencies: ["KanarieCore"]),
     ]
 )

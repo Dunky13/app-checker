@@ -1,5 +1,5 @@
 #!/bin/bash
-# Builds "build/App Checker.app" as a universal binary.
+# Builds "build/Kanarie.app" as a universal binary.
 #   scripts/build-app.sh [version]
 # CODESIGN_IDENTITY selects the signing identity. The default "-" is an ad-hoc signature for local use.
 set -euo pipefail
@@ -7,7 +7,7 @@ cd "$(dirname "$0")/.."
 
 VERSION="${1:-0.0.0}"
 IDENTITY="${CODESIGN_IDENTITY:--}"
-APP="build/App Checker.app"
+APP="build/Kanarie.app"
 [[ -f findings/index.json ]] || { echo "findings/index.json is missing: run scripts/sign-findings.sh" >&2; exit 1; }
 
 BUILD=(swift build -c release --arch arm64 --arch x86_64)
@@ -16,7 +16,7 @@ PRODUCTS="$("${BUILD[@]}" --show-bin-path)"
 
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Frameworks"
-cp "$PRODUCTS/AppChecker" "$APP/Contents/MacOS/"
+cp "$PRODUCTS/Kanarie" "$APP/Contents/MacOS/"
 cp -R "$PRODUCTS/Sparkle.framework" "$APP/Contents/Frameworks/"
 cp Resources/AppIcon.icns "$APP/Contents/Resources/"
 cp -R findings "$APP/Contents/Resources/"
@@ -37,4 +37,4 @@ sign "$SPARKLE"
 sign "$APP"
 
 codesign --verify --strict --deep "$APP"
-echo "Built $APP ($VERSION, $(lipo -archs "$APP/Contents/MacOS/AppChecker"))"
+echo "Built $APP ($VERSION, $(lipo -archs "$APP/Contents/MacOS/Kanarie"))"

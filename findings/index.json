@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "serial": 1795551198,
+  "serial": 1795553017,
   "files": {
     "aider/0.json": "1e3d819714573c1d0782f7e8d8fb9d815f8e8a160dbe7e001e4f8dcadf7e4284",
     "angular-cli/0.json": "9e36d1085e11124a24f9d70f985c42868faba34c9137c486269f15c8bdc91148",
@@ -15,7 +15,7 @@
     "expo/0.json": "eb6b74371e48cfb9999982c7cc32cf8e3cbb14c2b4cf31f0041e9e86db4f3b9e",
     "firefox/0.json": "ba5b4e42fda826ddc218aaa8221d2b65b58cd80540aa7d9ae7d7d45ca8f9e0f4",
     "flutter/0.json": "43ab1ab910670db47bbdf3aba5e8c56e8a158a95c90b7045c8308b20b40ad868",
-    "gatsby/0.json": "2b292fa1262cec9c85a2c3a5c4dec9cd299819bf2b367d31132c80915e3a177b",
+    "gatsby/0.json": "a232a6876e53a011bc8195ff01736de551db4c937fe45f433c3932c46ec8aa28",
     "gemini-cli/0.json": "104743e6353876c2ead39faba2a2a41f5ce1e3190d45c52bc2fcf80e9d97d8e1",
     "github-cli/0.json": "83ccd0e14ffb0293831b72795414f8cba8459388e5b922ddcc2c1d9c5abfb46d",
     "go/0.json": "4955ec7352389b9be9ff0347e508c2c549f5dbba483bc7f4f0db5010556eb6e7",
@@ -35,8 +35,8 @@
     "t3-code/0.1.11-nightly.20261117.4814.json": "260d723e2248832fb8b3b6685cb39107a6f3c3136e88f9238fd7991c6343852d",
     "t3-code/0.json": "a112a9dbc051a6b7a4fa78e8367d74249daf1a597cfa8ec71727bc88c6b165f5",
     "terraform/0.json": "83378143dcec908ccfadc18e5ff1cf867a7df78243ebf42e3e32e3b36aa9fd2c",
-    "turborepo/0.json": "409d3c68ebf19c1c70cd5eefeca1f0d4f6d61944d0fa668035db8297c1d7d41d",
-    "vercel/0.json": "b3f4b14a0a158e5439b58d6ab8db983baf11684a7575453a127d68fcb16fcf83",
+    "turborepo/0.json": "401843e43c8efe9ccdcb38546296be8f5a6a5e407cf33b5bfca69d36a920af74",
+    "vercel/0.json": "fd261da7fc84a1bd07dbd9a2413ed67206b3bc0cfbdd41534a25d681f7047f44",
     "visual-studio-code/0.json": "b70985113f2362663163b000e38bf9affc01ea5292482f7bf8489968f8f941aa",
     "vscode-containers/0.json": "72086d6372b3650afd96ee4ce8ad6d069329f551901d857c4c78233f9dc20a34",
     "vscode-continue/0.json": "1a66270f67cd2ef1c9c184c019a6e595c80250d0362b58e7a6e10c38d44ac822",

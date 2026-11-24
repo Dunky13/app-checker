@@ -1,4 +1,4 @@
-import AppCheckerCore
+import KanarieCore
 import SwiftUI
 
 /// Proposes a finding for one item. Nothing is sent from here: the last step opens a prefilled GitHub issue in the browser.
@@ -77,7 +77,7 @@ struct SubmitView: View {
                     Label("\(check.lines.joined(separator: " ").replacingOccurrences(of: "`", with: "")) A name that no cited page mentions may be misspelled or invented: correct it, cite the page that has it, or continue and say so in the issue.", systemImage: "exclamationmark.triangle")
                         .fixedSize(horizontal: false, vertical: true)
                 } else {
-                    Text("App Checker fetches the cited pages to look for the names, then opens a public GitHub issue in your browser. Nothing is sent until you submit it there.")
+                    Text("Kanarie fetches the cited pages to look for the names, then opens a public GitHub issue in your browser. Nothing is sent until you submit it there.")
                         .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
                 HStack {

@@ -9,10 +9,10 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 VERSION="${1:?usage: scripts/release.sh <version>}"
-REPO="Dunky13/app-checker"
-APP="build/App Checker.app"
+REPO="Dunky13/kanarie"
+APP="build/Kanarie.app"
 OUT="build/release"
-ZIP="AppChecker-$VERSION-universal.zip"
+ZIP="Kanarie-$VERSION-universal.zip"
 
 if [[ -n "${NOTARY_KEYCHAIN_PROFILE:-}" ]]; then
   AUTH=(--keychain-profile "$NOTARY_KEYCHAIN_PROFILE")
@@ -62,7 +62,7 @@ KEY=()
 grep -F "$ZIP" appcast.xml | grep -q "sparkle:edSignature" || { echo "The appcast entry for $ZIP is not signed." >&2; exit 1; }
 
 # The download must exist before the feed points at it.
-gh release create "v$VERSION" "$OUT/$ZIP" --repo "$REPO" --target "$COMMIT" --title "App Checker $VERSION" --generate-notes
+gh release create "v$VERSION" "$OUT/$ZIP" --repo "$REPO" --target "$COMMIT" --title "Kanarie $VERSION" --generate-notes
 git add appcast.xml
 git commit -s -m "Release $VERSION"
 git push

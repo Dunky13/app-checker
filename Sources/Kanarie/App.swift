@@ -1,4 +1,4 @@
-import AppCheckerCore
+import KanarieCore
 import Sparkle
 import SwiftUI
 import UserNotifications
@@ -9,9 +9,9 @@ extension Notification.Name {
 
 @main
 enum Main {
-    /// `AppChecker --list` prints one tab-separated line per item (status, id, version, explanation) and exits.
+    /// `Kanarie --list` prints one tab-separated line per item (status, id, version, explanation) and exits.
     static func main() {
-        guard CommandLine.arguments.contains("--list") else { return AppCheckerApp.main() }
+        guard CommandLine.arguments.contains("--list") else { return KanarieApp.main() }
         let (snapshot, rules, saved) = (AppModel.scan(shell: nil), AppModel.loadFindings().rules, AppModel.loadSaved())
         Probe.blockedFiles = Set(saved.blocked ?? [])
         let probe = Probe.live(env: snapshot.shell.env)
@@ -22,7 +22,7 @@ enum Main {
     }
 }
 
-struct AppCheckerApp: App {
+struct KanarieApp: App {
     @NSApplicationDelegateAdaptor private var delegate: AppDelegate
     @State private var model = AppModel()
     @State private var updater = Updater()
@@ -35,7 +35,7 @@ struct AppCheckerApp: App {
         }
         .menuBarExtraStyle(.window)
 
-        Window("App Checker", id: "main") {
+        Window("Kanarie", id: "main") {
             MainView(model: model)
         }
         .defaultSize(width: 980, height: 640)
@@ -51,8 +51,8 @@ struct MenuBarLabel: View {
     @AppStorage("didShowWindow") private var didShowWindow = false
 
     var body: some View {
-        Image(systemName: attention > 0 ? "exclamationmark.shield" : "checkmark.shield")
-            .accessibilityLabel(attention > 0 ? "App Checker: \(attention) items may send telemetry" : "App Checker")
+        Image(systemName: attention > 0 ? "bird.fill" : "bird")
+            .accessibilityLabel(attention > 0 ? "Kanarie: \(attention) items may send telemetry" : "Kanarie")
             .onReceive(NotificationCenter.default.publisher(for: .openMainWindow)) { _ in open() }
             .task {
                 if !didShowWindow {
@@ -115,7 +115,7 @@ final class Updater: NSObject, @preconcurrency SPUStandardUserDriverDelegate {
     func standardUserDriverWillHandleShowingUpdate(_ handleShowingUpdate: Bool, forUpdate update: SUAppcastItem, state: SPUUserUpdateState) {
         guard !handleShowingUpdate else { return }
         updateAvailable = true
-        notify("App Checker \(update.displayVersionString) is available", "Open the menu bar icon to install the update.")
+        notify("Kanarie \(update.displayVersionString) is available", "Open the menu bar icon to install the update.")
     }
 
     func standardUserDriverDidReceiveUserAttention(forUpdate update: SUAppcastItem) {

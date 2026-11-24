@@ -1,4 +1,4 @@
-import AppCheckerCore
+import KanarieCore
 import AppKit
 import Observation
 import ServiceManagement
@@ -6,8 +6,8 @@ import UserNotifications
 
 @MainActor @Observable
 final class AppModel {
-    nonisolated static let findingsURL = URL(string: "https://raw.githubusercontent.com/Dunky13/app-checker/main/findings/")!
-    nonisolated static let supportDir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("App Checker")
+    nonisolated static let findingsURL = URL(string: "https://raw.githubusercontent.com/Dunky13/kanarie/main/findings/")!
+    nonisolated static let supportDir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Kanarie")
     nonisolated static let stateFile = supportDir.appendingPathComponent("state.json"), cachedFindings = supportDir.appendingPathComponent("findings")
     /// Same key as the app's own updates: only findings the maintainer signed are accepted.
     nonisolated static var publicKey: String { Bundle.main.infoDictionary?["SUPublicEDKey"] as? String ?? "" }
@@ -48,7 +48,7 @@ final class AppModel {
             let aside = stateFile.appendingPathExtension("bad")
             try? FileManager.default.removeItem(at: aside)
             try? FileManager.default.moveItem(at: stateFile, to: aside)
-            NSLog("App Checker: could not read saved state, kept it as \(aside.lastPathComponent): \(error)")
+            NSLog("Kanarie: could not read saved state, kept it as \(aside.lastPathComponent): \(error)")
             return Saved()
         }
     }
@@ -60,7 +60,7 @@ final class AppModel {
             // The app's own code signature covers the bundled copy, so its index is only read for the serial.
             let index = try? JSONDecoder().decode(Findings.Index.self, from: Data(contentsOf: folder.appendingPathComponent("index.json")))
             do { best = (index?.serial ?? 0, try Findings.rules(from: Findings.read(folder: folder))) } catch {
-                NSLog("App Checker: the bundled findings are invalid: \(error.localizedDescription)")
+                NSLog("Kanarie: the bundled findings are invalid: \(error.localizedDescription)")
             }
         }
         if let cached = try? Findings.verified(folder: cachedFindings, publicKey: publicKey), cached.index.serial > best.serial {
@@ -84,7 +84,7 @@ final class AppModel {
         if !UserDefaults.standard.bool(forKey: "didSetUp") {
             UserDefaults.standard.set(true, forKey: "didSetUp")
             // Not fatal: Settings shows the real state and lets the user try again.
-            do { try SMAppService.mainApp.register() } catch { NSLog("App Checker: could not register the login item: \(error)") }
+            do { try SMAppService.mainApp.register() } catch { NSLog("Kanarie: could not register the login item: \(error)") }
             UNUserNotificationCenter.current().requestAuthorization(options: [.alert]) { _, _ in }
         }
         Task {
@@ -211,7 +211,7 @@ final class AppModel {
 
     private func save() {
         saved.blocked = Probe.blockedFiles.sorted()
-        do { try JSONEncoder().encode(saved).write(to: Self.stateFile, options: .atomic) } catch { NSLog("App Checker: could not save state: \(error)") }
+        do { try JSONEncoder().encode(saved).write(to: Self.stateFile, options: .atomic) } catch { NSLog("Kanarie: could not save state: \(error)") }
     }
 
     private func refreshFindings() async {
@@ -242,7 +242,7 @@ final class AppModel {
             evaluate()
             save()
         } catch {
-            NSLog("App Checker: findings not updated, keeping the current ones: \(error.localizedDescription)")
+            NSLog("Kanarie: findings not updated, keeping the current ones: \(error.localizedDescription)")
         }
     }
 
@@ -308,7 +308,7 @@ func notify(_ title: String, _ body: String) {
 /// The API key for the OpenAI-compatible backend lives in the login keychain, never in preferences.
 enum Keychain {
     private static var query: [String: Any] {
-        [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: "io.went.app-checker", kSecAttrAccount as String: "llm-api-key"]
+        [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: "io.went.kanarie", kSecAttrAccount as String: "llm-api-key"]
     }
 
     static var apiKey: String? {
@@ -321,7 +321,7 @@ enum Keychain {
             SecItemDelete(query as CFDictionary)
             guard let newValue, !newValue.isEmpty else { return }
             let status = SecItemAdd(query.merging([kSecValueData as String: Data(newValue.utf8)]) { $1 } as CFDictionary, nil)
-            if status != errSecSuccess { NSLog("App Checker: could not store the API key (\(status))") }
+            if status != errSecSuccess { NSLog("Kanarie: could not store the API key (\(status))") }
         }
     }
 }

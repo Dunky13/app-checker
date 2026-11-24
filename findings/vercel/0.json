@@ -7,7 +7,7 @@
   "summary": "Collects usage telemetry: commands and options used, CLI version, general machine info (CPU count, OS, CI or not) and identifiers tied to your account. Environment variables, file paths, file contents, logs and serialized errors are not collected.",
   "policyURL": "https://vercel.com/docs/cli/about-telemetry",
   "optOut": {
-    "instructions": "Set VERCEL_TELEMETRY_DISABLED=1 in your shell profile. Running vercel telemetry disable also works, but App Checker cannot see that.",
+    "instructions": "Set VERCEL_TELEMETRY_DISABLED=1 in your shell profile. Running vercel telemetry disable also works, but Kanarie cannot see that.",
     "command": "echo 'export VERCEL_TELEMETRY_DISABLED=1' >> ~/.zshrc",
     "url": "https://vercel.com/docs/cli/about-telemetry"
   },

@@ -7,7 +7,7 @@
   "summary": "Vercel collects anonymous usage and host information about Turborepo commands. Collection is optional.",
   "policyURL": "https://turborepo.com/docs/telemetry",
   "optOut": {
-    "instructions": "Set TURBO_TELEMETRY_DISABLED=1 in your shell profile. Running turbo telemetry disable also works, but App Checker cannot see that.",
+    "instructions": "Set TURBO_TELEMETRY_DISABLED=1 in your shell profile. Running turbo telemetry disable also works, but Kanarie cannot see that.",
     "command": "echo 'export TURBO_TELEMETRY_DISABLED=1' >> ~/.zshrc",
     "url": "https://turborepo.com/docs/telemetry"
   },
