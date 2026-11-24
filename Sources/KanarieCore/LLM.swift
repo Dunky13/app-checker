@@ -57,7 +57,11 @@ public enum LLM {
                     let content = block["content"] as? String
                         ?? (block["content"] as? [[String: Any]] ?? []).compactMap { $0["text"] as? String }.joined(separator: "\n")
                     let shown = content.count > resultLimit ? content.prefix(resultLimit) + "\n… (shortened)" : content
-                    turns[index].result = shown.isEmpty ? nil : (block["is_error"] as? Bool == true ? "Failed: " : "") + shown
+                    if block["is_error"] as? Bool == true {
+                        turns[index].result = "Failed" + (shown.isEmpty ? "" : ": " + shown)
+                    } else {
+                        turns[index].result = shown.isEmpty ? nil : String(shown)
+                    }
                 default: break
                 }
             }
@@ -72,18 +76,55 @@ public enum LLM {
         }
     }
 
-    /// Splits a text of the log for display. Parts that are JSON or fenced as code are code blocks, JSON laid out over lines.
+    /// Splits a text of the log for display. JSON and parts fenced as code are code blocks, JSON laid out over lines.
+    /// Nothing is left out or reworded: only white space changes.
     public static func blocks(of text: String) -> [(text: String, isCode: Bool)] {
-        text.components(separatedBy: "```").enumerated().compactMap { index, part in
-            let fenced = index % 2 == 1
-            // The first line inside a fence names the language.
-            let body = (fenced && part.contains(where: \.isNewline) ? String(part.drop { !$0.isNewline }) : part).trimmingCharacters(in: .whitespacesAndNewlines)
-            if let object = try? JSONSerialization.jsonObject(with: Data(body.utf8)),
-               let laidOut = try? JSONSerialization.data(withJSONObject: object, options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]) {
-                return (String(decoding: laidOut, as: UTF8.self), true)
+        func isJSON(_ text: String) -> Bool { (try? JSONSerialization.jsonObject(with: Data(text.utf8))) != nil }
+        let whole = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Checked before the fences: a string inside JSON may hold three backticks.
+        if isJSON(whole) { return [(laidOut(json: whole), true)] }
+        var parts = text.components(separatedBy: "```")
+        // A fence that never closes is text.
+        if parts.count % 2 == 0, let last = parts.popLast() { parts[parts.count - 1] += "```" + last }
+        return parts.enumerated().compactMap { index, part in
+            var body = part
+            // The first line inside a fence names the language, when it reads like a name.
+            if index % 2 == 1, let end = part.firstIndex(where: \.isNewline), part[..<end].allSatisfy({ $0.isLetter || $0.isNumber || "_+.-".contains($0) }) {
+                body = String(part[end...])
             }
-            return body.isEmpty ? nil : (body, fenced)
+            body = body.trimmingCharacters(in: .whitespacesAndNewlines)
+            if body.isEmpty { return nil }
+            return index % 2 == 1 ? (isJSON(body) ? laidOut(json: body) : body, true) : (body, false)
         }
+    }
+
+    /// Spreads JSON over indented lines without reading it into values, so numbers, escapes, the order of keys and
+    /// repeated keys stay as they were written.
+    static func laidOut(json: String) -> String {
+        var out = String.UnicodeScalarView(), depth = 0, inString = false, escaped = false
+        func newLine() { out.append(contentsOf: ("\n" + String(repeating: "  ", count: depth)).unicodeScalars) }
+        for scalar in json.unicodeScalars {
+            if inString {
+                out.append(scalar)
+                if escaped { escaped = false } else if scalar == "\\" { escaped = true } else if scalar == "\"" { inString = false }
+                continue
+            }
+            switch scalar {
+            case "\"": inString = true; out.append(scalar)
+            case "{", "[": out.append(scalar); depth += 1; newLine()
+            case "}", "]":
+                depth -= 1
+                // An empty object or array stays on one line.
+                while let last = out.last, last == " " || last == "\n" { out.removeLast() }
+                if out.last != "{", out.last != "[" { newLine() }
+                out.append(scalar)
+            case ",": out.append(scalar); newLine()
+            case ":": out.append(contentsOf: ": ".unicodeScalars)
+            case " ", "\t", "\n", "\r": break
+            default: out.append(scalar)
+            }
+        }
+        return String(out)
     }
 
     static let kinds = [
@@ -135,8 +176,12 @@ public enum LLM {
 
     /// Extracts the JSON object from a model reply and turns it into a rule for `itemID`.
     public static func parseRule(from text: String, itemID: String) throws -> Rule {
-        guard let start = text.firstIndex(of: "{"), let end = text.lastIndex(of: "}"), start < end,
-              var object = try? JSONSerialization.jsonObject(with: Data(text[start...end].utf8)) as? [String: Any] else {
+        // Fenced parts first: the words around a fenced answer may hold braces of their own.
+        let candidates = blocks(of: text).filter(\.isCode).map(\.text) + [text]
+        guard var object = candidates.lazy.compactMap({ text -> [String: Any]? in
+            guard let start = text.firstIndex(of: "{"), let end = text.lastIndex(of: "}"), start < end else { return nil }
+            return try? JSONSerialization.jsonObject(with: Data(text[start...end].utf8)) as? [String: Any]
+        }).first else {
             throw Failure(errorDescription: "The model did not answer with JSON.")
         }
         object["match"] = [itemID]
@@ -221,7 +266,9 @@ public enum LLM {
             let decoded = try? JSONDecoder().decode(Reply.self, from: data)
             guard let content = decoded?.choices?.first?.message.content else {
                 let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-                throw Failure(errorDescription: decoded?.error?.message ?? "The endpoint answered with HTTP \(status).")
+                // The reason goes into the lookup log on disk: kept short, and without the key should the endpoint repeat it.
+                let reason = decoded?.error?.message.replacingOccurrences(of: apiKey, with: "…").prefix(300)
+                throw Failure(errorDescription: reason.map(String.init) ?? "The endpoint answered with HTTP \(status).")
             }
             log.append(Turn(role: .assistant, text: content))
             return content

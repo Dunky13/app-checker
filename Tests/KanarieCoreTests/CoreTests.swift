@@ -186,6 +186,11 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         #expect(LLM.grouped([LLM.Turn(role: .user, text: "p")] + log.turns).map(\.count) == [1, 1, 3, 1])
         #expect(log.turns[1] == LLM.Turn(role: .tool, text: #"{"query":"tool telemetry"}"#, tool: "WebSearch", result: "Links: none"))
         #expect(log.turns[2].text == #"{"url":"https://example.com/a"}"# && log.turns[2].result == String(repeating: "x", count: LLM.resultLimit) + "\n… (shortened)")
+        let empty = #"""
+        {"type":"assistant","message":{"content":[{"type":"tool_use","id":"a","name":"WebFetch","input":{}}]}}
+        {"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"a","is_error":true,"content":""}]}}
+        """#
+        #expect(LLM.transcript(ofStream: Data(empty.utf8)).turns[0].result == "Failed")
         let failed = LLM.transcript(ofStream: Data(#"{"type":"result","is_error":true,"result":"Not logged in"}"#.utf8))
         #expect(failed.turns.isEmpty && failed.failed && failed.result == "Not logged in")
     }
@@ -193,9 +198,48 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
     @Test func setsJSONAndFencedCodeAsCodeBlocks() {
         let blocks = LLM.blocks(of: "Here you go:\n```json\n{\"b\":[1],\"a\":\"https://example.com/x\"}\n```\nDone. ```ls -l```")
         #expect(blocks.map(\.isCode) == [false, true, false, true])
-        #expect(blocks.map(\.text) == ["Here you go:", "{\n  \"a\" : \"https://example.com/x\",\n  \"b\" : [\n    1\n  ]\n}", "Done.", "ls -l"])
+        #expect(blocks.map(\.text) == ["Here you go:", "{\n  \"b\": [\n    1\n  ],\n  \"a\": \"https://example.com/x\"\n}", "Done.", "ls -l"])
         #expect(LLM.blocks(of: #"{"query":"x"}"#).map(\.isCode) == [true])
         #expect(LLM.blocks(of: "Links: [1]").map(\.isCode) == [false])
+    }
+
+    /// The log shows what was said: laying it out may only change white space.
+    @Test func layingOutTheLogLosesNothing() {
+        // Numbers, escapes, key order, a repeated key and brackets inside a string stay as written.
+        let json = #"{"n":0.1,"e":1e3,"u":"\u00e9 \/ \" , : { [","a":{},"l":[],"n":1.0}"#
+        let laidOut = LLM.blocks(of: json)[0].text
+        #expect(laidOut.filter { !$0.isWhitespace } == json.filter { !$0.isWhitespace })
+        #expect(laidOut.contains(#""u": "\u00e9 \/ \" , : { [""#) && laidOut.contains(#""a": {},"#) && laidOut.contains(#""l": [],"#))
+        // A fence that never closes is text, with what follows it.
+        #expect(LLM.blocks(of: "Type ``` to open a block. Then\nthe rest").map(\.text) == ["Type ``` to open a block. Then\nthe rest"])
+        // Only a line that reads like a language name is taken as one.
+        #expect(LLM.blocks(of: "```first line\nsecond```").map(\.text) == ["first line\nsecond"])
+        // Fences inside a JSON string do not split it.
+        #expect(LLM.blocks(of: #"{"summary":"use ```json fences```"}"#).map(\.text) == ["{\n  \"summary\": \"use ```json fences```\"\n}"])
+    }
+
+    @Test func readsAFencedAnswerAmongBraces() throws {
+        let reply = "See {below}.\n```json\n{\"telemetry\": \"none\", \"summary\": \"Nothing is sent.\"}\n```"
+        #expect(try LLM.parseRule(from: reply, itemID: "npm:tool").match == ["npm:tool"])
+    }
+
+    @Test func keepsTheLogBehindTheVerdictApartFromAFailedLookup() throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("lookups-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let logs = LookupLogs(folder: folder), id = "npm:@scope/tool"
+        let (good, bad, worse) = ([LLM.Turn(role: .user, text: "p")], [LLM.Turn(role: .error, text: "no")], [LLM.Turn(role: .error, text: "again no")])
+        #expect(!logs.hasLog(for: id) && logs.load(for: id).verdict == nil)
+        try logs.save(good, for: id, failed: false)
+        try logs.save(bad, for: id, failed: true)
+        try logs.save(worse, for: id, failed: true)
+        #expect(logs.load(for: id).verdict == good && logs.load(for: id).failed == worse)
+        // A lookup that works makes the earlier failure history.
+        try logs.save(good, for: id, failed: false)
+        #expect(logs.load(for: id).failed == nil && logs.hasLog(for: id))
+        try logs.save(bad, for: id, failed: true)
+        logs.removeVerdictLog(for: id)
+        #expect(logs.load(for: id).verdict == nil && logs.load(for: id).failed == bad)
+        #expect(!logs.hasLog(for: "npm:@scope/Tool"))
     }
 
     /// A lookup that fails keeps what it asked and got back, and says why it failed.
@@ -807,5 +851,15 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         } catch {
             #expect((error as? Shell.Failure)?.output == Data("part\n".utf8))
         }
+    }
+
+    /// A program that handles the signal and exits by itself has still run out of time.
+    @Test func timeoutIsToldApartFromAnExit() {
+        #expect {
+            try Shell.run("/bin/sh", ["-c", "trap 'kill $!; exit 0' TERM; echo part; sleep 30 >/dev/null & wait"], timeout: 1, acceptFailure: true)
+        } throws: { error in
+            (error as? Shell.Failure)?.output == Data("part\n".utf8) && error.localizedDescription == "sh timed out after 1 s."
+        }
+        #expect { try Shell.run("/bin/sh", ["-c", "kill -KILL $$"], timeout: 10) } throws: { $0.localizedDescription == "sh was stopped by signal 9." }
     }
 }
