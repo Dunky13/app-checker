@@ -19,6 +19,7 @@ final class AppModel {
         var aiRules: [String: Rule] = [:]      // item id -> AI lookup result
         var sdks: [String: [String]] = [:]     // "id@version" -> SDK scan result
         var blocked: [String]?                 // files macOS would not let the app read; optional so older state files still load
+        var serial: Int?                       // highest findings index accepted so far, which also holds when the cache is lost
     }
 
     private(set) var items: [Item] = []
@@ -214,14 +215,20 @@ final class AppModel {
         do {
             let session = URLSession(configuration: .ephemeral)
             func fetch(_ path: String) async throws -> Data {
-                let (data, response) = try await session.data(from: Self.findingsURL.appendingPathComponent(path))
+                let (bytes, response) = try await session.bytes(from: Self.findingsURL.appendingPathComponent(path))
                 guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw URLError(.badServerResponse) }
+                // Findings are a few kilobytes each. The cap also holds for the index, which is read before its signature can be checked.
+                var data = Data()
+                for try await byte in bytes {
+                    data.append(byte)
+                    if data.count > 1_000_000 { throw URLError(.dataLengthExceedsMaximum) }
+                }
                 return data
             }
             let (indexData, signature) = (try await fetch("index.json"), try await fetch("index.json.sig"))
             let index = try Findings.index(indexData, signature: String(decoding: signature, as: UTF8.self), publicKey: Self.publicKey)
-            // Nothing newer. This also refuses an older index that someone plays back.
-            guard index.serial > serial else { return }
+            // Nothing newer. This also refuses an older index that someone plays back, even after the cache was lost.
+            guard index.serial > serial, index.serial >= saved.serial ?? 0 else { return }
             // Files the app already has are reused by their hash and every other listed file is fetched,
             // whether or not the app is installed here: the requests say nothing about this Mac.
             var have: [String: Data] = [:]
@@ -234,18 +241,11 @@ final class AppModel {
             }
             let rules = try Findings.rules(from: files, matching: index)
 
-            // Keep the download, with its index and signature, so the next launch can verify and use it.
-            let fm = FileManager.default, fresh = Self.supportDir.appendingPathComponent("findings.new")
-            try? fm.removeItem(at: fresh)
-            for (path, data) in files.merging(["index.json": indexData, "index.json.sig": signature], uniquingKeysWith: { $1 }) {
-                let file = fresh.appendingPathComponent(path)
-                try fm.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
-                try data.write(to: file)
-            }
-            try? fm.removeItem(at: Self.cachedFindings)
-            try fm.moveItem(at: fresh, to: Self.cachedFindings)
-            (self.rules, serial) = (rules, index.serial)
+            try FileManager.default.createDirectory(at: Self.supportDir, withIntermediateDirectories: true)
+            try Findings.store(files, index: indexData, signature: signature, in: Self.cachedFindings)
+            (self.rules, serial, saved.serial) = (rules, index.serial, index.serial)
             evaluate()
+            save()
         } catch {
             NSLog("App Checker: findings not updated, keeping the current ones: \(error.localizedDescription)")
         }

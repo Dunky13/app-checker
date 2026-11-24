@@ -24,7 +24,7 @@ public struct Version: Comparable, Hashable, Sendable {
         }
         // A leading word is a prefix such as "v" or "release-".
         for run in runs.drop(while: { $0.first?.isNumber != true }) {
-            if pre.isEmpty, run.first?.isNumber == true { release.append(Int(run) ?? .max) } else { pre.append(run) }
+            if pre.isEmpty, run.first?.isNumber == true { release.append(Int(run) ?? .max) } else { pre.append(Int(run).map(String.init) ?? run) }  // beta.01 is beta.1
         }
         guard !release.isEmpty else { return nil }
         while release.last == 0 { release.removeLast() }  // 1.0 and 1.0.0 are the same version
@@ -42,6 +42,12 @@ public struct Version: Comparable, Hashable, Sendable {
             return Int(x) != nil ? true : Int(y) != nil ? false : x < y
         }
         return a.pre.count < b.pre.count
+    }
+
+    /// Pre-releases of one release on different channels ("nightly", "preview", "rc") have no order between them:
+    /// nothing says whether rc.1 was cut before or after nightly.20261117.
+    func isOnAnotherChannel(than other: Version) -> Bool {
+        release == other.release && !pre.isEmpty && !other.pre.isEmpty && pre.first != other.pre.first
     }
 }
 
@@ -71,16 +77,17 @@ public enum Findings {
 
     /// "app/version.json" with plain characters only: paths end up in URLs and on disk.
     static func isPath(_ path: String) -> Bool {
-        let parts = path.split(separator: "/", omittingEmptySubsequences: false)
-        let plain = { (text: Substring, extra: String) in !text.isEmpty && text.first != "." && text.allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber || extra.contains($0)) } }
-        return parts.count == 2 && plain(parts[0], "-") && parts[1].hasSuffix(".json") && plain(parts[1], ".-_")
+        let parts = path.split(separator: "/", omittingEmptySubsequences: false), lower = "abcdefghijklmnopqrstuvwxyz0123456789"
+        let plain = { (text: Substring, allowed: String) in !text.isEmpty && text.first != "." && text.allSatisfy(allowed.contains) }
+        // Folders in lower case only, so two of them cannot collide on a file system that ignores case.
+        return parts.count == 2 && plain(parts[0], lower + "-") && parts[1].hasSuffix(".json") && plain(parts[1], lower + lower.uppercased() + ".-_")
     }
 
-    /// Every "<app>/<version>.json" below `folder`. Anything else, such as an app's NOTES.md, is left alone.
+    /// Every "<app>/<version>.json" below `folder`. Anything else, such as an app's NOTES.md or a hidden file the Finder left, is left alone.
     public static func read(folder: URL) -> [String: Data] {
         var files: [String: Data] = [:]
         for app in Scanner.children(folder) {
-            for file in Scanner.children(app) where file.pathExtension == "json" {
+            for file in Scanner.children(app) where file.pathExtension == "json" && !file.lastPathComponent.hasPrefix(".") {
                 files["\(app.lastPathComponent)/\(file.lastPathComponent)"] = try? Data(contentsOf: file)
             }
         }
@@ -89,8 +96,8 @@ public enum Findings {
 
     /// Decodes and validates findings. One invalid file rejects them all.
     public static func rules(from files: [String: Data]) throws -> [Rule] {
-        var seen: [String: Set<Version>] = [:]
-        return try files.keys.sorted().map { path in
+        var seen: [String: (app: Substring, versions: Set<Version>)] = [:]
+        let rules = try files.keys.sorted().map { path in
             let since = String(path.split(separator: "/").last?.dropLast(5) ?? "")
             guard isPath(path), let version = Version(since) else {
                 throw failure("\(path): name the file <app>/<first version it applies to>.json")
@@ -98,9 +105,19 @@ public enum Findings {
             guard var rule = try? JSONDecoder().decode(Rule.self, from: files[path] ?? Data()) else { throw failure("\(path): not a finding") }
             rule.since = since
             if let problem = rule.problems(curated: true).first { throw failure("\(path): \(problem)") }
-            for id in rule.match where !seen[id, default: []].insert(version).inserted { throw failure("\(path): \(id) has two findings for the same version") }
+            let app = path.prefix { $0 != "/" }
+            for id in rule.match {
+                // One timeline per item: a file in another folder would silently override the right one.
+                if let other = seen[id]?.app, other != app { throw failure("\(path): \(id) already has findings in \(other)/") }
+                if !seen[id, default: (app, [])].versions.insert(version).inserted { throw failure("\(path): \(id) has two findings for the same version") }
+            }
             return rule
         }
+        // Without a first file an older install would have no curated finding and could be judged by an unverified AI answer.
+        if let id = seen.keys.sorted().first(where: { seen[$0]?.versions.contains(.zero) == false }) {
+            throw failure("\(seen[id]?.app ?? "")/: \(id) needs a 0.json for the versions before its first file")
+        }
+        return rules
     }
 
     /// The signed list of files. The signature is the maintainer's Ed25519 one, made with the Sparkle update key.
@@ -118,6 +135,19 @@ public enum Findings {
     public static func rules(from files: [String: Data], matching index: Index) throws -> [Rule] {
         guard files.mapValues(sha256) == index.files else { throw failure("The findings do not match their signed index.") }
         return try rules(from: files)
+    }
+
+    /// Replaces `folder` with a download, keeping the index and its signature so `verified(folder:)` can check it at the next launch.
+    public static func store(_ files: [String: Data], index: Data, signature: Data, in folder: URL) throws {
+        let fm = FileManager.default, fresh = folder.appendingPathExtension("new")
+        try? fm.removeItem(at: fresh)
+        for (path, data) in files.merging(["index.json": index, "index.json.sig": signature], uniquingKeysWith: { $1 }) {
+            let file = fresh.appendingPathComponent(path)
+            try fm.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try data.write(to: file)
+        }
+        // In one step, so a crash leaves the old folder or the new one, never neither.
+        if fm.fileExists(atPath: folder.path) { _ = try fm.replaceItemAt(folder, withItemAt: fresh) } else { try fm.moveItem(at: fresh, to: folder) }
     }
 
     /// A folder that carries its own index and signature, such as the app's cache of the last download.

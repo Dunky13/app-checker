@@ -77,13 +77,19 @@ public struct Rule: Codable, Sendable, Hashable {
     /// The first version this finding applies to. Comes from the file name, not from the file.
     public var since: String?
 
-    /// The finding for `version` among those for one item: the newest one that starts at or below it.
-    /// An item without a readable version gets the newest finding.
-    public static func pick(_ candidates: [Rule], version: String) -> Rule? {
+    static let unsureNote = "The installed version does not say which finding applies, so the strictest one is shown."
+
+    /// The findings that may hold for `version` among those for one item, oldest first. Normally that is one:
+    /// the newest that starts at or below it. When the version cannot say, every finding that might hold comes back
+    /// and the caller shows the worst: all of them for a version that cannot be read, and any that starts on another
+    /// pre-release channel of the same release.
+    public static func pick(_ candidates: [Rule], version: String) -> [Rule] {
         let start = { (rule: Rule) in rule.since.flatMap(Version.init) ?? .zero }
         let sorted = candidates.sorted { start($0) < start($1) }
-        guard let version = Version(version) else { return sorted.last }
-        return sorted.last { start($0) <= version }
+        guard let version = Version(version) else { return sorted }
+        let unsure = { (rule: Rule) in version.isOnAnotherChannel(than: start(rule)) }
+        let certain = sorted.lastIndex { !unsure($0) && start($0) <= version }
+        return sorted.enumerated().filter { $0.offset == certain || unsure($0.element) }.map(\.element)
     }
 
     /// What is wrong with this rule, first problem first. Every rule passes through here before it is used:
@@ -247,9 +253,13 @@ public struct Verdict: Sendable, Equatable {
             return (shown.result.status, results.count > 1 && notable ? "In \(editor): \(shown.result.state)" : shown.result.state)
         }
         // shortcut: an extension with a different version per editor is judged by the first editor's version; pick per editor if an extension ever gets version files.
-        if let rule = Rule.pick(rules.filter({ $0.match.contains(item.id) }), version: item.version) {
-            (status, state) = judge(rule)
-            (self.rule, source) = (rule, .rules)
+        let found = Rule.pick(rules.filter({ $0.match.contains(item.id) }), version: item.version).map { (rule: $0, result: judge($0)) }
+        let severity = { (status: Status) in [Status.ok, .unknown, .warn, .bad].firstIndex(of: status) ?? 0 }
+        // Several findings may hold: show the worst, and the newest of equally bad ones.
+        if let worst = found.map({ severity($0.result.0) }).max(), let shown = found.last(where: { severity($0.result.0) == worst }) {
+            (status, state) = shown.result
+            if found.count > 1 { state += " " + Rule.unsureNote }
+            (rule, source) = (shown.rule, .rules)
         } else if let rule = aiRules[item.id] {
             (status, state) = judge(rule)
             (self.rule, source) = (rule, .ai)

@@ -13,7 +13,7 @@ Status on 2026-11-24: the app is built, tested, reviewed and pushed to `main`. T
 
 Checked by running it, on one Mac (macOS 27, Apple Silicon):
 
-- `swift test`: 27 tests in 9 suites pass locally. CI results are linked from each commit and pull request page.
+- `swift test`: 29 tests in 9 suites pass locally. CI results are linked from each commit and pull request page.
 - First run: window opens, login item is registered, notification permission is requested. Second launch is silent and Sparkle asks once about automatic checks.
 - A new app bundle dropped into `~/Applications` was detected in about 12 seconds and produced a notification.
 - Search, the filter menu, the detail pane, the copy button, the "Data Access Blocked" note, and the AI marker in the list.
@@ -72,6 +72,8 @@ After any change below `findings/`: run `scripts/sign-findings.sh` and commit `i
 - Variables are read from the login shell at launch and on Rescan, so a change to a shell profile shows up after Rescan.
 - The findings format is version 1. No build was released before the move from one rules file to the findings folder, so no older app can misread it. Raise `version` in the index and `supportedVersion` together for the next format change.
 - A word after the version numbers is read as a pre-release, so a version such as OpenSSL's `1.1.1w` sorts before `1.1.1`. No app with such versions has more than one file yet.
+- Pre-releases on different channels of one release are never ordered, also where a convention exists (beta before rc). Such an item gets the strictest of the findings that might hold, which can be yellow where green would be right.
+- The highest findings serial the app accepted is kept in `state.json`. Deleting the whole App Checker support folder resets it to the serial shipped in the app.
 - An extension with a different version in each editor is judged by the first editor's version.
 - If the findings change on the server between the download of the index and of a file, that download is rejected and tried again the next day.
 - Stopping a batch of AI lookups lets the running lookup finish. A lookup that times out stops the CLI but not programs the CLI started.

@@ -291,11 +291,19 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
     @Test func t3CodeIsOnlyGreenFromTheBuildThatHonoursTheVariable() throws {
         let all = try Findings.rules(from: Findings.read(folder: folder))
         let off = probe(env: ["T3CODE_TELEMETRY_ENABLED": "false"])
-        let status = { (version: String) in
-            Verdict(item: Item(id: "app:com.t3tools.t3code", name: "T3 Code", version: version, path: "/x"), rules: all, aiRules: [:], sdks: [], probe: off).status
+        let verdict = { (version: String) in
+            Verdict(item: Item(id: "app:com.t3tools.t3code", name: "T3 Code", version: version, path: "/x"), rules: all, aiRules: [:], sdks: [], probe: off)
         }
-        for version in ["0.1.10", "0.1.10-nightly.20261116.4800", "0.1.11-nightly.20261116.4799"] { #expect(status(version) == .warn, "\(version)") }
-        for version in ["0.1.11-nightly.20261117.4814", "0.1.11", "0.1.12-nightly.20261124.5191", "1.0", "not a version"] { #expect(status(version) == .ok, "\(version)") }
+        for version in ["0.1.10", "0.1.10-nightly.20261116.4800", "0.1.11-nightly.20261116.4799"] {
+            #expect(verdict(version).status == .warn && !verdict(version).state.contains(Rule.unsureNote), "\(version)")
+        }
+        for version in ["0.1.11-nightly.20261117.4814", "0.1.11", "0.1.12-nightly.20261124.5191", "0.1.12-preview.1", "1.0"] {
+            #expect(verdict(version).status == .ok && !verdict(version).state.contains(Rule.unsureNote), "\(version)")
+        }
+        // No version, or a build from another channel of 0.1.11 that may be older than the fix: the stricter finding, and it says why.
+        for version in ["", "not a version", "0.1.11-preview.20261110.4500", "0.1.11-rc.1"] {
+            #expect(verdict(version).status == .warn && verdict(version).state.contains(Rule.unsureNote), "\(version)")
+        }
     }
 
     /// The app only takes downloaded findings that its signed index lists, so an unsigned change would silently never reach users.
@@ -320,20 +328,38 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
             let (a, b) = (try #require(Version(lower)), try #require(Version(higher)))
             #expect(a < b && !(b < a) && a != b, "\(lower) < \(higher)")
         }
-        #expect(Version("1.0") == Version("1.0.0+build.5") && Version("V2.1") == Version("2.1,0"))
+        #expect(Version("1.0") == Version("1.0.0+build.5") && Version("V2.1") == Version("2.1,0") && Version("1-beta.01") == Version("1-beta.1"))
         #expect(Version("") == nil && Version("latest") == nil)
     }
 
     @Test func aFindingHoldsUntilTheNextOne() {
         var (first, second, third) = (rule(.optOut), rule(.none), rule(.forced))
         (first.since, second.since, third.since) = ("0", "2.0-beta.3", "3")
-        let pick = { (version: String) in Rule.pick([third, first, second], version: version)?.since }
-        #expect(pick("1.4") == "0" && pick("2.0-beta.2") == "0")
-        #expect(pick("2.0-beta.3") == "2.0-beta.3" && pick("2.0") == "2.0-beta.3" && pick("2.99") == "2.0-beta.3")
-        #expect(pick("3") == "3" && pick("10.1") == "3")
-        // An unreadable version gets the current finding, and a version from before the first finding gets none.
-        #expect(pick("unknown") == "3")
-        #expect(Rule.pick([second, third], version: "1.0") == nil && Rule.pick([], version: "1.0") == nil)
+        let pick = { (version: String) in Rule.pick([third, first, second], version: version).map { $0.since ?? "" } }
+        #expect(pick("1.4") == ["0"] && pick("2.0-beta.2") == ["0"])
+        #expect(pick("2.0-beta.3") == ["2.0-beta.3"] && pick("2.0") == ["2.0-beta.3"] && pick("2.99") == ["2.0-beta.3"])
+        #expect(pick("3") == ["3"] && pick("10.1") == ["3"])
+        // A version from before the first finding gets none.
+        #expect(Rule.pick([second, third], version: "1.0").isEmpty && Rule.pick([], version: "1.0").isEmpty)
+    }
+
+    /// Nothing says whether 2.0-rc.1 or 2.0-nightly.5 came before 2.0-beta.3, and an unreadable version says nothing at all.
+    @Test func aVersionThatCannotSayGetsEveryFindingThatMightHoldAndTheWorstIsShown() {
+        var (first, second, third) = (rule(.none), rule(.forced), rule(.none))
+        (first.since, second.since, third.since) = ("0", "2.0-beta.3", "3")
+        let pick = { (version: String) in Rule.pick([third, first, second], version: version).map { $0.since ?? "" } }
+        #expect(pick("2.0-rc.1") == ["0", "2.0-beta.3"] && pick("2.0-alpha.9") == ["0", "2.0-beta.3"])
+        #expect(pick("unknown") == ["0", "2.0-beta.3", "3"] && pick("") == ["0", "2.0-beta.3", "3"])
+        #expect(pick("2.1-rc.1") == ["2.0-beta.3"] && pick("3.0-rc.1") == ["2.0-beta.3"])
+
+        let verdict = { (version: String) in
+            Verdict(item: Item(id: "brew:x", name: "x", version: version, path: "/x"), rules: [first, second, third], aiRules: [:], sdks: [], probe: probe())
+        }
+        #expect(verdict("2.0-rc.1").status == .bad && verdict("2.0-rc.1").rule?.since == "2.0-beta.3" && verdict("2.0-rc.1").state.contains(Rule.unsureNote))
+        #expect(verdict("").status == .bad && verdict("").state.contains(Rule.unsureNote))
+        #expect(verdict("3.1").status == .ok && verdict("3.1").rule?.since == "3" && !verdict("3.1").state.contains(Rule.unsureNote))
+        // Equally bad findings: the newest is shown.
+        #expect(Verdict(item: Item(id: "brew:x", name: "x", version: "", path: "/x"), rules: [first, third], aiRules: [:], sdks: [], probe: probe()).rule?.since == "3")
     }
 }
 
@@ -353,12 +379,42 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
             #expect(good.contains(from))
             #expect(throws: CocoaError.self, "\(to)") { try Findings.rules(from: ["x/0.json": Data(good.replacingOccurrences(of: from, with: to).utf8)]) }
         }
-        // The same item and version twice, also when spelled differently or filed under two apps.
-        #expect(throws: CocoaError.self) { try Findings.rules(from: ["x/1.json": Data(good.utf8), "y/1.0.json": Data(good.utf8)]) }
-        // File names that are no version, or that could leave the folder.
-        for path in ["x/latest.json", "x/.json", "0.json", "x/y/0.json", "../x/0.json", "x/..json", "X y/0.json", "x/1 2.json"] {
-            #expect(throws: CocoaError.self, "\(path)") { try Findings.rules(from: [path: Data(good.utf8)]) }
+        let file = Data(good.utf8), other = Data(good.replacingOccurrences(of: "brew:x", with: "brew:y").utf8)
+        // One bad file among good ones rejects them all.
+        #expect(try Findings.rules(from: ["x/0.json": file, "y/0.json": other]).count == 2)
+        #expect(throws: CocoaError.self) { try Findings.rules(from: ["x/0.json": file, "y/0.json": Data("{}".utf8)]) }
+        // The same item and version twice, also when spelled differently.
+        #expect(throws: CocoaError.self) { try Findings.rules(from: ["x/0.json": file, "x/1.json": file, "x/1.0.json": file]) }
+        // One item in two folders: the second folder would silently change the first one's timeline.
+        #expect(throws: CocoaError.self) { try Findings.rules(from: ["x/0.json": file, "y/2.json": file]) }
+        // No finding for the versions before the first file.
+        #expect(throws: CocoaError.self) { try Findings.rules(from: ["x/2.json": file]) }
+        #expect(throws: CocoaError.self) { try Findings.rules(from: ["x/0.json": file, "y/0.1.json": other]) }
+        // File names that are no version, or that could leave the folder or collide in it.
+        for path in ["x/latest.json", "x/.json", "0.json", "x/y/0.json", "../x/0.json", "x/..json", "X/0.json", "x y/0.json", "x/1 2.json", "x/._0.json", "é/0.json"] {
+            #expect(throws: CocoaError.self, "\(path)") { try Findings.rules(from: ["x/0.json": file, path: other]) }
         }
+    }
+
+    @Test func aStoredDownloadReplacesTheFolderAndVerifiesAgain() throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("findings-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let key = Curve25519.Signing.PrivateKey(), publicKey = key.publicKey.rawRepresentation.base64EncodedString()
+        let other = Data(good.replacingOccurrences(of: "brew:x", with: "brew:y").utf8)
+        for (serial, files) in [(1, ["x/0.json": Data(good.utf8), "y/0.json": other]), (2, ["y/0.json": other])] {
+            let index = try JSONEncoder().encode(Findings.Index(version: 1, serial: serial, files: files.mapValues(Findings.sha256)))
+            try Findings.store(files, index: index, signature: Data(key.signature(for: index).base64EncodedString().utf8), in: folder)
+            let stored = try Findings.verified(folder: folder, publicKey: publicKey)
+            // The second download has one file less: nothing of the first one may stay behind.
+            #expect(stored.index.serial == serial && stored.rules.count == files.count && Findings.read(folder: folder).count == files.count)
+        }
+        // Files the Finder or a network share leaves behind are not findings.
+        try Data().write(to: folder.appendingPathComponent("y/._0.json"))
+        try Data().write(to: folder.appendingPathComponent("y/NOTES.md"))
+        #expect(throws: Never.self) { try Findings.verified(folder: folder, publicKey: publicKey) }
+        // A changed file is.
+        try Data("{}".utf8).write(to: folder.appendingPathComponent("y/0.json"))
+        #expect(throws: CocoaError.self) { try Findings.verified(folder: folder, publicKey: publicKey) }
     }
 
     @Test func checksNeedAnExpectedValueAndAPathInsideHomeOrHomebrew() {
