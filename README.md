@@ -8,6 +8,16 @@ It is a macOS menu bar app that lists the software on your Mac and tells you whe
 
 Many tools collect usage data unless you opt out, and the opt-out is often an environment variable that is only mentioned in an issue tracker. Kanarie keeps those switches in one folder of findings, one per app, and checks them against your Mac.
 
+## Screenshots
+
+![The Kanarie window: a list of items that send telemetry, with Homebrew selected and the steps to switch its analytics off](docs/screenshots/list.png)
+
+Every item shows what it collects, whether that is switched off on this Mac, and how to switch it off, with sources.
+
+![The form to suggest a correction, filled in with the Homebrew finding](docs/screenshots/submit.png)
+
+A finding can be proposed or corrected from the app. Kanarie checks it and then opens a prefilled GitHub issue in your browser.
+
 ## What it checks
 
 - Apps in `/Applications` and `~/Applications`, including one folder below them
