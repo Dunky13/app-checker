@@ -1,0 +1,26 @@
+{
+  "match": [
+    "ext:redhat.vscode-yaml",
+    "ext:redhat.vscode-xml"
+  ],
+  "name": "Red Hat YAML and XML (VS Code extensions)",
+  "telemetry": "opt-in",
+  "summary": "Anonymous usage data is sent to Red Hat only after you accept the first-run opt-in prompt. No data is sent if telemetry.telemetryLevel is off, even when redhat.telemetry.enabled is true.",
+  "policyURL": "https://developers.redhat.com/article/tool-data-collection",
+  "optOut": {
+    "instructions": "If you accepted, set redhat.telemetry.enabled to false in VS Code settings.",
+    "url": "https://github.com/redhat-developer/vscode-redhat-telemetry#how-to-disable-telemetry-reporting"
+  },
+  "enabledWhen": [
+    {
+      "json": "~/Library/Application Support/Code/User/settings.json",
+      "key": "redhat.telemetry.enabled",
+      "equals": "true"
+    }
+  ],
+  "sources": [
+    "https://raw.githubusercontent.com/redhat-developer/vscode-redhat-telemetry/main/README.md",
+    "https://raw.githubusercontent.com/redhat-developer/vscode-yaml/main/README.md",
+    "https://raw.githubusercontent.com/redhat-developer/vscode-xml/main/README.md"
+  ]
+}

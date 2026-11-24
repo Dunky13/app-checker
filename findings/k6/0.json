@@ -1,0 +1,23 @@
+{
+  "match": [
+    "brew:k6"
+  ],
+  "name": "k6",
+  "telemetry": "opt-out",
+  "summary": "Sends a usage report each time k6 runs: anonymous installation ID, k6 version, OS and architecture, CI or not, and extension info when extensions are used.",
+  "policyURL": "https://grafana.com/docs/k6/latest/set-up/usage-collection/",
+  "optOut": {
+    "instructions": "Set K6_NO_USAGE_REPORT=true, pass --no-usage-report, or set noUsageReport in the config file.",
+    "command": "echo 'export K6_NO_USAGE_REPORT=true' >> ~/.zshrc",
+    "url": "https://grafana.com/docs/k6/latest/set-up/usage-collection/"
+  },
+  "disabledWhen": [
+    {
+      "env": "K6_NO_USAGE_REPORT",
+      "equals": "true"
+    }
+  ],
+  "sources": [
+    "https://grafana.com/docs/k6/latest/set-up/usage-collection.md"
+  ]
+}

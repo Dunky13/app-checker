@@ -1,0 +1,24 @@
+{
+  "match": [
+    "app:com.t3tools.t3code"
+  ],
+  "name": "T3 Code",
+  "telemetry": "opt-out",
+  "summary": "Sends product usage events (provider, model, reasoning effort, permission mode, turn results, durations, token counts, release channel) tied to hashed account or install identifiers to ingest.t3.codes, which forwards them to PostHog. Also sends relay connection traces to Axiom. Prompts, responses and file contents are not included. Stable and Nightly desktop builds share this bundle ID. In this version the desktop app does not apply a telemetry opt-out from your shell profile to relay tracing.",
+  "policyURL": "https://t3.codes/privacy-policy",
+  "optOut": {
+    "instructions": "Update T3 Code to 0.1.11 or later (nightly 0.1.11-nightly.20261117.4814 or later), then set T3CODE_TELEMETRY_ENABLED=false in your shell profile (for example ~/.zshrc) and restart the app. In this version the variable stops product usage events, but relay connection traces are still sent when the app is started from Finder or the Dock (issue 37772).",
+    "command": "echo 'export T3CODE_TELEMETRY_ENABLED=false' >> ~/.zshrc",
+    "url": "https://github.com/pingdotgg/t3code/blob/main/docs/user/telemetry.md"
+  },
+  "sources": [
+    "https://github.com/pingdotgg/t3code/blob/main/docs/user/telemetry.md",
+    "https://github.com/pingdotgg/t3code/blob/main/apps/server/src/telemetry/AnalyticsService.ts",
+    "https://github.com/pingdotgg/t3code/blob/main/apps/marketing/src/pages/privacy-policy.astro",
+    "https://github.com/pingdotgg/t3code/blob/main/scripts/build-desktop-artifact.ts",
+    "https://github.com/pingdotgg/t3code/blob/main/packages/shared/src/otelEnvironment.ts",
+    "https://github.com/pingdotgg/t3code/issues/37772",
+    "https://t3.codes/privacy-policy",
+    "https://github.com/pingdotgg/t3code/pull/37792"
+  ]
+}

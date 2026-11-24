@@ -1,0 +1,23 @@
+{
+  "match": [
+    "npm:gatsby"
+  ],
+  "name": "Gatsby CLI",
+  "telemetry": "opt-out",
+  "summary": "Collects anonymous aggregate usage analytics. Users are notified on install and on first run.",
+  "policyURL": "https://www.gatsbyjs.com/docs/telemetry/",
+  "optOut": {
+    "instructions": "Set GATSBY_TELEMETRY_DISABLED=1 in your shell profile. Running gatsby telemetry --disable also works, but App Checker cannot see that.",
+    "command": "echo 'export GATSBY_TELEMETRY_DISABLED=1' >> ~/.zshrc",
+    "url": "https://www.gatsbyjs.com/docs/telemetry/"
+  },
+  "disabledWhen": [
+    {
+      "env": "GATSBY_TELEMETRY_DISABLED",
+      "equals": "1"
+    }
+  ],
+  "sources": [
+    "https://www.gatsbyjs.com/docs/telemetry/"
+  ]
+}

@@ -1,0 +1,67 @@
+{
+  "match": [
+    "brew:gh"
+  ],
+  "name": "GitHub CLI",
+  "telemetry": "opt-out",
+  "summary": "Since v2.91.0 sends pseudonymous usage telemetry to GitHub's internal analytics. GH_TELEMETRY=log prints the payload instead of sending it.",
+  "policyURL": "https://github.blog/changelog/2026-04-22-github-cli-opt-out-usage-telemetry",
+  "optOut": {
+    "instructions": "Run gh config set telemetry disabled, or set GH_TELEMETRY=false or DO_NOT_TRACK=1. GH_TELEMETRY wins over DO_NOT_TRACK, which wins over the config value, so a GH_TELEMETRY that enables telemetry overrides the other two.",
+    "command": "gh config set telemetry disabled",
+    "url": "https://github.blog/changelog/2026-04-22-github-cli-opt-out-usage-telemetry"
+  },
+  "disabledWhen": [
+    {
+      "env": "GH_TELEMETRY",
+      "equals": "false"
+    },
+    {
+      "env": "GH_TELEMETRY",
+      "equals": "0"
+    },
+    {
+      "env": "GH_TELEMETRY",
+      "equals": "no"
+    },
+    {
+      "env": "GH_TELEMETRY",
+      "equals": "off"
+    },
+    {
+      "env": "GH_TELEMETRY",
+      "equals": "disabled"
+    },
+    {
+      "env": "DO_NOT_TRACK",
+      "equals": "1"
+    },
+    {
+      "env": "DO_NOT_TRACK",
+      "equals": "true"
+    },
+    {
+      "file": "~/.config/gh/config.yml",
+      "contains": "telemetry: disabled"
+    }
+  ],
+  "sources": [
+    "https://github.blog/changelog/2026-04-22-github-cli-opt-out-usage-telemetry",
+    "https://github.com/cli/cli/blob/trunk/internal/config/config.go",
+    "https://github.com/cli/cli/blob/trunk/internal/telemetry/telemetry.go"
+  ],
+  "enabledWhen": [
+    {
+      "env": "GH_TELEMETRY",
+      "notIn": [
+        "",
+        "0",
+        "false",
+        "no",
+        "disabled",
+        "off",
+        "log"
+      ]
+    }
+  ]
+}

@@ -1,4 +1,3 @@
-import CryptoKit
 import Foundation
 import Synchronization
 
@@ -75,6 +74,24 @@ public struct Rule: Codable, Sendable, Hashable {
     public var disabledWhen: [Check]?
     public var enabledWhen: [Check]?
     public var sources: [String]?
+    /// The first version this finding applies to. Comes from the file name, not from the file.
+    public var since: String?
+
+    static let unsureNote = "The installed version does not say which finding applies, so the strictest one is shown."
+
+    /// The findings that may hold for `version` among those for one item, oldest first. Normally that is one:
+    /// the newest that starts at or below it. When the version cannot say, every finding that might hold comes back
+    /// and the caller shows the worst: all of them for a version that cannot be read, and any whose start has no known
+    /// order with it (another pre-release channel of the same release, or a number after a dash, see `Version.hasNoOrder`).
+    public static func pick(_ candidates: [Rule], version: String) -> [Rule] {
+        let start = { (rule: Rule) in rule.since.flatMap(Version.init) ?? .zero }
+        let sorted = candidates.sorted { start($0) < start($1) }
+        guard let version = Version(version) else { return sorted }
+        let unsure = { (rule: Rule) in version.hasNoOrder(with: start(rule)) }
+        // A version below every file, such as "0.0.0-dev", gets the first file: no version may be left without a finding.
+        let certain = sorted.lastIndex { !unsure($0) && start($0) <= version } ?? sorted.firstIndex { !unsure($0) && start($0) == .zero }
+        return sorted.enumerated().filter { $0.offset == certain || unsure($0.element) }.map(\.element)
+    }
 
     /// What is wrong with this rule, first problem first. Every rule passes through here before it is used:
     /// bundled and downloaded ones as `curated`, AI answers with the safety checks only.
@@ -130,38 +147,6 @@ public struct Rule: Codable, Sendable, Hashable {
     }
 
     static let blockedNote = "macOS did not let App Checker read this app's setting. To allow it, open System Settings > Privacy & Security > Files & Folders, then rescan."
-}
-
-public struct RuleSet: Codable, Sendable {
-    public static let supportedVersion = 1
-    public var version: Int
-    public var rules: [Rule]
-
-    static func failure(_ message: String) -> CocoaError {
-        CocoaError(.fileReadCorruptFile, userInfo: [NSLocalizedDescriptionKey: message])
-    }
-
-    /// Decodes and validates a rules file. One invalid rule rejects the whole file.
-    public static func decode(_ data: Data) throws -> RuleSet {
-        let set = try JSONDecoder().decode(RuleSet.self, from: data)
-        guard set.version <= supportedVersion else { throw failure("Rules version \(set.version) needs a newer App Checker.") }
-        var seen = Set<String>()
-        for rule in set.rules {
-            let label = rule.name ?? rule.match.first ?? "?"
-            if let problem = rule.problems(curated: true).first { throw failure("\(label): \(problem)") }
-            for id in rule.match where !seen.insert(id).inserted { throw failure("\(id) is matched by two rules") }
-        }
-        return set
-    }
-
-    /// For downloaded rules: they must carry the maintainer's Ed25519 signature (made with the Sparkle update key),
-    /// so a tampered file can never change a verdict or put a command behind the Copy button.
-    public static func decode(_ data: Data, signature: String, publicKey: String) throws -> RuleSet {
-        guard let signature = Data(base64Encoded: signature.trimmingCharacters(in: .whitespacesAndNewlines)),
-              let key = Data(base64Encoded: publicKey).flatMap({ try? Curve25519.Signing.PublicKey(rawRepresentation: $0) }),
-              key.isValidSignature(signature, for: data) else { throw failure("The rules file is not signed by App Checker.") }
-        return try decode(data)
-    }
 }
 
 /// Local state the checks read. Injected so the rule engine is testable.
@@ -268,15 +253,20 @@ public struct Verdict: Sendable, Equatable {
             let notable = shown.result.status != .ok || shown.result.state.contains(Rule.blockedNote)
             return (shown.result.status, results.count > 1 && notable ? "In \(editor): \(shown.result.state)" : shown.result.state)
         }
-        if let rule = rules.first(where: { $0.match.contains(item.id) }) {
-            (status, state) = judge(rule)
-            (self.rule, source) = (rule, .rules)
+        // shortcut: an extension with a different version per editor is judged by the first editor's version; pick per editor if an extension ever gets version files.
+        let found = Rule.pick(rules.filter({ $0.match.contains(item.id) }), version: item.version).map { (rule: $0, result: judge($0)) }
+        let severity = { (status: Status) in [Status.ok, .unknown, .warn, .bad].firstIndex(of: status) ?? 0 }
+        // Several findings may hold: show the worst, and the newest of equally bad ones.
+        if let worst = found.map({ severity($0.result.0) }).max(), let shown = found.last(where: { severity($0.result.0) == worst }) {
+            (status, state) = shown.result
+            if found.count > 1 { state += " " + Rule.unsureNote }
+            (rule, source) = (shown.rule, .rules)
         } else if let rule = aiRules[item.id] {
             (status, state) = judge(rule)
             (self.rule, source) = (rule, .ai)
         } else if !sdks.isEmpty {
             // A string match is a lead, not evidence: bundled dependencies and domain lists contain these names too. So it stays grey.
-            (status, state, rule, source) = (.unknown, "Not in the rules database. Its files mention \(sdks.joined(separator: ", ")). That is a hint worth looking up, not proof of telemetry.", nil, .sdk)
+            (status, state, rule, source) = (.unknown, "Not in the App Checker findings. Its files mention \(sdks.joined(separator: ", ")). That is a hint worth looking up, not proof of telemetry.", nil, .sdk)
         } else {
             (status, state, rule, source) = (.unknown, "Nothing is known about this item yet.", nil, .none)
         }

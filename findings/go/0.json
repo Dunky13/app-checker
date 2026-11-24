@@ -1,0 +1,23 @@
+{
+  "match": [
+    "brew:go"
+  ],
+  "name": "Go toolchain",
+  "telemetry": "opt-in",
+  "summary": "By default Go telemetry counters stay on the local computer. Uploading an approved subset to telemetry.go.dev happens only after you run go telemetry on. Local collection can also be switched off.",
+  "policyURL": "https://go.dev/doc/telemetry",
+  "optOut": {
+    "instructions": "If you opted in, run go telemetry local to stop uploads, or go telemetry off to also stop local collection.",
+    "command": "go telemetry off",
+    "url": "https://go.dev/doc/telemetry"
+  },
+  "enabledWhen": [
+    {
+      "file": "~/Library/Application Support/go/telemetry/mode",
+      "contains": "on "
+    }
+  ],
+  "sources": [
+    "https://go.dev/doc/telemetry"
+  ]
+}

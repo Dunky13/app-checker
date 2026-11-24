@@ -1,0 +1,23 @@
+{
+  "match": [
+    "npm:astro"
+  ],
+  "name": "Astro CLI",
+  "telemetry": "opt-out",
+  "summary": "Sends anonymous usage data: command invoked, Astro version, machine info (CPU count, OS, CI) and configuration options in use.",
+  "policyURL": "https://astro.build/telemetry/",
+  "optOut": {
+    "instructions": "Run astro telemetry disable (applies to the whole machine), or set ASTRO_TELEMETRY_DISABLED=1.",
+    "command": "echo 'export ASTRO_TELEMETRY_DISABLED=1' >> ~/.zshrc",
+    "url": "https://astro.build/telemetry/"
+  },
+  "disabledWhen": [
+    {
+      "env": "ASTRO_TELEMETRY_DISABLED",
+      "equals": "1"
+    }
+  ],
+  "sources": [
+    "https://astro.build/telemetry/"
+  ]
+}

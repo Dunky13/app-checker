@@ -5,20 +5,20 @@ Status on 2026-11-24: the app is built, tested, reviewed and pushed to `main`. T
 ## What exists
 
 - A menu bar app (no Dock icon, starts at login) that lists apps, Homebrew formulae and casks, commands in `~/.local/bin`, global npm and pnpm packages and editor extensions, with a green, yellow, red or grey verdict per item. See the [README](../README.md).
-- Verdicts from a signed rules file ([rules.json](../rules.json), 43 rules), an on-demand AI lookup (Claude Code CLI or an OpenAI-compatible endpoint such as OpenRouter) and an offline hint that stays grey.
-- Sparkle 2 for updates, fed from `appcast.xml` on `main`. The same EdDSA key signs `rules.json` (`rules.json.sig`), and the app refuses a downloaded rules file without that signature.
-- `scripts/build-app.sh`, `scripts/sign-rules.sh`, `scripts/release.sh`, and CI that runs the tests and a release build on every push.
+- Verdicts from the curated findings ([findings/](../findings), one folder per app and one file per version from which a finding holds, 44 apps), an on-demand AI lookup (Claude Code CLI or an OpenAI-compatible endpoint such as OpenRouter) and an offline hint that stays grey.
+- Sparkle 2 for updates, fed from `appcast.xml` on `main`. The same EdDSA key signs `findings/index.json`, which lists every finding file with its hash, and the app refuses downloaded findings that do not match a signed index or whose index is older than the one it has.
+- `scripts/build-app.sh`, `scripts/sign-findings.sh`, `scripts/release.sh`, and CI that runs the tests and a release build on every push.
 
 ## Evidence
 
 Checked by running it, on one Mac (macOS 27, Apple Silicon):
 
-- `swift test`: 24 tests in 8 suites pass locally. CI passed on every pushed commit up to `6b8d09d`; the run for a later commit is linked from its commit page.
+- `swift test`: 29 tests in 9 suites pass locally. CI results are linked from each commit and pull request page.
 - First run: window opens, login item is registered, notification permission is requested. Second launch is silent and Sparkle asks once about automatic checks.
 - A new app bundle dropped into `~/Applications` was detected in about 12 seconds and produced a notification.
 - Search, the filter menu, the detail pane, the copy button, the "Data Access Blocked" note, and the AI marker in the list.
 - A real lookup through the Claude Code CLI with web search, and a lookup through the OpenAI-compatible backend against a local stub (key read from the keychain, no redirect followed).
-- The signed rules download: the app fetched `rules.json` and its signature from `main`, accepted it and cached it.
+- The findings download, with a test build that read the `findings-folder` branch and shipped an older bundled copy (serial 1, one changed file): it fetched the signed index, replaced its copy, and its cache was identical to the committed folder. A relaunch with nothing new left the cache untouched. A cached file changed by hand to claim "no telemetry" was not used (the item stayed yellow) and was replaced at the next launch. With the cache deleted and the saved serial set above the published one, the published index was refused.
 - `AppChecker --list` on that Mac: 216 items, of which 15 yellow, 3 green and 198 grey. The native Claude Code install is found as `bin:claude`.
 
 Reviewed independently (Claude Opus, high effort), each round followed by fixes:
@@ -59,7 +59,7 @@ Expected: Sparkle offers 0.1.0, installs it and relaunches.
 
 Back up the Sparkle private key (`.build/artifacts/sparkle/Sparkle/bin/generate_keys -x <file>`, then store the file in a password manager and delete it). Without it no update and no rules change can be signed.
 
-After any change to `rules.json`: run `scripts/sign-rules.sh` and commit `rules.json.sig` with it, otherwise the test fails and installed apps keep their old rules.
+After any change below `findings/`: run `scripts/sign-findings.sh` and commit `index.json` and `index.json.sig` with it, otherwise the test fails and installed apps keep their old findings.
 
 ## Known limits, left open on purpose
 
@@ -70,8 +70,13 @@ After any change to `rules.json`: run `scripts/sign-rules.sh` and commit `rules.
 - A block comment (`/* … */`) around a setting is not recognised as a comment; `#`, `//` and `;` lines are.
 - GitHub CLI: unusual spellings of an "off" value (`GH_TELEMETRY=FALSE`) show yellow, not green. That is the safe direction. The rule reads `~/.config/gh/config.yml` only, so with a custom `GH_CONFIG_DIR` or `XDG_CONFIG_HOME` a leftover file there can wrongly show green.
 - Variables are read from the login shell at launch and on Rescan, so a change to a shell profile shows up after Rescan.
-- The rules file format is still version 1 although it gained `notIn` and the `enabledWhen` override. No build was released before that, so no older app can misread it. Raise `version` and `supportedVersion` together for the next format change.
-- An older, validly signed rules file would be accepted if someone could serve it in place of the current one.
+- The findings format is version 1. No build was released before the move from one rules file to the findings folder, so no older app can misread it. Raise `version` in the index and `supportedVersion` together for the next format change.
+- A word after the version numbers is read as a pre-release, so a version such as OpenSSL's `1.1.1w` sorts before `1.1.1`. No app with such versions has more than one file yet.
+- Pre-releases on different channels of one release are never ordered, also where a convention exists (beta before rc). Such an item gets the strictest of the findings that might hold, which can be yellow where green would be right, or red where yellow would be. The same holds for an item without a readable version, such as Homebrew itself or a cask at `latest`: version files cannot tell its builds apart.
+- The highest findings serial the app accepted is kept in `state.json`. Deleting the whole App Checker support folder, or a `state.json` that can no longer be read, resets it to the serial of the findings the app then loads, cached or shipped.
+- A product name with a digit in front of the version (`python3-1.2`) is read as part of the version. No scanned item reports its version that way.
+- An extension with a different version in each editor is judged by the first editor's version.
+- If the findings change on the server between the download of the index and of a file, that download is rejected and tried again the next day.
 - Stopping a batch of AI lookups lets the running lookup finish. A lookup that times out stops the CLI but not programs the CLI started.
 - Verdicts are computed on the main thread, which is fine for a few hundred items.
 - The model object that ties scanning, saving and notifications together has no unit tests; it was checked by running the app.

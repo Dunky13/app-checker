@@ -1,0 +1,18 @@
+{
+  "match": [
+    "npm:@angular/cli"
+  ],
+  "name": "Angular CLI",
+  "telemetry": "opt-in",
+  "summary": "Sends command usage statistics to Google only if you explicitly opt in. The installer prompts once; declining or skipping the prompt means no data is collected.",
+  "policyURL": "https://angular.dev/cli/analytics",
+  "optOut": {
+    "instructions": "If you opted in, run ng analytics disable (add --global for all projects). ng analytics info shows the current state; the on/off state is not checked by this app.",
+    "command": "ng analytics disable --global",
+    "url": "https://angular.dev/cli/analytics"
+  },
+  "sources": [
+    "https://angular.dev/cli/analytics",
+    "https://angular.dev/cli/analytics/disable"
+  ]
+}

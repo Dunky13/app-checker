@@ -1,0 +1,18 @@
+{
+  "match": [
+    "cask:azure-cli"
+  ],
+  "name": "Azure CLI",
+  "telemetry": "opt-out",
+  "summary": "Collects anonymous data on usage of the CLI and sends it to Microsoft. Collection is on by default.",
+  "policyURL": "https://github.com/Azure/azure-cli#data-collection",
+  "optOut": {
+    "instructions": "Run az config set core.collect_telemetry=no. The on/off state is not checked by this app.",
+    "command": "az config set core.collect_telemetry=no",
+    "url": "https://github.com/Azure/azure-cli#data-collection"
+  },
+  "sources": [
+    "https://github.com/Azure/azure-cli#data-collection",
+    "https://learn.microsoft.com/en-us/cli/azure/azure-cli-configuration"
+  ]
+}

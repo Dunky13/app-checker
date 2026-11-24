@@ -1,0 +1,26 @@
+{
+  "match": [
+    "npm:nuxt",
+    "npm:nuxi",
+    "npm:@nuxt/telemetry"
+  ],
+  "name": "Nuxt",
+  "telemetry": "opt-in",
+  "summary": "Nuxt asks for permission on first use and sends anonymous usage telemetry only if you agree. The prompt can be declined or the setting changed later.",
+  "policyURL": "https://github.com/nuxt/telemetry",
+  "optOut": {
+    "instructions": "If you accepted the first-run prompt, turn it off with npx @nuxt/telemetry disable (add -g for global), or set NUXT_TELEMETRY_DISABLED=1 or DO_NOT_TRACK=1.",
+    "command": "npx @nuxt/telemetry disable",
+    "url": "https://github.com/nuxt/telemetry#opting-out"
+  },
+  "sources": [
+    "https://raw.githubusercontent.com/nuxt/telemetry/main/README.md",
+    "https://github.com/nuxt/telemetry/blob/main/src/consent.ts"
+  ],
+  "enabledWhen": [
+    {
+      "file": "~/.nuxtrc",
+      "contains": "telemetry.enabled=true"
+    }
+  ]
+}

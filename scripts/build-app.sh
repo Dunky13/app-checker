@@ -8,7 +8,7 @@ cd "$(dirname "$0")/.."
 VERSION="${1:-0.0.0}"
 IDENTITY="${CODESIGN_IDENTITY:--}"
 APP="build/App Checker.app"
-[[ -f rules.json ]] || { echo "rules.json is missing" >&2; exit 1; }
+[[ -f findings/index.json ]] || { echo "findings/index.json is missing: run scripts/sign-findings.sh" >&2; exit 1; }
 
 BUILD=(swift build -c release --arch arm64 --arch x86_64)
 "${BUILD[@]}"
@@ -18,7 +18,8 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Frameworks"
 cp "$PRODUCTS/AppChecker" "$APP/Contents/MacOS/"
 cp -R "$PRODUCTS/Sparkle.framework" "$APP/Contents/Frameworks/"
-cp rules.json Resources/AppIcon.icns "$APP/Contents/Resources/"
+cp Resources/AppIcon.icns "$APP/Contents/Resources/"
+cp -R findings "$APP/Contents/Resources/"
 cp Info.plist "$APP/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" -c "Set :CFBundleVersion $VERSION" "$APP/Contents/Info.plist"
 

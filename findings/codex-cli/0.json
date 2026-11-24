@@ -1,0 +1,24 @@
+{
+  "match": [
+    "cask:codex",
+    "npm:@openai/codex"
+  ],
+  "name": "Codex CLI (OpenAI)",
+  "telemetry": "opt-out",
+  "summary": "Periodically sends a small amount of anonymous usage and health data to OpenAI (feature and configuration usage, model, auth mode). OpenTelemetry log export is separate and disabled by default.",
+  "policyURL": "https://openai.com/policies/row-privacy-policy/",
+  "optOut": {
+    "instructions": "Add [analytics] with enabled = false to ~/.codex/config.toml. Set otel.metrics_exporter = \"none\" to disable a custom OTLP metrics exporter as well.",
+    "url": "https://developers.openai.com/codex/config-advanced"
+  },
+  "disabledWhen": [
+    {
+      "file": "~/.codex/config.toml",
+      "contains": "[analytics]\nenabled = false"
+    }
+  ],
+  "sources": [
+    "https://developers.openai.com/codex/config-advanced",
+    "https://openai.com/policies/row-privacy-policy/"
+  ]
+}

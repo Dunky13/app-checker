@@ -1,0 +1,25 @@
+{
+  "match": [
+    "ext:continue.continue"
+  ],
+  "name": "Continue (VS Code extension)",
+  "telemetry": "opt-out",
+  "summary": "Reports anonymous usage data to PostHog: suggestion accept or reject events, model and command names, token counts, OS and IDE name. Telemetry is enabled by default in the extension.",
+  "policyURL": "https://continue.dev/privacy",
+  "optOut": {
+    "instructions": "In the extension's user settings turn off 'Allow Anonymous Telemetry'.",
+    "url": "https://raw.githubusercontent.com/continuedev/continue/main/docs/customize/telemetry.mdx"
+  },
+  "sources": [
+    "https://raw.githubusercontent.com/continuedev/continue/main/docs/customize/telemetry.mdx",
+    "https://github.com/continuedev/continue/blob/main/extensions/vscode/package.json",
+    "https://github.com/continuedev/continue/blob/main/core/config/load.ts"
+  ],
+  "disabledWhen": [
+    {
+      "json": "~/Library/Application Support/Code/User/settings.json",
+      "key": "continue.telemetryEnabled",
+      "equals": "false"
+    }
+  ]
+}

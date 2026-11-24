@@ -1,0 +1,19 @@
+{
+  "match": [
+    "npm:netlify-cli",
+    "brew:netlify-cli"
+  ],
+  "name": "Netlify CLI",
+  "telemetry": "opt-out",
+  "summary": "Collects data on usage of Netlify CLI commands to improve reliability and performance.",
+  "policyURL": "https://www.netlify.com/privacy/",
+  "optOut": {
+    "instructions": "Run netlify --telemetry-disable, or set the telemetryDisabled property in the Netlify CLI config.json.",
+    "command": "netlify --telemetry-disable",
+    "url": "https://docs.netlify.com/api-and-cli-guides/cli-guides/get-started-with-cli/"
+  },
+  "sources": [
+    "https://docs.netlify.com/api-and-cli-guides/cli-guides/get-started-with-cli/",
+    "https://www.netlify.com/privacy/"
+  ]
+}

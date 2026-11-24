@@ -1,0 +1,25 @@
+{
+  "match": [
+    "npm:expo",
+    "npm:@expo/cli"
+  ],
+  "name": "Expo CLI",
+  "telemetry": "opt-out",
+  "summary": "Collects anonymous usage data about general use of the Expo dev tools.",
+  "policyURL": "https://expo.dev/privacy",
+  "optOut": {
+    "instructions": "Set EXPO_NO_TELEMETRY=1.",
+    "command": "echo 'export EXPO_NO_TELEMETRY=1' >> ~/.zshrc",
+    "url": "https://docs.expo.dev/more/expo-cli/"
+  },
+  "disabledWhen": [
+    {
+      "env": "EXPO_NO_TELEMETRY",
+      "equals": "1"
+    }
+  ],
+  "sources": [
+    "https://docs.expo.dev/more/expo-cli/",
+    "https://expo.dev/privacy"
+  ]
+}

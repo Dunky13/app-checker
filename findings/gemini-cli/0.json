@@ -1,0 +1,25 @@
+{
+  "match": [
+    "npm:@google/gemini-cli",
+    "brew:gemini-cli"
+  ],
+  "name": "Gemini CLI",
+  "telemetry": "opt-out",
+  "summary": "Sends usage statistics to Google. privacy.usageStatisticsEnabled defaults to true.",
+  "policyURL": "https://github.com/google-gemini/gemini-cli/blob/main/docs/resources/tos-privacy.md",
+  "optOut": {
+    "instructions": "Set privacy.usageStatisticsEnabled to false in ~/.gemini/settings.json.",
+    "url": "https://github.com/google-gemini/gemini-cli/blob/main/docs/reference/configuration.md"
+  },
+  "disabledWhen": [
+    {
+      "json": "~/.gemini/settings.json",
+      "key": "privacy.usageStatisticsEnabled",
+      "equals": "false"
+    }
+  ],
+  "sources": [
+    "https://github.com/google-gemini/gemini-cli/blob/main/docs/reference/configuration.md",
+    "https://github.com/google-gemini/gemini-cli/blob/main/docs/resources/tos-privacy.md"
+  ]
+}

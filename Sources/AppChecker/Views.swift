@@ -196,10 +196,10 @@ struct DetailView: View {
 
     private var sourceNote: String {
         switch verdict.source {
-        case .rules: "From the App Checker rules database."
+        case .rules: "From the App Checker findings."
         case .ai: "From an AI lookup. Not verified: check its sources before relying on it."
         case .sdk: "The hint comes from an offline search of the installed files for analytics service names."
-        case .none: "Not in the rules database."
+        case .none: "Not in the App Checker findings."
         }
     }
 
@@ -304,9 +304,9 @@ struct SettingsView: View {
                     .onChange(of: launchAtLogin) { _, on in
                         do { try on ? SMAppService.mainApp.register() : SMAppService.mainApp.unregister() } catch { launchAtLogin = !on }
                     }
-                Toggle("Download rule updates daily", isOn: $refreshRules)
+                Toggle("Download new findings daily", isOn: $refreshRules)
             } footer: {
-                Text("Rule updates are fetched from GitHub. Nothing about your Mac is sent.").frame(maxWidth: .infinity, alignment: .leading)
+                Text("Findings are fetched from GitHub. Nothing about your Mac is sent.").frame(maxWidth: .infinity, alignment: .leading)
             }
             Section {
                 Picker("Backend", selection: $backend) {

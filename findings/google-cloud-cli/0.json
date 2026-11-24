@@ -1,0 +1,17 @@
+{
+  "match": [
+    "cask:gcloud-cli"
+  ],
+  "name": "Google Cloud CLI",
+  "telemetry": "opt-in",
+  "summary": "Does not collect usage statistics unless you opt in during installation. Statistics exclude argument values and personal information.",
+  "policyURL": "https://cloud.google.com/sdk/docs/usage-statistics",
+  "optOut": {
+    "instructions": "If you opted in, run gcloud config set disable_usage_reporting true.",
+    "command": "gcloud config set disable_usage_reporting true",
+    "url": "https://cloud.google.com/sdk/docs/usage-statistics"
+  },
+  "sources": [
+    "https://cloud.google.com/sdk/docs/usage-statistics"
+  ]
+}

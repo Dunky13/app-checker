@@ -1,0 +1,28 @@
+{
+  "match": [
+    "npm:wrangler"
+  ],
+  "name": "Wrangler (Cloudflare)",
+  "telemetry": "opt-out",
+  "summary": "Cloudflare gathers non-user-identifying usage telemetry about Wrangler commands. In the source, metrics are enabled by default unless the user, config or environment turns them off.",
+  "policyURL": "https://github.com/cloudflare/workers-sdk/blob/main/packages/wrangler/telemetry.md",
+  "optOut": {
+    "instructions": "Run npx wrangler telemetry disable, set send_metrics=false in the project's wrangler.toml, or set WRANGLER_SEND_METRICS=false or DO_NOT_TRACK=1.",
+    "command": "echo 'export WRANGLER_SEND_METRICS=false' >> ~/.zshrc",
+    "url": "https://github.com/cloudflare/workers-sdk/blob/main/packages/wrangler/telemetry.md"
+  },
+  "disabledWhen": [
+    {
+      "env": "WRANGLER_SEND_METRICS",
+      "equals": "false"
+    },
+    {
+      "env": "DO_NOT_TRACK",
+      "equals": "1"
+    }
+  ],
+  "sources": [
+    "https://github.com/cloudflare/workers-sdk/blob/main/packages/wrangler/telemetry.md",
+    "https://github.com/cloudflare/workers-sdk/blob/main/packages/wrangler/src/metrics/metrics-config.ts"
+  ]
+}

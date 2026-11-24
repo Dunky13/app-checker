@@ -1,0 +1,27 @@
+{
+  "match": [
+    "cask:dotnet-sdk"
+  ],
+  "name": ".NET SDK",
+  "telemetry": "opt-out",
+  "summary": "Microsoft distributions of the .NET SDK collect usage data for .NET CLI commands (not for running an app with dotnet app.dll). The installer also sends one telemetry entry on successful install. A first-run notice explains this.",
+  "policyURL": "https://learn.microsoft.com/en-us/dotnet/core/tools/telemetry",
+  "optOut": {
+    "instructions": "Set DOTNET_CLI_TELEMETRY_OPTOUT=1 (or true). To also stop the installer entry, set it before installing the SDK.",
+    "command": "echo 'export DOTNET_CLI_TELEMETRY_OPTOUT=1' >> ~/.zshrc",
+    "url": "https://learn.microsoft.com/en-us/dotnet/core/tools/telemetry"
+  },
+  "disabledWhen": [
+    {
+      "env": "DOTNET_CLI_TELEMETRY_OPTOUT",
+      "equals": "1"
+    },
+    {
+      "env": "DOTNET_CLI_TELEMETRY_OPTOUT",
+      "equals": "true"
+    }
+  ],
+  "sources": [
+    "https://learn.microsoft.com/en-us/dotnet/core/tools/telemetry"
+  ]
+}
