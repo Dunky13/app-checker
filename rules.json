@@ -67,6 +67,30 @@
         {
           "file": "/opt/homebrew/.git/config",
           "contains": "analyticsdisabled = true"
+        }
+      ],
+      "sources": [
+        "https://docs.brew.sh/Analytics",
+        "https://github.com/Homebrew/brew/blob/main/Library/Homebrew/utils/analytics.rb",
+        "https://github.com/Homebrew/brew/blob/main/Library/Homebrew/env_config.rb"
+      ]
+    },
+    {
+      "match": [
+        "brew:homebrew-usr-local"
+      ],
+      "name": "Homebrew (/usr/local)",
+      "telemetry": "opt-out",
+      "summary": "Sends anonymous usage analytics to InfluxDB over HTTPS: formula and cask install events and build-error events. Events are kept for 365 days. A notice is shown before analytics are first enabled.",
+      "policyURL": "https://docs.brew.sh/Analytics",
+      "optOut": {
+        "instructions": "Run brew analytics off, or set HOMEBREW_NO_ANALYTICS=1. brew analytics state shows the current setting.",
+        "command": "brew analytics off",
+        "url": "https://docs.brew.sh/Analytics"
+      },
+      "disabledWhen": [
+        {
+          "env": "HOMEBREW_NO_ANALYTICS"
         },
         {
           "file": "/usr/local/Homebrew/.git/config",
@@ -511,6 +535,28 @@
         "https://github.blog/changelog/2026-04-22-github-cli-opt-out-usage-telemetry",
         "https://github.com/cli/cli/blob/trunk/internal/config/config.go",
         "https://github.com/cli/cli/blob/trunk/internal/telemetry/telemetry.go"
+      ],
+      "enabledWhen": [
+        {
+          "env": "GH_TELEMETRY",
+          "equals": "enabled"
+        },
+        {
+          "env": "GH_TELEMETRY",
+          "equals": "true"
+        },
+        {
+          "env": "GH_TELEMETRY",
+          "equals": "1"
+        },
+        {
+          "env": "GH_TELEMETRY",
+          "equals": "yes"
+        },
+        {
+          "env": "GH_TELEMETRY",
+          "equals": "on"
+        }
       ]
     },
     {

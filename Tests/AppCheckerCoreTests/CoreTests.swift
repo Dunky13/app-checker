@@ -44,6 +44,10 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         let files = ["cfg": "[homebrew]\n\tanalyticsdisabled = true\n"]
         #expect(Check(file: "cfg", contains: "analyticsdisabled = true").result(probe(files: files)) == true)
         #expect(Check(file: "cfg", contains: "nope").result(probe(files: files)) == false)
+        // A commented-out setting is not set; a setting that spans two lines still matches.
+        let commented = ["cfg": "# disable = true\n  // disable = true\n; disable = true\n[analytics]\n# why\nenabled = false\n"]
+        #expect(Check(file: "cfg", contains: "disable = true").result(probe(files: commented)) == false)
+        #expect(Check(file: "cfg", contains: "[analytics]\nenabled = false").result(probe(files: commented)) == true)
     }
 
     @Test func blockedReadsAreNotMistakenForASetting() {
@@ -76,6 +80,10 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         #expect(rule(.optOut).evaluate(probe()).status == .warn)
         #expect(rule(.optIn, enabledWhen: on).evaluate(probe()).status == .ok)
         #expect(rule(.optIn, enabledWhen: on).evaluate(probe(env: ["ON": "1"])).status == .warn)
+        // On an opt-out rule an explicit "on" switch beats an "off" switch.
+        let overridden = rule(.optOut, disabledWhen: [Check(env: "OFF")], enabledWhen: on)
+        #expect(overridden.evaluate(probe(env: ["OFF": "1"])).status == .ok)
+        #expect(overridden.evaluate(probe(env: ["OFF": "1", "ON": "1"])).status == .warn)
     }
 
     @Test func curatedBeatsAIAndScanHitsStayUnknown() {
@@ -98,8 +106,25 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         let onlyCode = probe(files: ["~/Library/Application Support/Code/User/settings.json": off])
         let mixed = Verdict(item: item, rules: rules, aiRules: [:], sdks: [], probe: onlyCode)
         #expect(mixed.status == .warn && mixed.state.hasPrefix("In Cursor: "))
-        let both = probe(files: ["~/Library/Application Support/Code/User/settings.json": off, "~/Library/Application Support/Cursor/User/settings.json": off])
+        let cursorFile = "~/Library/Application Support/Cursor/User/settings.json"
+        let both = probe(files: ["~/Library/Application Support/Code/User/settings.json": off, cursorFile: off])
         #expect(Verdict(item: item, rules: rules, aiRules: [:], sdks: [], probe: both).status == .ok)
+
+        // In Cursor only, VS Code's file says nothing about it. Other editors' folders are never mistaken for "Code/".
+        item.editors = ["Cursor"]
+        #expect(Verdict(item: item, rules: rules, aiRules: [:], sdks: [], probe: onlyCode).status == .warn)
+        item.editors = ["Code - Insiders"]
+        #expect(Verdict(item: item, rules: rules, aiRules: [:], sdks: [], probe: probe(files: ["~/Library/Application Support/Code - Insiders/User/settings.json": off])).status == .ok)
+        // A path outside VS Code's folder is read as written.
+        #expect(probe(files: ["~/.nuxtrc": "x"]).forEditor("Cursor").file("~/.nuxtrc") != .missing)
+
+        // Opt-in: switched on in any editor is yellow, and a blocked read in one editor keeps its note.
+        item.editors = ["Code", "Cursor"]
+        let optIn = [rule(.optIn, enabledWhen: [Check(json: "~/Library/Application Support/Code/User/settings.json", key: "x.enabled", equals: "true")])]
+        let onInCursor = Verdict(item: item, rules: optIn, aiRules: [:], sdks: [], probe: probe(files: [cursorFile: #"{"x.enabled": true}"#]))
+        #expect(onInCursor.status == .warn && onInCursor.state.hasPrefix("In Cursor: "))
+        let blockedInCursor = Verdict(item: item, rules: optIn, aiRules: [:], sdks: [], probe: probe(blocked: [cursorFile]))
+        #expect(blockedInCursor.status == .ok && blockedInCursor.state.hasPrefix("In Cursor: ") && blockedInCursor.state.contains("did not let App Checker read"))
     }
 
     @Test func onlyHTTPLinksAreSafe() {
@@ -144,6 +169,7 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         }
         // Yellow means "there is a way out", so an AI answer that names none is refused.
         #expect(rule(.optOut).problems(curated: false) == ["an opt-out needs instructions"])
+        #expect(rule(.optIn).problems(curated: false) == ["an opt-out needs instructions"])
     }
 }
 
@@ -193,6 +219,7 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         let extensions = Scanner.extensions(in: [(editor: "Code", dir: dir.appendingPathComponent("code")), (editor: "Cursor", dir: dir.appendingPathComponent("cursor"))])
         #expect(extensions.map(\.id) == ["ext:pub.ext", "ext:other.ext"])
         #expect(extensions.map(\.editors) == [["Code", "Cursor"], ["Cursor"]])
+        #expect(extensions.map(\.version) == ["1.0, 1.1", "3"])
 
         // A command that links to a versioned file reports that version; folders and plain data files are not commands.
         try write("bin/versions/2.1.3", "#!/bin/sh")

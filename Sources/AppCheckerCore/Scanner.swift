@@ -54,7 +54,9 @@ public enum Scanner {
     public static func brew(prefix: URL) -> [Item] {
         let cellar = prefix.appendingPathComponent("Cellar"), caskroom = prefix.appendingPathComponent("Caskroom")
         guard fm.fileExists(atPath: cellar.path) else { return [] }
-        var items = [Item(id: "brew:homebrew", name: "Homebrew", version: "", path: prefix.path)]
+        // A Mac can have both installs, each with its own analytics switch, so the Intel one is its own item.
+        let intel = prefix.path == "/usr/local"
+        var items = [Item(id: intel ? "brew:homebrew-usr-local" : "brew:homebrew", name: intel ? "Homebrew (/usr/local)" : "Homebrew", version: "", path: prefix.path)]
         for formula in children(cellar) {
             guard let keg = children(formula).last,
                   let receipt = json(keg.appendingPathComponent("INSTALL_RECEIPT.json")) as? [String: Any],
@@ -100,12 +102,15 @@ public enum Scanner {
         for (editor, dir) in dirs {
             for entry in json(dir.appendingPathComponent("extensions.json")) as? [[String: Any]] ?? [] {
                 guard let id = ((entry["identifier"] as? [String: Any])?["id"] as? String)?.lowercased() else { continue }
+                let version = entry["version"] as? String ?? ""
                 if let index = items.firstIndex(where: { $0.id == "ext:\(id)" }) {
                     if !items[index].editors.contains(editor) { items[index].editors.append(editor) }
+                    // Every editor's version counts, so an update in any of them is noticed.
+                    if !items[index].version.components(separatedBy: ", ").contains(version) { items[index].version += ", \(version)" }
                     continue
                 }
                 let location = entry["relativeLocation"] as? String ?? ""
-                var item = Item(id: "ext:\(id)", name: id, version: entry["version"] as? String ?? "", path: dir.appendingPathComponent(location).path)
+                var item = Item(id: "ext:\(id)", name: id, version: version, path: dir.appendingPathComponent(location).path)
                 item.editors = [editor]
                 items.append(item)
             }

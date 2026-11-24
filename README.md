@@ -71,7 +71,7 @@ Each rule in [rules.json](rules.json) matches one or more item IDs:
 | Prefix | Example |
 | --- | --- |
 | `app:` bundle identifier | `app:com.microsoft.VSCode` |
-| `brew:` formula | `brew:gh` (`brew:homebrew` is Homebrew itself) |
+| `brew:` formula | `brew:gh` (`brew:homebrew` is Homebrew itself, `brew:homebrew-usr-local` the install in `/usr/local`) |
 | `cask:` command-line cask | `cask:codex` |
 | `bin:` command in `~/.local/bin` | `bin:claude` |
 | `npm:` package | `npm:next` |
@@ -94,12 +94,12 @@ Each rule in [rules.json](rules.json) matches one or more item IDs:
 }
 ```
 
-`telemetry` is `none`, `opt-in`, `opt-out` or `forced`. `disabledWhen` and `enabledWhen` are lists of checks; one matching check is enough. A check reads one value:
+`telemetry` is `none`, `opt-in`, `opt-out` or `forced`. `disabledWhen` and `enabledWhen` are lists of checks; one matching check is enough. On an opt-out rule, `enabledWhen` lists switches that force telemetry on, and a match there wins over `disabledWhen`. A check reads one value:
 
 - `{ "env": "NAME", "equals": "0" }`: a variable in your login shell. Without `equals`, any non-empty value matches.
 - `{ "defaults": "bundle.id", "key": "name", "equals": "0" }`: a macOS preference. Booleans read as `1` and `0`.
 - `{ "json": "~/path/settings.json", "key": "a.b", "equals": "false" }`: a value in a JSON or JSONC file. Booleans read as `true` and `false`.
-- `{ "file": "~/path/config", "contains": "text" }`: text in a file
+- `{ "file": "~/path/config", "contains": "text" }`: text in a file. Lines commented out with `#`, `//` or `;` are ignored.
 
 File paths must start with `~/` or a Homebrew prefix. Rules cannot run commands, by design. In an extension rule, a path below `~/Library/Application Support/Code/` is read from each editor that has the extension.
 

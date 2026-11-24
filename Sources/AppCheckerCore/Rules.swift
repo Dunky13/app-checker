@@ -45,7 +45,10 @@ public struct Check: Codable, Sendable, Hashable {
         case .missing: return false
         case let .data(data):
             if let key { return matches(jsonValue(in: data, key: key)) }
-            return contains.map { String(decoding: data, as: UTF8.self).contains($0) } ?? false
+            // Commented-out lines are dropped first, so "# disable_checkpoint = true" does not count as set.
+            let lines = String(decoding: data, as: UTF8.self).split(whereSeparator: \.isNewline)
+                .filter { line in !["#", "//", ";"].contains { line.drop(while: \.isWhitespace).hasPrefix($0) } }
+            return contains.map { lines.joined(separator: "\n").contains($0) } ?? false
         }
     }
 }
@@ -80,7 +83,7 @@ public struct Rule: Codable, Sendable, Hashable {
             found.append("the command contains hidden characters or line breaks")
         }
         // Yellow promises a way out, so an opt-out verdict without one is not usable.
-        if telemetry == .optOut, (optOut?.instructions ?? "").isEmpty { found.append("an opt-out needs instructions") }
+        if [.optOut, .optIn].contains(telemetry), (optOut?.instructions ?? "").isEmpty { found.append("an opt-out needs instructions") }
         guard curated else { return found }
         if telemetry == .unknown { found.append("unknown telemetry does not belong in the curated rules") }
         if summary.isEmpty { found.append("no summary") }
@@ -99,6 +102,10 @@ public struct Rule: Codable, Sendable, Hashable {
         case .forced: return (.bad, "Telemetry is on and cannot be switched off.")
         case .unknown: return (.unknown, "Telemetry behaviour could not be determined.")
         case .optOut:
+            // An explicit "on" switch beats every "off" switch, as with gh: GH_TELEMETRY=enabled overrides DO_NOT_TRACK.
+            if (enabledWhen ?? []).contains(where: { $0.result(probe) == true }) {
+                return (.warn, "A setting on this Mac switches telemetry on. You can switch it off.")
+            }
             let results = (disabledWhen ?? []).map { $0.result(probe) }
             if results.contains(true) { return (.ok, "Telemetry is switched off on this Mac.") }
             if results.contains(nil) { return (.warn, "Telemetry is on by default. \(Self.blockedNote)") }
@@ -156,7 +163,7 @@ public struct Probe: Sendable {
     public var defaults: @Sendable (_ domain: String, _ key: String) -> String?
     public var file: @Sendable (_ path: String) -> FileRead
 
-    public enum FileRead: Sendable { case data(Data), missing, blocked }
+    public enum FileRead: Sendable, Equatable { case data(Data), missing, blocked }
 
     public init(
         env: [String: String],
@@ -248,9 +255,11 @@ public struct Verdict: Sendable, Equatable {
             guard !item.editors.isEmpty else { return rule.evaluate(probe) }
             // Green only when every editor that has the extension is off: show the first one that is not.
             let results = item.editors.map { (editor: $0, result: rule.evaluate(probe.forEditor($0))) }
-            let shown = results.first { $0.result.status != .ok } ?? results[0]
+            // Failing that, one whose setting macOS would not let the app read, so that note is not lost.
+            let shown = results.first { $0.result.status != .ok } ?? results.first { $0.result.state.contains(Rule.blockedNote) } ?? results[0]
             let editor = shown.editor == "Code" ? "VS Code" : shown.editor
-            return (shown.result.status, results.count > 1 && shown.result.status != .ok ? "In \(editor): \(shown.result.state)" : shown.result.state)
+            let notable = shown.result.status != .ok || shown.result.state.contains(Rule.blockedNote)
+            return (shown.result.status, results.count > 1 && notable ? "In \(editor): \(shown.result.state)" : shown.result.state)
         }
         if let rule = rules.first(where: { $0.match.contains(item.id) }) {
             (status, state) = judge(rule)

@@ -59,6 +59,8 @@ final class AppModel {
     init() {
         try? FileManager.default.createDirectory(at: Self.supportDir, withIntermediateDirectories: true)
         saved = Self.loadSaved()
+        // Answers saved by an older version must pass today's checks too.
+        saved.aiRules = saved.aiRules.filter { $0.value.problems(curated: false).isEmpty }
         Probe.blockedFiles = Set(saved.blocked ?? [])
         rules = Self.loadRules()
         UserDefaults.standard.register(defaults: [
@@ -90,18 +92,22 @@ final class AppModel {
         var env: [String: String]
         var failed: Bool
         var npmRoots: [URL]
+        /// False when the shell or a package manager did not answer: such a result is asked for again at the next scan.
+        var complete: Bool
 
         static func current() -> ShellInfo {
             let shellEnv = Shell.loginEnvironment()
             let env = shellEnv ?? ProcessInfo.processInfo.environment
             // Without this npm uses the occasion to ask the registry for a newer npm.
             let quiet = env.merging(["npm_config_update_notifier": "false", "pnpm_config_update_notifier": "false"]) { $1 }
+            var complete = shellEnv != nil
             let npmRoots = ["npm", "pnpm"].compactMap { tool -> URL? in
-                guard let path = Shell.which(tool, env: env), let out = try? Shell.run(path, ["root", "-g"], env: quiet, timeout: 20) else { return nil }
+                guard let path = Shell.which(tool, env: env) else { return nil }
+                guard let out = try? Shell.run(path, ["root", "-g"], env: quiet, timeout: 20) else { complete = false; return nil }
                 // Node version managers hand every shell its own symlink: list and watch the folder behind it.
                 return URL(fileURLWithPath: String(decoding: out, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)).resolvingSymlinksInPath()
             }
-            return ShellInfo(env: env, failed: shellEnv == nil, npmRoots: npmRoots)
+            return ShellInfo(env: env, failed: shellEnv == nil, npmRoots: npmRoots, complete: complete)
         }
     }
 
@@ -135,7 +141,7 @@ final class AppModel {
         if userInitiated { (Probe.blockedFiles, refreshShell) = ([], true) }
         guard !scanning else { rescanQueued = true; return }
         scanning = true
-        let known = refreshShell ? nil : shell
+        let known = refreshShell || shell?.complete != true ? nil : shell
         refreshShell = false
         let snapshot = await Task.detached { Self.scan(shell: known) }.value
         shell = snapshot.shell
