@@ -84,6 +84,10 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         let overridden = rule(.optOut, disabledWhen: [Check(env: "OFF")], enabledWhen: on)
         #expect(overridden.evaluate(probe(env: ["OFF": "1"])).status == .ok)
         #expect(overridden.evaluate(probe(env: ["OFF": "1", "ON": "1"])).status == .warn)
+        // An "on" switch that macOS would not let the app read must not end in green either.
+        let unreadable = rule(.optOut, disabledWhen: [Check(env: "OFF")], enabledWhen: [Check(json: "protected.json", key: "a", equals: "1")])
+        #expect(unreadable.evaluate(probe(env: ["OFF": "1"], blocked: ["protected.json"])).status == .warn)
+        #expect(!Check(env: "X", equals: "1", notIn: ["0"]).isWellFormed && !Check(file: "~/f", contains: "c", notIn: ["0"]).isWellFormed)
     }
 
     @Test func curatedBeatsAIAndScanHitsStayUnknown() {
@@ -267,6 +271,19 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
 
     @Test func rulesFileIsValid() throws {
         #expect(try !RuleSet.decode(Data(contentsOf: rules)).rules.isEmpty)
+    }
+
+    /// gh reads any GH_TELEMETRY value but a few "off" spellings as on, and that beats DO_NOT_TRACK and the config file.
+    @Test func gitHubCLIIsNotGreenWhenItsOwnVariableSwitchesTelemetryOn() throws {
+        let all = try RuleSet.decode(Data(contentsOf: rules)).rules
+        let gh = try #require(all.first { $0.match.contains("brew:gh") })
+        #expect(gh.evaluate(probe(env: ["DO_NOT_TRACK": "1"])).status == .ok)
+        #expect(gh.evaluate(probe(env: ["DO_NOT_TRACK": "1", "GH_TELEMETRY": " Enabled"])).status == .warn)
+        #expect(gh.evaluate(probe(env: ["DO_NOT_TRACK": "1", "GH_TELEMETRY": "2"])).status == .warn)
+        #expect(gh.evaluate(probe(env: ["DO_NOT_TRACK": "1", "GH_TELEMETRY": "log"])).status == .ok)
+        #expect(gh.evaluate(probe(env: ["GH_TELEMETRY": "off"])).status == .ok)
+        // Each Homebrew install has its own rule, so one install's switch cannot turn the other green.
+        #expect(all.contains { $0.match == ["brew:homebrew"] } && all.contains { $0.match == ["brew:homebrew-usr-local"] })
     }
 
     /// The app ignores a downloaded rules.json without a valid signature, so an unsigned change would silently never reach users.

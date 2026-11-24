@@ -14,14 +14,17 @@ public enum Telemetry: String, Codable, Sendable {
 /// There is deliberately no command form: rules are refreshed from the network and must never execute anything.
 public struct Check: Codable, Sendable, Hashable {
     public var env, defaults, json, file, key, equals, contains: String?
+    /// For `env` only: matches when the variable is set to anything but these values, compared trimmed and in lower case.
+    /// For tools that read every other value as "on", whatever its spelling.
+    public var notIn: [String]?
 
     public var isWellFormed: Bool {
         switch (env, defaults, json, file) {
-        case (.some, nil, nil, nil): key == nil && contains == nil
+        case (.some, nil, nil, nil): key == nil && contains == nil && (equals == nil || notIn == nil)
         // A stored false reads as "0" or "false", so "any value" would mistake it for a switch that is on.
-        case (nil, .some, nil, nil): key != nil && equals != nil && contains == nil
-        case let (nil, nil, .some(path), nil): key != nil && equals != nil && contains == nil && Self.isReadable(path)
-        case let (nil, nil, nil, .some(path)): contains != nil && key == nil && equals == nil && Self.isReadable(path)
+        case (nil, .some, nil, nil): key != nil && equals != nil && contains == nil && notIn == nil
+        case let (nil, nil, .some(path), nil): key != nil && equals != nil && contains == nil && notIn == nil && Self.isReadable(path)
+        case let (nil, nil, nil, .some(path)): contains != nil && key == nil && equals == nil && notIn == nil && Self.isReadable(path)
         default: false
         }
     }
@@ -36,6 +39,9 @@ public struct Check: Codable, Sendable, Hashable {
         func matches(_ value: String?) -> Bool {
             guard let value else { return false }
             return equals.map { $0 == value } ?? !value.isEmpty
+        }
+        if let env, let notIn {
+            return probe.env[env].map { !notIn.contains($0.trimmingCharacters(in: .whitespaces).lowercased()) } ?? false
         }
         if let env { return matches(probe.env[env]) }
         if let defaults, let key { return matches(probe.defaults(defaults, key)) }
@@ -103,9 +109,10 @@ public struct Rule: Codable, Sendable, Hashable {
         case .unknown: return (.unknown, "Telemetry behaviour could not be determined.")
         case .optOut:
             // An explicit "on" switch beats every "off" switch, as with gh: GH_TELEMETRY=enabled overrides DO_NOT_TRACK.
-            if (enabledWhen ?? []).contains(where: { $0.result(probe) == true }) {
-                return (.warn, "A setting on this Mac switches telemetry on. You can switch it off.")
-            }
+            let forced = (enabledWhen ?? []).map { $0.result(probe) }
+            if forced.contains(true) { return (.warn, "A setting on this Mac switches telemetry on. You can switch it off.") }
+            // An "on" switch that could not be read may still be set, so it must not end in green.
+            if forced.contains(nil) { return (.warn, "Telemetry is on by default. \(Self.blockedNote)") }
             let results = (disabledWhen ?? []).map { $0.result(probe) }
             if results.contains(true) { return (.ok, "Telemetry is switched off on this Mac.") }
             if results.contains(nil) { return (.warn, "Telemetry is on by default. \(Self.blockedNote)") }

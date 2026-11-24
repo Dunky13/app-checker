@@ -539,23 +539,15 @@
       "enabledWhen": [
         {
           "env": "GH_TELEMETRY",
-          "equals": "enabled"
-        },
-        {
-          "env": "GH_TELEMETRY",
-          "equals": "true"
-        },
-        {
-          "env": "GH_TELEMETRY",
-          "equals": "1"
-        },
-        {
-          "env": "GH_TELEMETRY",
-          "equals": "yes"
-        },
-        {
-          "env": "GH_TELEMETRY",
-          "equals": "on"
+          "notIn": [
+            "",
+            "0",
+            "false",
+            "no",
+            "disabled",
+            "off",
+            "log"
+          ]
         }
       ]
     },

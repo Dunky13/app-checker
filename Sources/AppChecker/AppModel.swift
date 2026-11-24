@@ -94,6 +94,7 @@ final class AppModel {
         var npmRoots: [URL]
         /// False when the shell or a package manager did not answer: such a result is asked for again at the next scan.
         var complete: Bool
+        var asked = Date()
 
         static func current() -> ShellInfo {
             let shellEnv = Shell.loginEnvironment()
@@ -141,7 +142,9 @@ final class AppModel {
         if userInitiated { (Probe.blockedFiles, refreshShell) = ([], true) }
         guard !scanning else { rescanQueued = true; return }
         scanning = true
-        let known = refreshShell || shell?.complete != true ? nil : shell
+        // An incomplete answer is asked for again, but at most once an hour: a lookup that always fails costs up to a minute.
+        let stale = shell.map { !$0.complete && Date().timeIntervalSince($0.asked) > 3600 } ?? true
+        let known = refreshShell || stale ? nil : shell
         refreshShell = false
         let snapshot = await Task.detached { Self.scan(shell: known) }.value
         shell = snapshot.shell
