@@ -93,7 +93,7 @@ public enum LLM {
             reply = try await Task.detached {
                 // Empty working directory, no settings, CLAUDE.md, skills, hooks or MCP servers, web tools only:
                 // the model reads untrusted web pages, so it gets nothing personal and nothing it could act with.
-                let cwd = FileManager.default.temporaryDirectory.appendingPathComponent("app-checker-\(UUID().uuidString)")
+                let cwd = FileManager.default.temporaryDirectory.appendingPathComponent("kanarie-\(UUID().uuidString)")
                 try FileManager.default.createDirectory(at: cwd, withIntermediateDirectories: true)
                 defer { try? FileManager.default.removeItem(at: cwd) }
                 var arguments = [

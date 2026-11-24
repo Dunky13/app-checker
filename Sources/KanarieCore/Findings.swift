@@ -145,9 +145,9 @@ public enum Findings {
     public static func index(_ data: Data, signature: String, publicKey: String) throws -> Index {
         guard let signature = Data(base64Encoded: signature.trimmingCharacters(in: .whitespacesAndNewlines)),
               let key = Data(base64Encoded: publicKey).flatMap({ try? Curve25519.Signing.PublicKey(rawRepresentation: $0) }),
-              key.isValidSignature(signature, for: data) else { throw failure("The findings are not signed by App Checker.") }
+              key.isValidSignature(signature, for: data) else { throw failure("The findings are not signed by Kanarie.") }
         let index = try JSONDecoder().decode(Index.self, from: data)
-        guard index.version <= supportedVersion else { throw failure("Findings version \(index.version) needs a newer App Checker.") }
+        guard index.version <= supportedVersion else { throw failure("Findings version \(index.version) needs a newer Kanarie.") }
         guard index.files.keys.allSatisfy(isPath) else { throw failure("The findings index lists an unexpected file name.") }
         return index
     }

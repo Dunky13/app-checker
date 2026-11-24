@@ -3,13 +3,13 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleIdentifier</key>
-	<string>io.went.app-checker</string>
+	<string>io.went.kanarie</string>
 	<key>CFBundleName</key>
-	<string>App Checker</string>
+	<string>Kanarie</string>
 	<key>CFBundleDisplayName</key>
-	<string>App Checker</string>
+	<string>Kanarie</string>
 	<key>CFBundleExecutable</key>
-	<string>AppChecker</string>
+	<string>Kanarie</string>
 	<key>CFBundleIconFile</key>
 	<string>AppIcon</string>
 	<key>CFBundlePackageType</key>
@@ -29,7 +29,7 @@
 	<key>NSHumanReadableCopyright</key>
 	<string>MIT licensed. No telemetry.</string>
 	<key>SUFeedURL</key>
-	<string>https://raw.githubusercontent.com/Dunky13/app-checker/main/appcast.xml</string>
+	<string>https://raw.githubusercontent.com/Dunky13/kanarie/main/appcast.xml</string>
 	<key>SUPublicEDKey</key>
 	<string>CIKVfBlCMo2CUPj7QLGS8uWx0FINoL++02suMafoJcs=</string>
 	<key>SUEnableSystemProfiling</key>

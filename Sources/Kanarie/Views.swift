@@ -1,4 +1,4 @@
-import AppCheckerCore
+import KanarieCore
 import ServiceManagement
 import SwiftUI
 
@@ -52,7 +52,7 @@ struct MenuView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("App Checker").font(.headline)
+                Text("Kanarie").font(.headline)
                 Spacer()
                 if model.scanning { ProgressView().controlSize(.small) }
             }
@@ -75,7 +75,7 @@ struct MenuView: View {
             }
             Button("Rescan Now") { Task { await model.rescan(userInitiated: true) } }.disabled(model.scanning)
             Button("Check for Updates…") { updater.checkForUpdates() }
-            Button("Quit App Checker") { NSApp.terminate(nil) }
+            Button("Quit Kanarie") { NSApp.terminate(nil) }
         }
         .buttonStyle(.link)
         .padding()
@@ -146,7 +146,7 @@ struct MainView: View {
             if let item = model.items.first(where: { $0.id == selection }), let verdict = model.verdicts[item.id] {
                 DetailView(model: model, item: item, verdict: verdict)
             } else {
-                ContentUnavailableView("Select an item", systemImage: "checkmark.shield", description: Text("\(model.items.count) apps, packages and extensions checked."))
+                ContentUnavailableView("Select an item", systemImage: "bird", description: Text("\(model.items.count) apps, packages and extensions checked."))
             }
         }
         // In the toolbar: a sidebar search field scrolls out of sight with a long list.
@@ -197,10 +197,10 @@ struct DetailView: View {
 
     private var sourceNote: String {
         switch verdict.source {
-        case .rules: "From the App Checker findings."
+        case .rules: "From the Kanarie findings."
         case .ai: "From an AI lookup. Not verified: check its sources before relying on it."
         case .sdk: "The hint comes from an offline search of the installed files for analytics service names."
-        case .none: "Not in the App Checker findings."
+        case .none: "Not in the Kanarie findings."
         }
     }
 

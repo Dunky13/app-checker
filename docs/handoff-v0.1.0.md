@@ -4,6 +4,7 @@ Status on 2026-11-24: the app is built, tested, reviewed and pushed to `main`. T
 
 ## What exists
 
+- The app and its repository are named Kanarie. They were called App Checker (`Dunky13/app-checker`) until 2026-11-24; GitHub redirects the old address. The bundle identifier is `io.went.kanarie`. Settings, saved state and a stored API key of an App Checker build are not carried over, which affects no one because nothing was released. The icon and the README logo (a canary carrying a blue medieval shield) are drawn by `scripts/make-icon.swift`.
 - A menu bar app (no Dock icon, starts at login) that lists apps, Homebrew formulae and casks, commands in `~/.local/bin`, global npm and pnpm packages and editor extensions, with a green, yellow, red or grey verdict per item. See the [README](../README.md).
 - Verdicts from the curated findings ([findings/](../findings), one folder per app and one file per version from which a finding holds, 44 apps), an on-demand AI lookup (Claude Code CLI or an OpenAI-compatible endpoint such as OpenRouter) and an offline hint that stays grey.
 - A form on every item to submit a finding or a correction as a prefilled GitHub issue, with the app's format checks, what the checks read on that Mac, and a search of the cited pages for the names the finding relies on.
@@ -21,7 +22,7 @@ Checked by running it, on one Mac (macOS 27, Apple Silicon):
 - A real lookup through the Claude Code CLI with web search, and a lookup through the OpenAI-compatible backend against a local stub (key read from the keychain, no redirect followed).
 - The findings download, with a test build that read the `findings-folder` branch and shipped an older bundled copy (serial 1, one changed file): it fetched the signed index, replaced its copy, and its cache was identical to the committed folder. A relaunch with nothing new left the cache untouched. A cached file changed by hand to claim "no telemetry" was not used (the item stayed yellow) and was replaced at the next launch. With the cache deleted and the saved serial set above the published one, the published index was refused.
 - The submit form, with a seeded AI result that named an invented variable: the form showed what its check read on the Mac, the source check fetched the cited page and reported the name as not found, and Continue Anyway opened a GitHub issue page with the title and the finding filled in. An item without any finding opened an empty form that listed what was missing and kept Continue disabled. With a local web server running, cited links to `127.0.0.1`, to `localhost` and to a public address that redirects to the local server were all left out (the server logged no request, and did log one when `curl` followed the same redirect), while a public page in the same list was fetched. After the HTTPS rule: a plain HTTP link and an HTTPS link that redirects to plain HTTP or to this Mac were not fetched; an HTTPS link and an HTTPS link redirecting to another HTTPS page were.
-- `AppChecker --list` on that Mac: 216 items, of which 15 yellow, 3 green and 198 grey. The native Claude Code install is found as `bin:claude`.
+- `Kanarie --list` on that Mac: 216 items, of which 15 yellow, 3 green and 198 grey. The native Claude Code install is found as `bin:claude`.
 
 Reviewed independently (Claude Opus, high effort), each round followed by fixes:
 
@@ -44,18 +45,18 @@ On the maintainer's Mac, with the Developer ID certificate and the Sparkle key i
 
 ```sh
 # Once. Asks for an app-specific password from account.apple.com and stores it in the keychain.
-xcrun notarytool store-credentials app-checker-notary --apple-id <apple id> --team-id <team id>
+xcrun notarytool store-credentials kanarie-notary --apple-id <apple id> --team-id <team id>
 
-NOTARY_KEYCHAIN_PROFILE=app-checker-notary scripts/release.sh 0.1.0
+NOTARY_KEYCHAIN_PROFILE=kanarie-notary scripts/release.sh 0.1.0
 ```
 
-Expected: tests pass, notarization status `Accepted`, the app is stapled and passes `spctl`, a GitHub release `v0.1.0` with `AppChecker-0.1.0-universal.zip` exists, and a commit `Release 0.1.0` adds `appcast.xml`. macOS may ask once for permission to use the Sparkle key: choose Always Allow. If notarization times out, do not submit again: continue with `xcrun notarytool wait <id>` using the receipt in `build/notary/`.
+Expected: tests pass, notarization status `Accepted`, the app is stapled and passes `spctl`, a GitHub release `v0.1.0` with `Kanarie-0.1.0-universal.zip` exists, and a commit `Release 0.1.0` adds `appcast.xml`. macOS may ask once for permission to use the Sparkle key: choose Always Allow. If notarization times out, do not submit again: continue with `xcrun notarytool wait <id>` using the receipt in `build/notary/`.
 
 Then check updating end to end:
 
 ```sh
 CODESIGN_IDENTITY="Developer ID Application" scripts/build-app.sh 0.0.9
-open "build/App Checker.app"   # menu bar shield > Check for Updates…
+open "build/Kanarie.app"   # menu bar bird > Check for Updates…
 ```
 
 Expected: Sparkle offers 0.1.0, installs it and relaunches.
@@ -77,7 +78,7 @@ After any change below `findings/`: run `scripts/sign-findings.sh` and commit `i
 - The findings format is version 1. No build was released before the move from one rules file to the findings folder, so no older app can misread it. Raise `version` in the index and `supportedVersion` together for the next format change.
 - A word after the version numbers is read as a pre-release, so a version such as OpenSSL's `1.1.1w` sorts before `1.1.1`. No app with such versions has more than one file yet.
 - Pre-releases on different channels of one release are never ordered, also where a convention exists (beta before rc). Such an item gets the strictest of the findings that might hold, which can be yellow where green would be right, or red where yellow would be. The same holds for an item without a readable version, such as Homebrew itself or a cask at `latest`: version files cannot tell its builds apart.
-- The highest findings serial the app accepted is kept in `state.json`. Deleting the whole App Checker support folder, or a `state.json` that can no longer be read, resets it to the serial of the findings the app then loads, cached or shipped.
+- The highest findings serial the app accepted is kept in `state.json`. Deleting the whole Kanarie support folder, or a `state.json` that can no longer be read, resets it to the serial of the findings the app then loads, cached or shipped.
 - A product name with a digit in front of the version (`python3-1.2`) is read as part of the version. No scanned item reports its version that way.
 - An extension with a different version in each editor is judged by the first editor's version.
 - If the findings change on the server between the download of the index and of a file, that download is rejected and tried again the next day.

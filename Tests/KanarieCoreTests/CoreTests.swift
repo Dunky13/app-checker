@@ -1,7 +1,7 @@
 import CryptoKit
 import Foundation
 import Testing
-@testable import AppCheckerCore
+@testable import KanarieCore
 
 let repoRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
 
@@ -54,9 +54,9 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         let check = Check(json: "protected.json", key: "Analytics", equals: "false")
         #expect(check.result(probe(blocked: ["protected.json"])) == nil)
         let optOut = rule(.optOut, disabledWhen: [check]).evaluate(probe(blocked: ["protected.json"]))
-        #expect(optOut.status == .warn && optOut.state.contains("did not let App Checker read"))
+        #expect(optOut.status == .warn && optOut.state.contains("did not let Kanarie read"))
         let optIn = rule(.optIn, enabledWhen: [check]).evaluate(probe(blocked: ["protected.json"]))
-        #expect(optIn.status == .ok && optIn.state.contains("did not let App Checker read"))
+        #expect(optIn.status == .ok && optIn.state.contains("did not let Kanarie read"))
     }
 
     @Test func wellFormedness() {
@@ -128,7 +128,7 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         let onInCursor = Verdict(item: item, rules: optIn, aiRules: [:], sdks: [], probe: probe(files: [cursorFile: #"{"x.enabled": true}"#]))
         #expect(onInCursor.status == .warn && onInCursor.state.hasPrefix("In Cursor: "))
         let blockedInCursor = Verdict(item: item, rules: optIn, aiRules: [:], sdks: [], probe: probe(blocked: [cursorFile]))
-        #expect(blockedInCursor.status == .ok && blockedInCursor.state.hasPrefix("In Cursor: ") && blockedInCursor.state.contains("did not let App Checker read"))
+        #expect(blockedInCursor.status == .ok && blockedInCursor.state.hasPrefix("In Cursor: ") && blockedInCursor.state.contains("did not let Kanarie read"))
     }
 
     @Test func onlyHTTPLinksAreSafe() {
@@ -178,7 +178,7 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
 }
 
 @Suite struct Scanning {
-    let dir = FileManager.default.temporaryDirectory.appendingPathComponent("app-checker-tests-\(UUID().uuidString)")
+    let dir = FileManager.default.temporaryDirectory.appendingPathComponent("kanarie-tests-\(UUID().uuidString)")
 
     func write(_ path: String, _ content: String) throws {
         let url = dir.appendingPathComponent(path)
@@ -243,7 +243,7 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
 @Suite(.serialized) struct LiveProbe {
     /// A remembered blocked path must not be touched again: each refused read makes macOS show a banner.
     @Test func rememberedBlockedFileIsNotReadAgain() throws {
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent("app-checker-probe-\(UUID().uuidString).json")
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("kanarie-probe-\(UUID().uuidString).json")
         try Data(#"{"k": "v"}"#.utf8).write(to: url)
         defer {
             try? FileManager.default.removeItem(at: url)
@@ -558,7 +558,7 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         let check = Submission.sourceCheck(found, pages: ["EXAMPLE_TELEMETRY"], cited: 2)
         let odd = Item(id: "brew:x", name: "Evil`\n## Heading", version: "1.2\n", path: "/x")
         let issue = Submission.issue(item: odd, rule: found, origin: "Written by hand", readings: ["one"], sourceCheck: check, appVersion: "0.1.0")
-        #expect(issue.clipboard == nil && issue.url.absoluteString.hasPrefix("https://github.com/Dunky13/app-checker/issues/new?"))
+        #expect(issue.clipboard == nil && issue.url.absoluteString.hasPrefix("https://github.com/Dunky13/kanarie/issues/new?"))
         #expect(!issue.url.absoluteString.contains("+"))
         let query = try #require(URLComponents(url: issue.url, resolvingAgainstBaseURL: false)?.queryItems)
         let body = try #require(query.first { $0.name == "body" }?.value)

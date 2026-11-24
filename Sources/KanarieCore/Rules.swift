@@ -141,12 +141,12 @@ public struct Rule: Codable, Sendable, Hashable {
             if results.contains(true) { return (.warn, "Telemetry has been switched on. You can switch it off.") }
             if results.contains(nil) { return (.ok, "Telemetry stays off unless you enable it. \(Self.blockedNote)") }
             return (.ok, results.isEmpty
-                ? "Telemetry is off unless you agreed to it. App Checker cannot read that choice on this Mac."
+                ? "Telemetry is off unless you agreed to it. Kanarie cannot read that choice on this Mac."
                 : "Telemetry stays off unless you enable it.")
         }
     }
 
-    static let blockedNote = "macOS did not let App Checker read this app's setting. To allow it, open System Settings > Privacy & Security > Files & Folders, then rescan."
+    static let blockedNote = "macOS did not let Kanarie read this app's setting. To allow it, open System Settings > Privacy & Security > Files & Folders, then rescan."
 }
 
 /// Local state the checks read. Injected so the rule engine is testable.
@@ -266,7 +266,7 @@ public struct Verdict: Sendable, Equatable {
             (self.rule, source) = (rule, .ai)
         } else if !sdks.isEmpty {
             // A string match is a lead, not evidence: bundled dependencies and domain lists contain these names too. So it stays grey.
-            (status, state, rule, source) = (.unknown, "Not in the App Checker findings. Its files mention \(sdks.joined(separator: ", ")). That is a hint worth looking up, not proof of telemetry.", nil, .sdk)
+            (status, state, rule, source) = (.unknown, "Not in the Kanarie findings. Its files mention \(sdks.joined(separator: ", ")). That is a hint worth looking up, not proof of telemetry.", nil, .sdk)
         } else {
             (status, state, rule, source) = (.unknown, "Nothing is known about this item yet.", nil, .none)
         }

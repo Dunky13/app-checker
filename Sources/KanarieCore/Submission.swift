@@ -3,7 +3,7 @@ import Foundation
 /// A finding someone proposes from the app. It leaves the Mac only as a prefilled GitHub issue that the person
 /// reads and submits in their own browser: the app has no server of its own and no GitHub login.
 public enum Submission {
-    static let issues = "https://github.com/Dunky13/app-checker/issues/new"
+    static let issues = "https://github.com/Dunky13/kanarie/issues/new"
 
     /// The fields of the form.
     /// shortcut: checks that came with an AI lookup or a curated finding are kept as they are, and by hand only one variable can be added; give checks their own editor if submissions need more.
@@ -183,7 +183,7 @@ public enum Submission {
         **Source check**
         \(sourceCheck.lines.map { "- \($0)" }.joined(separator: "\n"))
 
-        Sent from App Checker \(plain(appVersion)). The finding passed the app's format and safety checks. Whether it is true is for review.
+        Sent from Kanarie \(plain(appVersion)). The finding passed the app's format and safety checks. Whether it is true is for review.
         """
         let title = "Finding: \(plain(rule.name ?? item.name))"
         func url(_ body: String) -> URL {
@@ -196,7 +196,7 @@ public enum Submission {
         let link = url(body)
         // GitHub answers a longer address with an error page.
         guard link.absoluteString.utf8.count > 7000 else { return (link, nil) }
-        return (url("Paste the finding here: App Checker put it on your clipboard."), body)
+        return (url("Paste the finding here: Kanarie put it on your clipboard."), body)
     }
 }
 
