@@ -3,6 +3,8 @@ import Foundation
 public enum Shell {
     public struct Failure: LocalizedError {
         public var errorDescription: String?
+        /// What the program had printed when it ran out of time.
+        public var output = Data()
     }
 
     /// Runs a program and returns its stdout. Blocking: call from a background task.
@@ -26,7 +28,7 @@ public enum Shell {
         let data = out.fileHandleForReading.readDataToEndOfFile()
         process.waitUntilExit()
         guard process.terminationReason == .exit else {
-            throw Failure(errorDescription: "\(URL(fileURLWithPath: executable).lastPathComponent) timed out after \(Int(timeout)) s.")
+            throw Failure(errorDescription: "\(URL(fileURLWithPath: executable).lastPathComponent) timed out after \(Int(timeout)) s.", output: data)
         }
         guard process.terminationStatus == 0 || (acceptFailure && !data.isEmpty) else {
             throw Failure(errorDescription: "\(URL(fileURLWithPath: executable).lastPathComponent) exited with status \(process.terminationStatus).")

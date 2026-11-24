@@ -1,5 +1,6 @@
 import KanarieCore
 import AppKit
+import CryptoKit
 import Observation
 import ServiceManagement
 import UserNotifications
@@ -256,9 +257,12 @@ final class AppModel {
         errors[item.id] = nil
         do {
             let (log, rule) = await LLM.analyse(item, backend: try backend(), env: env)
+            let failed = (try? rule.get()) == nil
             do {
                 try FileManager.default.createDirectory(at: Self.lookupLogs, withIntermediateDirectories: true)
-                try JSONEncoder().encode(log).write(to: Self.logFile(item), options: .atomic)
+                try JSONEncoder().encode(log).write(to: Self.logFile(item, failed: failed), options: .atomic)
+                // A failed lookup leaves the verdict of an earlier one in place, so the log that explains that verdict stays too.
+                if !failed { try? FileManager.default.removeItem(at: Self.logFile(item, failed: true)) }
             } catch { NSLog("Kanarie: could not save the lookup log: \(error)") }
             saved.aiRules[item.id] = try rule.get()
             save()
@@ -269,16 +273,19 @@ final class AppModel {
         analysing.remove(item.id)
     }
 
-    private nonisolated static func logFile(_ item: Item) -> URL {
-        // An item id can hold slashes and dots, as in "npm:@scope/name".
-        lookupLogs.appendingPathComponent((item.id.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? item.id) + ".json")
+    private nonisolated static func logFile(_ item: Item, failed: Bool) -> URL {
+        // A hash: an item id can hold slashes, as in "npm:@scope/name", and be longer than a file name may be.
+        let name = SHA256.hash(data: Data(item.id.utf8)).map { String(format: "%02x", $0) }.joined()
+        return lookupLogs.appendingPathComponent(name + (failed ? ".failed.json" : ".json"))
     }
 
-    func hasLookupLog(_ item: Item) -> Bool { FileManager.default.fileExists(atPath: Self.logFile(item).path) }
+    func hasLookupLog(_ item: Item) -> Bool {
+        [false, true].contains { FileManager.default.fileExists(atPath: Self.logFile(item, failed: $0).path) }
+    }
 
-    /// What the last lookup of this item asked and got back, whether it succeeded or not.
+    /// What the lookup behind the item's verdict asked and got back, followed by a later lookup that failed, if there is one.
     func lookupLog(_ item: Item) -> [LLM.Turn] {
-        (try? JSONDecoder().decode([LLM.Turn].self, from: Data(contentsOf: Self.logFile(item)))) ?? []
+        [false, true].flatMap { (try? JSONDecoder().decode([LLM.Turn].self, from: Data(contentsOf: Self.logFile(item, failed: $0)))) ?? [] }
     }
 
     /// Looks up the given items one after another. Stops on the first failure, which is usually a quota or configuration problem.

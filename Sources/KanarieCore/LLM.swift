@@ -17,7 +17,8 @@ public enum LLM {
 
     /// One step of a lookup, kept so the user can read what was asked and what came back.
     public struct Turn: Codable, Sendable, Equatable {
-        public enum Role: String, Codable, Sendable { case user, assistant, tool }
+        /// `error` is why the lookup failed, as the last step of its log.
+        public enum Role: String, Codable, Sendable { case user, assistant, tool, error }
         public var role: Role
         /// The message, or for a tool call what the model passed to the tool.
         public var text: String
@@ -40,12 +41,13 @@ public enum LLM {
         var calls: [String: Int] = [:]  // tool call id -> its place in `turns`, for the result that follows
         for line in data.split(separator: UInt8(ascii: "\n")) {
             guard let event = try? JSONSerialization.jsonObject(with: line) as? [String: Any] else { continue }
+            let fromModel = event["type"] as? String == "assistant"
             if event["type"] as? String == "result" { (result, failed) = (event["result"] as? String, event["is_error"] as? Bool == true) }
             for block in (event["message"] as? [String: Any])?["content"] as? [[String: Any]] ?? [] {
                 switch block["type"] as? String {
-                case "text":
+                case "text" where fromModel:
                     if let text = block["text"] as? String, !text.isEmpty { turns.append(Turn(role: .assistant, text: text)) }
-                case "tool_use":
+                case "tool_use" where fromModel:
                     let input = (block["input"] as? [String: Any])
                         .flatMap { try? JSONSerialization.data(withJSONObject: $0, options: [.sortedKeys, .withoutEscapingSlashes]) }
                     if let id = block["id"] as? String { calls[id] = turns.count }
@@ -54,12 +56,34 @@ public enum LLM {
                     guard let index = (block["tool_use_id"] as? String).flatMap({ calls[$0] }) else { continue }
                     let content = block["content"] as? String
                         ?? (block["content"] as? [[String: Any]] ?? []).compactMap { $0["text"] as? String }.joined(separator: "\n")
-                    turns[index].result = content.count > resultLimit ? content.prefix(resultLimit) + "\n… (shortened)" : content
+                    let shown = content.count > resultLimit ? content.prefix(resultLimit) + "\n… (shortened)" : content
+                    turns[index].result = shown.isEmpty ? nil : (block["is_error"] as? Bool == true ? "Failed: " : "") + shown
                 default: break
                 }
             }
         }
         return (turns, result, failed)
+    }
+
+    /// The log as it is shown: the tool calls between two messages form one group.
+    public static func grouped(_ turns: [Turn]) -> [[Turn]] {
+        turns.reduce(into: []) { groups, turn in
+            if turn.role == .tool, groups.last?.first?.role == .tool { groups[groups.count - 1].append(turn) } else { groups.append([turn]) }
+        }
+    }
+
+    /// Splits a text of the log for display. Parts that are JSON or fenced as code are code blocks, JSON laid out over lines.
+    public static func blocks(of text: String) -> [(text: String, isCode: Bool)] {
+        text.components(separatedBy: "```").enumerated().compactMap { index, part in
+            let fenced = index % 2 == 1
+            // The first line inside a fence names the language.
+            let body = (fenced && part.contains(where: \.isNewline) ? String(part.drop { !$0.isNewline }) : part).trimmingCharacters(in: .whitespacesAndNewlines)
+            if let object = try? JSONSerialization.jsonObject(with: Data(body.utf8)),
+               let laidOut = try? JSONSerialization.data(withJSONObject: object, options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]) {
+                return (String(decoding: laidOut, as: UTF8.self), true)
+            }
+            return body.isEmpty ? nil : (body, fenced)
+        }
     }
 
     static let kinds = [
@@ -138,8 +162,9 @@ public enum LLM {
         var log = [Turn(role: .user, text: prompt)]
         do {
             let reply = try await ask(prompt, backend: backend, env: env, log: &log)
-            return (log, Result { try parseRule(from: reply, itemID: item.id) })
+            return (log, .success(try parseRule(from: reply, itemID: item.id)))
         } catch {
+            log.append(Turn(role: .error, text: error.localizedDescription))
             return (log, .failure(error))
         }
     }
@@ -147,7 +172,7 @@ public enum LLM {
     private static func ask(_ prompt: String, backend: Backend, env: [String: String], log: inout [Turn]) async throws -> String {
         switch backend {
         case let .claudeCLI(path, model):
-            let data = try await Task.detached {
+            let run = Task.detached {
                 // Empty working directory, no settings, CLAUDE.md, skills, hooks or MCP servers, web tools only:
                 // the model reads untrusted web pages, so it gets nothing personal and nothing it could act with.
                 let cwd = FileManager.default.temporaryDirectory.appendingPathComponent("kanarie-\(UUID().uuidString)")
@@ -161,7 +186,13 @@ public enum LLM {
                 // No settings are loaded, so an opt-out in the user's Claude settings would not apply: a lookup must not cause telemetry itself.
                 let quiet = env.merging(["DISABLE_TELEMETRY": "1", "DISABLE_ERROR_REPORTING": "1"]) { $1 }
                 return try Shell.run(path, arguments, env: quiet, cwd: cwd, timeout: 300, acceptFailure: true)
-            }.value
+            }
+            let data: Data
+            do { data = try await run.value } catch let failure as Shell.Failure {
+                // A lookup that ran out of time still shows how far it got.
+                log += transcript(ofStream: failure.output).turns
+                throw failure
+            }
             let stream = transcript(ofStream: data)
             log += stream.turns
             guard let result = stream.result else { throw Failure(errorDescription: "Unexpected output from the claude CLI.") }

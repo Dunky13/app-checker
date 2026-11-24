@@ -77,7 +77,7 @@ Lookups run only when you click **Look Up with AI** on an item, or the sparkles 
 
 A lookup sends the item's name, identifier and version to that backend. Answers can be wrong, so check the listed sources before relying on one. Items judged by a lookup carry a sparkles mark in the list.
 
-**Show Lookup Log…** on an item shows what its last lookup asked and what came back: the prompt, the model's messages and, folded away between them, its web searches and page fetches with their results. The log is kept on your Mac only, in `~/Library/Application Support/Kanarie/lookups`, also when the lookup failed. A long tool result is shortened. With the API backend the log holds the prompt and the answer: the endpoint does not report its searches.
+**Show Lookup Log…** on an item shows what the lookup behind its verdict asked and what came back, as a small chat log: the prompt, the model's messages and, folded away between them, its web searches and page fetches with their results. JSON is set as a code block. A later lookup that failed follows below it, with the reason. The logs are kept on your Mac only, in `~/Library/Application Support/Kanarie/lookups`. A long tool result is shortened. With the API backend a log holds the prompt and the answer: Kanarie does not read the searches an endpoint may report.
 
 The Claude Code CLI is started without your Claude settings, and with its own metrics and error reports switched off (`DISABLE_TELEMETRY`, `DISABLE_ERROR_REPORTING`).
 

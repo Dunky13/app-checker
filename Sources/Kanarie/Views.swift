@@ -194,7 +194,7 @@ struct DetailView: View {
     var verdict: Verdict
     @State private var copied = false
     @State private var submitting = false
-    @State private var showingLog = false
+    @State private var log: OpenedLog?
 
     private var sourceNote: String {
         switch verdict.source {
@@ -269,7 +269,7 @@ struct DetailView: View {
                             ProgressView().controlSize(.small).accessibilityHidden(true)
                             Text("Searching the web. This can take a minute or two.").foregroundStyle(.secondary)
                         } else if model.hasLookupLog(item) {
-                            Button("Show Lookup Log…", systemImage: "text.bubble") { showingLog = true }
+                            Button("Show Lookup Log…", systemImage: "text.bubble") { log = OpenedLog(turns: model.lookupLog(item)) }
                         }
                     }
                     if let error = model.errors[item.id] {
@@ -287,44 +287,49 @@ struct DetailView: View {
         }
         .onChange(of: item.id) { copied = false }
         .sheet(isPresented: $submitting) { SubmitView(model: model, item: item, verdict: verdict) }
-        .sheet(isPresented: $showingLog) { LookupLogView(name: item.name, turns: model.lookupLog(item)) }
+        .sheet(item: $log) { LookupLogView(name: item.name, turns: $0.turns) }
     }
 }
 
-/// What one AI lookup asked and got back. All of it is shown as plain text: tool results are web pages.
+/// A log as it was read when its window opened, so a lookup that ends meanwhile does not change it.
+private struct OpenedLog: Identifiable {
+    let id = UUID()
+    var turns: [LLM.Turn]
+}
+
+/// What an AI lookup asked and got back. All of it is shown as plain text: tool results are web pages.
 struct LookupLogView: View {
     @Environment(\.dismiss) private var dismiss
     var name: String
     var turns: [LLM.Turn]
 
-    /// The tool calls between two messages form one group, which starts collapsed.
-    private var groups: [[LLM.Turn]] {
-        turns.reduce(into: []) { groups, turn in
-            if turn.role == .tool, groups.last?.first?.role == .tool { groups[groups.count - 1].append(turn) } else { groups.append([turn]) }
-        }
-    }
-
     var body: some View {
         VStack(spacing: 0) {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 12) {
-                    ForEach(Array(groups.enumerated()), id: \.offset) { _, group in
+                    if turns.isEmpty { Text("This log could not be read.").foregroundStyle(.secondary) }
+                    ForEach(Array(LLM.grouped(turns).enumerated()), id: \.offset) { _, group in
                         if group[0].role == .tool {
                             DisclosureGroup(group.count == 1 ? "1 tool call" : "\(group.count) tool calls") {
                                 ForEach(Array(group.enumerated()), id: \.offset) { _, call in
                                     VStack(alignment: .leading, spacing: 4) {
-                                        Text(verbatim: "\(call.tool ?? "Tool") \(call.text)").font(.callout.monospaced())
-                                        Text(verbatim: call.result ?? "No result was recorded.").font(.callout).foregroundStyle(.secondary)
+                                        Text(verbatim: call.tool ?? "Tool").font(.callout).bold()
+                                        LogText(text: call.text)
+                                        LogText(text: call.result ?? "No result was recorded.").foregroundStyle(.secondary)
                                     }
-                                    .textSelection(.enabled)
+                                    .font(.callout)
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                     .padding(.top, 6)
                                 }
                             }
                         } else {
                             VStack(alignment: .leading, spacing: 4) {
-                                Text(group[0].role == .user ? "Prompt" : "Model").font(.caption).bold().foregroundStyle(.secondary)
-                                Text(verbatim: group[0].text).textSelection(.enabled)
+                                switch group[0].role {
+                                case .user: Text("Prompt").font(.caption).bold().foregroundStyle(.secondary)
+                                case .error: Label("The lookup failed", systemImage: "exclamationmark.triangle").font(.caption).bold().foregroundStyle(.red)
+                                default: Text("Model").font(.caption).bold().foregroundStyle(.secondary)
+                                }
+                                LogText(text: group[0].text)
                             }
                             .padding(8)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -336,7 +341,7 @@ struct LookupLogView: View {
             }
             Divider()
             HStack {
-                Text("Last AI lookup of \(name). Kept on this Mac only.").font(.callout).foregroundStyle(.secondary)
+                Text("AI lookup of \(name). Kept on this Mac only.").font(.callout).foregroundStyle(.secondary)
                 Spacer()
                 Button("Done") { dismiss() }.keyboardShortcut(.defaultAction)
             }
@@ -344,6 +349,27 @@ struct LookupLogView: View {
             .background(.bar)
         }
         .frame(width: 640, height: 600)
+    }
+}
+
+/// A text of the log, with its JSON and fenced code set as code blocks.
+private struct LogText: View {
+    var text: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            ForEach(Array(LLM.blocks(of: text).enumerated()), id: \.offset) { _, block in
+                if block.isCode {
+                    Text(verbatim: block.text).font(.callout.monospaced())
+                        .padding(8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 6))
+                } else {
+                    Text(verbatim: block.text)
+                }
+            }
+        }
+        .textSelection(.enabled)
     }
 }
 

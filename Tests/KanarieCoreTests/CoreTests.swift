@@ -172,7 +172,8 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         {"type":"system","subtype":"init","cwd":"/somewhere"}
         not json
         {"type":"assistant","message":{"content":[{"type":"thinking","thinking":""},{"type":"text","text":"Searching."},{"type":"tool_use","id":"a","name":"WebSearch","input":{"query":"tool telemetry"}}]}}
-        {"type":"assistant","message":{"content":[{"type":"tool_use","id":"b","name":"WebFetch","input":{"url":"https://example.com/a"}}]}}
+        {"type":"assistant","message":{"content":[{"type":"tool_use","id":"b","name":"WebFetch","input":{"url":"https://example.com/a"}},{"type":"tool_use","id":"c","name":"WebFetch","input":{}}]}}
+        {"type":"user","message":{"content":[{"type":"text","text":"Not from the model."},{"type":"tool_result","tool_use_id":"c","is_error":true,"content":"HTTP 404"}]}}
         {"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"b","content":[{"type":"text","text":"\#(long)"}]}]}}
         {"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"a","content":"Links: none"}]}}
         {"type":"assistant","message":{"content":[{"type":"text","text":"{}"}]}}
@@ -180,11 +181,39 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         """#
         let log = LLM.transcript(ofStream: Data(stream.utf8))
         #expect(log.result == "{}" && !log.failed)
-        #expect(log.turns.map(\.role) == [.assistant, .tool, .tool, .assistant])
+        #expect(log.turns.map(\.role) == [.assistant, .tool, .tool, .tool, .assistant])
+        #expect(log.turns[3].result == "Failed: HTTP 404")
+        #expect(LLM.grouped([LLM.Turn(role: .user, text: "p")] + log.turns).map(\.count) == [1, 1, 3, 1])
         #expect(log.turns[1] == LLM.Turn(role: .tool, text: #"{"query":"tool telemetry"}"#, tool: "WebSearch", result: "Links: none"))
         #expect(log.turns[2].text == #"{"url":"https://example.com/a"}"# && log.turns[2].result == String(repeating: "x", count: LLM.resultLimit) + "\n… (shortened)")
         let failed = LLM.transcript(ofStream: Data(#"{"type":"result","is_error":true,"result":"Not logged in"}"#.utf8))
         #expect(failed.turns.isEmpty && failed.failed && failed.result == "Not logged in")
+    }
+
+    @Test func setsJSONAndFencedCodeAsCodeBlocks() {
+        let blocks = LLM.blocks(of: "Here you go:\n```json\n{\"b\":[1],\"a\":\"https://example.com/x\"}\n```\nDone. ```ls -l```")
+        #expect(blocks.map(\.isCode) == [false, true, false, true])
+        #expect(blocks.map(\.text) == ["Here you go:", "{\n  \"a\" : \"https://example.com/x\",\n  \"b\" : [\n    1\n  ]\n}", "Done.", "ls -l"])
+        #expect(LLM.blocks(of: #"{"query":"x"}"#).map(\.isCode) == [true])
+        #expect(LLM.blocks(of: "Links: [1]").map(\.isCode) == [false])
+    }
+
+    /// A lookup that fails keeps what it asked and got back, and says why it failed.
+    @Test func failedLookupKeepsItsLog() async throws {
+        let cli = FileManager.default.temporaryDirectory.appendingPathComponent("claude-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: cli) }
+        let script = """
+        #!/bin/sh
+        echo '{"type":"assistant","message":{"content":[{"type":"text","text":"I could not find anything."}]}}'
+        echo '{"type":"result","is_error":false,"result":"I could not find anything."}'
+        """
+        try Data(script.utf8).write(to: cli)
+        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: cli.path)
+        let item = Item(id: "npm:tool", name: "Tool", version: "1.0", path: "/x")
+        let (log, rule) = await LLM.analyse(item, backend: .claudeCLI(path: cli.path, model: ""), env: ["PATH": "/usr/bin:/bin"])
+        #expect(throws: LLM.Failure.self) { try rule.get() }
+        #expect(log.map(\.role) == [.user, .assistant, .error])
+        #expect(log.first?.text == LLM.prompt(for: item) && log.last?.text == "The model did not answer with JSON.")
     }
 
     @Test func rejectsUnusableReplies() {
@@ -769,5 +798,14 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
     @Test func failingProgramIsAnErrorUnlessTheCallerExpectsOutput() throws {
         #expect(throws: Shell.Failure.self) { try Shell.run("/bin/sh", ["-c", "echo out; exit 3"], timeout: 10) }
         #expect(try Shell.run("/bin/sh", ["-c", "echo out; exit 3"], timeout: 10, acceptFailure: true) == Data("out\n".utf8))
+    }
+
+    @Test func timeoutKeepsWhatWasPrinted() {
+        do {
+            _ = try Shell.run("/bin/sh", ["-c", "echo part; exec sleep 30"], timeout: 1)
+            Issue.record("expected a timeout")
+        } catch {
+            #expect((error as? Shell.Failure)?.output == Data("part\n".utf8))
+        }
     }
 }
