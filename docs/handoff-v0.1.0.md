@@ -77,8 +77,8 @@ After any change below `findings/`: run `scripts/sign-findings.sh` and commit `i
 
 ## Known limits, left open on purpose
 
-- The Homebrew cask is not signed, unlike updates and findings: whoever can push to `main` decides what `brew install` and `brew upgrade` run. Only the maintainer has write access, and `main` is not protected because `scripts/release.sh` pushes the release commit to it. Changes below `Casks/` in a pull request from someone else need the same care as code.
-- `brew upgrade --greedy` reinstalls the version the tap names, which can be older than what Sparkle already installed until the tap refreshes. Plain `brew upgrade` skips the app.
+- The Homebrew cask is not signed, unlike updates and findings: whoever can push to `main` decides what Homebrew runs each time it loads the cask, which is at install and at every `brew upgrade` after that, also when there is no new version. Only the maintainer, and so any token of the maintainer's, has write access, and `main` is not protected because `scripts/release.sh` pushes the release commit to it. Changes below `Casks/` in a pull request from someone else need the same care as code.
+- `brew upgrade --greedy` reinstalls the version the tap names, which can be older than what Sparkle already installed until the tap refreshes. Plain `brew upgrade` upgrades it only when the installed app is older than the version the tap names.
 - The submit form keeps the checks of the finding it started from and can add one variable by hand; other checks are written by the maintainer. Its source check reads the page as served, so a name on a page that is built in the browser is reported as not found. It fetches only HTTPS pages from public addresses, so a cited page that is only served over plain HTTP counts as not fetched.
 - A yellow item whose switch cannot be read (a setting inside an app, or a tool's own `telemetry disable` command) stays yellow. There is no "mark as done".
 - Opt-in tools without a readable state (Angular, Aider, Google Cloud CLI) are green with a note that the choice cannot be read.

@@ -20,12 +20,13 @@ cask "kanarie" do
 
   uninstall quit: "io.went.kanarie"
 
-  # The script removes the API key of the AI lookup from the keychain; there is none when it was never set.
+  # The script removes the API key of the AI lookup from the keychain. Exit status 44: there is none.
   zap script: {
         executable: "/bin/sh",
         args:       ["-c",
                      "/usr/bin/security delete-generic-password -s io.went.kanarie -a llm-api-key " \
-                     ">/dev/null 2>&1 || true"],
+                     ">/dev/null 2>&1 || [ $? -eq 44 ] || " \
+                     "echo 'Kanarie: remove the keychain item io.went.kanarie (llm-api-key) by hand' >&2"],
       },
       trash:  [
         "~/Library/Application Support/Kanarie",

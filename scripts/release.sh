@@ -10,7 +10,7 @@ cd "$(dirname "$0")/.."
 
 VERSION="${1:?usage: scripts/release.sh <version>}"
 # Checked first: the version ends up in a file name, a tag, the feed and the cask.
-[[ "$VERSION" =~ ^[0-9]+(\.[0-9]+){1,2}$ ]] || { echo "Not a version like 1.2 or 1.2.3: $VERSION" >&2; exit 1; }
+[[ "$VERSION" =~ ^(0|[1-9][0-9]*)(\.(0|[1-9][0-9]*)){1,2}$ ]] || { echo "Not a version like 1.2 or 1.2.3: $VERSION" >&2; exit 1; }
 REPO="Dunky13/kanarie"
 APP="build/Kanarie.app"
 OUT="build/release"
