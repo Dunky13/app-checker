@@ -37,6 +37,9 @@ struct KanarieApp: App {
 
         Window("Kanarie", id: "main") {
             MainView(model: model)
+                // With the list open the app is an ordinary one, in the app switcher and the Dock. Closed, it is menu bar only again.
+                .onAppear { NSApp.setActivationPolicy(.regular) }
+                .onDisappear { NSApp.setActivationPolicy(.accessory) }
         }
         .defaultSize(width: 980, height: 640)
         // A login item should start silently in the menu bar.
