@@ -90,7 +90,7 @@ def accept(issues):
             file.write_text(text)
         title = "Findings: " + ", ".join(folders)
         run("scripts/sign-findings.sh")
-        run("swift", "test")
+        run("swift", "test", capture_output=True)
         run("git", "add", "findings")
         run("git", "commit", "-q", "-s", "-m", title + "\n\n" + "\n".join(lines))
     except BaseException:
@@ -121,4 +121,5 @@ if __name__ == "__main__":
     except ValueError as error:
         sys.exit(f"{error}.")
     except subprocess.CalledProcessError as error:
-        sys.exit(f"Stopped: {' '.join(error.cmd)} failed.")
+        # What a captured command printed says why, as with a finding the tests reject.
+        sys.exit(f"{(error.stdout or '')[-3000:]}{error.stderr or ''}\nStopped: {' '.join(error.cmd)} failed.")
