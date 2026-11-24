@@ -1,5 +1,5 @@
 #!/bin/bash
-# Publishes a signed, notarized release and updates the Sparkle feed.
+# Publishes a signed, notarized release and updates the Sparkle feed and the Homebrew cask.
 #   scripts/release.sh 0.2.0
 # Needs: a Developer ID Application certificate, the Sparkle EdDSA key in the login keychain
 # (or SPARKLE_KEY_FILE), the gh CLI, and notarization credentials as either
@@ -61,9 +61,14 @@ KEY=()
   --link "https://github.com/$REPO" -o appcast.xml
 grep -F "$ZIP" appcast.xml | grep -q "sparkle:edSignature" || { echo "The appcast entry for $ZIP is not signed." >&2; exit 1; }
 
-# The download must exist before the feed points at it.
+# Homebrew installs the same archive: the cask in this repository names the version and its hash.
+SHA="$(shasum -a 256 "$OUT/$ZIP" | cut -d' ' -f1)"
+perl -pi -e "s/^  version \".*\"/  version \"$VERSION\"/; s/^  sha256 \".*\"/  sha256 \"$SHA\"/" Casks/kanarie.rb
+grep -q "version \"$VERSION\"" Casks/kanarie.rb && grep -q "sha256 \"$SHA\"" Casks/kanarie.rb || { echo "Casks/kanarie.rb was not updated." >&2; exit 1; }
+
+# The download must exist before the feed and the cask point at it.
 gh release create "v$VERSION" "$OUT/$ZIP" --repo "$REPO" --target "$COMMIT" --title "Kanarie $VERSION" --generate-notes
-git add appcast.xml
+git add appcast.xml Casks/kanarie.rb
 git commit -s -m "Release $VERSION"
 git push
 echo "Released $VERSION"
