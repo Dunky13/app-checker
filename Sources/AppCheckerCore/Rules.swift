@@ -41,7 +41,7 @@ public struct Check: Codable, Sendable, Hashable {
             return equals.map { $0 == value } ?? !value.isEmpty
         }
         if let env, let notIn {
-            return probe.env[env].map { !notIn.contains($0.trimmingCharacters(in: .whitespaces).lowercased()) } ?? false
+            return probe.env[env].map { !notIn.contains($0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()) } ?? false
         }
         if let env { return matches(probe.env[env]) }
         if let defaults, let key { return matches(probe.defaults(defaults, key)) }

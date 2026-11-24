@@ -281,6 +281,7 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         #expect(gh.evaluate(probe(env: ["DO_NOT_TRACK": "1", "GH_TELEMETRY": " Enabled"])).status == .warn)
         #expect(gh.evaluate(probe(env: ["DO_NOT_TRACK": "1", "GH_TELEMETRY": "2"])).status == .warn)
         #expect(gh.evaluate(probe(env: ["DO_NOT_TRACK": "1", "GH_TELEMETRY": "log"])).status == .ok)
+        #expect(gh.evaluate(probe(env: ["DO_NOT_TRACK": "1", "GH_TELEMETRY": "0\n"])).status == .ok)
         #expect(gh.evaluate(probe(env: ["GH_TELEMETRY": "off"])).status == .ok)
         // Each Homebrew install has its own rule, so one install's switch cannot turn the other green.
         #expect(all.contains { $0.match == ["brew:homebrew"] } && all.contains { $0.match == ["brew:homebrew-usr-local"] })
