@@ -128,7 +128,7 @@ public struct Rule: Codable, Sendable, Hashable {
             found.append("match needs ids starting with app:, brew:, cask:, bin:, npm: or ext:")
         }
         if !((disabledWhen ?? []) + (enabledWhen ?? [])).allSatisfy(\.isWellFormed) { found.append("malformed check") }
-        // The command is offered for copying, so nothing invisible (control or formatting characters, line breaks) may ride along.
+        // The command is offered for copying and, after a confirmation that shows it, for running, so nothing invisible (control or formatting characters, line breaks) may ride along.
         if optOut?.command.map(Check.hasHiddenCharacters) == true {
             found.append("the command contains hidden characters or line breaks")
         }

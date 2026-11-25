@@ -1138,25 +1138,51 @@ private extension Result {
 }
 
 @Suite struct OptOutActions {
-    @Test func aCommandIsRunAddedOrOnlyCopied() {
+    @Test func aCommandIsRunAddedOrOnlyCopied() throws {
         #expect(ShellProfile.action(for: "brew analytics off") == .run)
         #expect(ShellProfile.action(for: "export HEADROOM_BEACON=off") == .add(name: "HEADROOM_BEACON", value: "off"))
         #expect(ShellProfile.action(for: "echo 'export CHECKPOINT_DISABLE=1' >> ~/.zshrc") == .add(name: "CHECKPOINT_DISABLE", value: "1"))
         #expect(ShellProfile.action(for: "echo \"export X_OFF=true\" >> ~/.bashrc") == .add(name: "X_OFF", value: "true"))
-        // What cannot be written safely is only copied: quoting, substitution, other redirections, and variables that change what runs.
+        // What cannot be written safely is only copied: quoting, substitution, other redirections and files, values that are
+        // more than a switch, variables that change what runs, where traffic goes or what is trusted, and what a confirmation
+        // cannot show plainly (look-alike letters, padding).
         for command in ["export X=\"a b\"", "export X=$(id)", "echo 'export X=1; rm -rf ~' >> ~/.zshrc", "echo hi > ~/.zshrc", "export PATH=.",
-                        "echo 'export DYLD_INSERT_LIBRARIES=x.dylib' >> ~/.zshrc", "export NODE_OPTIONS=x", "echo 'export X=1' >> /etc/profile"] {
+                        "echo 'export DYLD_INSERT_LIBRARIES=x.dylib' >> ~/.zshrc", "export NODE_OPTIONS=x", "echo 'export X=1' >> /etc/profile",
+                        "echo 'export X=1' >> ~/.ssh/authorized_keys", "export HTTPS_PROXY=evil.example", "export PROMPT_COMMAND=logout",
+                        "export IFS=x", "export NODE_TLS_REJECT_UNAUTHORIZED=0", "export GIT_SSL_NO_VERIFY=true", "export X=-e",
+                        "brew analytics \u{43E}ff", "brew analytics off  " + String(repeating: " ", count: 200) + "; rm -rf ~"] {
             #expect(ShellProfile.action(for: command) == .copyOnly, "\(command)")
+        }
+        // Every variable the Kanarie findings set can still be added.
+        let folder = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("../../findings").standardized
+        var commands: [String] = []
+        for case let file as URL in FileManager.default.enumerator(at: folder, includingPropertiesForKeys: nil)! where file.pathExtension == "json" {
+            commands += try String(contentsOf: file, encoding: .utf8).matches(of: /"command": "(echo 'export [^"]*)"/).map { String($0.output.1) }
+        }
+        #expect(commands.count > 10)
+        for command in commands {
+            guard case .add = ShellProfile.action(for: command) else { Issue.record("\(command)"); continue }
         }
     }
 
-    @Test func eachShellGetsItsOwnProfileAndSyntax() {
-        #expect(ShellProfile.addition(name: "X", value: "1", shell: "/bin/zsh")! == (".zshrc", "export X=1"))
-        #expect(ShellProfile.addition(name: "X", value: "1", shell: "/opt/homebrew/bin/bash")! == (".bash_profile", "export X=1"))
-        #expect(ShellProfile.addition(name: "X", value: "1", shell: "/bin/sh")! == (".profile", "export X=1"))
-        #expect(ShellProfile.addition(name: "X", value: "1", shell: "/opt/homebrew/bin/fish")! == (".config/fish/config.fish", "set -gx X 1"))
-        #expect(ShellProfile.addition(name: "X", value: "1", shell: "/opt/homebrew/bin/nu") == nil)
-        #expect(ShellProfile.addition(name: "X", value: "1", shell: "") == nil)
+    @Test func eachShellGetsItsOwnProfileAndSyntax() throws {
+        let home = FileManager.default.temporaryDirectory.appendingPathComponent("home-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: home) }
+        try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
+        let add = { (shell: String, env: [String: String]) in ShellProfile.addition(name: "X", value: "1", shell: shell, home: home, env: env) }
+        #expect(add("/bin/zsh", [:])! == (home.appendingPathComponent(".zshrc"), "export X=1"))
+        #expect(add("/bin/zsh", ["ZDOTDIR": "/elsewhere/zsh"])! == (URL(fileURLWithPath: "/elsewhere/zsh/.zshrc"), "export X=1"))
+        #expect(add("/opt/homebrew/bin/bash", [:])! == (home.appendingPathComponent(".bash_profile"), "export X=1"))
+        // A login bash reads only the first of its profiles that exists, so the line goes there.
+        try Data().write(to: home.appendingPathComponent(".profile"))
+        #expect(add("/opt/homebrew/bin/bash", [:])!.file == home.appendingPathComponent(".profile"))
+        #expect(add("/bin/sh", [:])! == (home.appendingPathComponent(".profile"), "export X=1"))
+        #expect(add("/opt/homebrew/bin/fish", [:])! == (home.appendingPathComponent(".config/fish/config.fish"), "set -gx X 1"))
+        #expect(add("/opt/homebrew/bin/fish", ["XDG_CONFIG_HOME": "/elsewhere"])!.file == URL(fileURLWithPath: "/elsewhere/fish/config.fish"))
+        #expect(add("/opt/homebrew/bin/nu", [:]) == nil)
+        #expect(add("", [:]) == nil)
+        #expect(ShellProfile.display(home.appendingPathComponent(".zshrc"), home: home) == "~/.zshrc")
+        #expect(ShellProfile.display(URL(fileURLWithPath: "/elsewhere/zsh/.zshrc"), home: home) == "/elsewhere/zsh/.zshrc")
     }
 
     @Test func aLineIsAppendedOnce() throws {
@@ -1175,13 +1201,28 @@ private extension Result {
         #expect(try ShellProfile.append("export Y=1", to: linked))
         #expect(try FileManager.default.destinationOfSymbolicLink(atPath: linked.path) == rc.path)
         #expect(try String(contentsOf: rc, encoding: .utf8).hasSuffix("export Y=1\n"))
+        // A link to a missing file is refused, not replaced by a file.
+        let broken = dir.appendingPathComponent(".bash_profile")
+        try FileManager.default.createSymbolicLink(at: broken, withDestinationURL: dir.appendingPathComponent("missing"))
+        #expect(throws: Shell.Failure.self) { try ShellProfile.append("export X=1", to: broken) }
+        #expect(try FileManager.default.destinationOfSymbolicLink(atPath: broken.path).hasSuffix("missing"))
+        // A profile that is not UTF-8 keeps its bytes, and the lines start on a line of their own.
+        let latin = dir.appendingPathComponent(".bashrc")
+        try Data([0x61, 0x3D, 0xE9]).write(to: latin)
+        #expect(try ShellProfile.append("export X=1", to: latin))
+        #expect(try Data(contentsOf: latin) == Data([0x61, 0x3D, 0xE9]) + Data("\n# Added by Kanarie to switch off telemetry\nexport X=1\n".utf8))
     }
 
     @Test func aRunReportsItsOutputOrWhyItFailed() throws {
-        let env = ["PATH": "/usr/bin:/bin"]
-        #expect(try ShellProfile.run("echo done", env: env) == "done")
-        #expect(throws: Shell.Failure.self) { try ShellProfile.run("echo nope >&2; false", env: env) }
-        do { _ = try ShellProfile.run("echo nope >&2; false", env: env) } catch { #expect(error.localizedDescription == "It ended with status 1: nope") }
-        #expect(throws: Shell.Failure.self) { try ShellProfile.run("exit 0", env: env) }
+        let env = ["PATH": "/usr/bin:/bin"], home = FileManager.default.temporaryDirectory
+        #expect(try ShellProfile.run("echo done", env: env, home: home) == "done")
+        // Foundation leaves /private off what the shell reports for the same folder.
+        #expect(try ShellProfile.run("pwd -P", env: env, home: home).hasSuffix(home.resolvingSymlinksInPath().path))
+        do { _ = try ShellProfile.run("echo nope >&2; false", env: env, home: home) } catch { #expect(error.localizedDescription == "It ended with status 1: nope") }
+        #expect(throws: Shell.Failure.self) { try ShellProfile.run("echo nope >&2; false", env: env, home: home) }
+        #expect(throws: Shell.Failure.self) { try ShellProfile.run("exit 0", env: env, home: home) }
+        // A command that is not complete cannot take the report with it: a final backslash continues nothing, an open quote fails and says why.
+        #expect(try ShellProfile.run("printf ok \\", env: env, home: home) == "ok")
+        do { _ = try ShellProfile.run("echo 'open", env: env, home: home) } catch { #expect(error.localizedDescription.contains("unexpected EOF")) }
     }
 }

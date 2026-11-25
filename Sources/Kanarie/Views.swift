@@ -230,7 +230,8 @@ struct MainView: View {
                 }
             // A single selected item stays open when its new verdict moves it out of the filtered list.
             } else if let item = picked.first ?? (selection.count == 1 ? model.items.first { selection.contains($0.id) } : nil), let verdict = model.verdicts[item.id] {
-                DetailView(model: model, item: item, verdict: verdict)
+                // Its own state per item: a copy, a run's outcome or an open confirmation does not carry over to the next item.
+                DetailView(model: model, item: item, verdict: verdict).id(item.id)
             } else {
                 ContentUnavailableView("Select an item", systemImage: "bird", description: Text("\(model.items.count - model.removed.count) apps, packages and extensions checked."))
             }
@@ -335,7 +336,7 @@ struct DetailView: View {
                                     Text(command).font(.body.monospaced()).textSelection(.enabled)
                                     Spacer()
                                     if working { ProgressView().controlSize(.small).accessibilityLabel("Working") }
-                                    switch OptOutStep(command: command) {
+                                    switch OptOutStep(command: command, env: model.env, ai: verdict.source == .ai) {
                                     case let step?:
                                         Button(step.button, systemImage: step.icon) { confirming = step }.disabled(working)
                                     case nil:
@@ -412,7 +413,6 @@ struct DetailView: View {
             .padding()
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .onChange(of: item.id) { (copied, outcome) = (false, nil) }
         .alert(confirming?.title ?? "", isPresented: Binding { confirming != nil } set: { if !$0 { confirming = nil } }, presenting: confirming) { step in
             Button(step.button) {
                 working = true
@@ -423,7 +423,7 @@ struct DetailView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: { step in
-            Text(step.message + (verdict.source == .ai ? "\n\nAn AI lookup suggested this. Check the linked source first." : ""))
+            Text(step.message)
         }
         .sheet(isPresented: $submitting) { SubmitView(model: model, item: item, verdict: verdict) }
         .sheet(item: $log) { LookupLogView(log: $0) }
@@ -597,16 +597,21 @@ extension View {
 
 /// Running an opt-out command, or adding the variable it sets to the shell profile. Always confirmed first.
 struct OptOutStep: Identifiable {
-    enum Kind { case run(String), add(line: String, file: String) }
+    enum Kind { case run(String), add(line: String, file: URL) }
     var kind: Kind
+    /// Fixed when the button is pressed, so a verdict changing behind the alert cannot change what it says.
+    var ai: Bool
     var id: String { title + message }
+    private var home: URL { FileManager.default.homeDirectoryForCurrentUser }
 
     /// nil when only copying is offered: a shell this does not know, or a command that cannot be done safely.
-    init?(command: String) {
+    init?(command: String, env: [String: String], ai: Bool) {
+        self.ai = ai
         switch ShellProfile.action(for: command) {
         case .run: kind = .run(command)
         case let .add(name, value):
-            guard let addition = ShellProfile.addition(name: name, value: value, shell: ShellProfile.loginShell) else { return nil }
+            let home = FileManager.default.homeDirectoryForCurrentUser
+            guard let addition = ShellProfile.addition(name: name, value: value, shell: ShellProfile.loginShell, home: home, env: env) else { return nil }
             kind = .add(line: addition.line, file: addition.file)
         case .copyOnly: return nil
         }
@@ -615,7 +620,7 @@ struct OptOutStep: Identifiable {
     var button: String {
         switch kind {
         case .run: "Run"
-        case .add(_, let file): "Add to ~/\(file)"
+        case .add(_, let file): "Add to \(ShellProfile.display(file, home: home))"
         }
     }
 
@@ -629,15 +634,16 @@ struct OptOutStep: Identifiable {
     var title: String {
         switch kind {
         case .run: "Run this command?"
-        case .add(_, let file): "Add this line to ~/\(file)?"
+        case .add(_, let file): "Add these lines to \(ShellProfile.display(file, home: home))?"
         }
     }
 
     var message: String {
-        switch kind {
-        case .run(let command): "\(command)\n\nIt runs once with your shell's settings, as if you typed it in Terminal."
-        case .add(let line, _): "\(line)\n\nNew terminal windows will have it set. Apps opened from the Dock or Finder do not read this file."
+        let text = switch kind {
+        case .run(let command): "\(command)\n\nIt runs once in sh, from your home folder, with your login shell's variables."
+        case .add(let line, _): "\(ShellProfile.block(line))\n\nNew terminal windows will have it set. Apps opened from the Dock or Finder do not read this file."
         }
+        return text + (ai ? "\n\nAn AI lookup suggested this. Check the linked source first." : "")
     }
 
     @MainActor func perform(_ model: AppModel) async throws -> String {
