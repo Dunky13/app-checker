@@ -272,6 +272,7 @@ struct MainView: View {
                         .disabled(lookupCandidates.isEmpty || model.batch != nil)
                     // Always open: the sheet says which items go and why the others do not.
                     Button("Submit Findings…", systemImage: "square.and.pencil") { Task { await model.checkOpenFindings(); submitting = picked } }
+                        .disabled(model.readingOpenFindings)
                         .help("Sends their AI lookups, as they are, in one GitHub issue")
                 }
             // A single selected item stays open when its new verdict moves it out of the filtered list.
@@ -457,7 +458,7 @@ struct DetailView: View {
                     if !model.removed.contains(item.id) {
                         Button("Show in Finder", systemImage: "folder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: item.path)]) }
                     }
-                    if let number = model.openFindings[item.id] {
+                    if let number = model.openFinding(for: item) {
                         // Someone proposed a finding already: add to that one instead of opening another.
                         Button("Open Finding #\(number)", systemImage: "arrow.up.right.square") { NSWorkspace.shared.open(Submission.issue(number)) }
                             .help("A finding for this item is waiting for review on GitHub")
@@ -609,7 +610,7 @@ struct SettingsView: View {
                     }
                 Toggle("Download new findings daily", isOn: $refreshRules)
             } footer: {
-                Text("Findings are fetched from GitHub. Nothing about your Mac is sent.").frame(maxWidth: .infinity, alignment: .leading)
+                Text("Findings, and the list of findings waiting for review, are fetched from GitHub. Nothing about your Mac is sent.").frame(maxWidth: .infinity, alignment: .leading)
             }
             Section {
                 Picker("Backend", selection: $backend) {

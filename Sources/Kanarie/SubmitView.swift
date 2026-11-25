@@ -89,7 +89,7 @@ struct SubmitView: View {
         .sheetFooter {
             VStack(alignment: .leading) {
                 // Below the form, where it stays in view whatever the form is scrolled to.
-                if let number = model.openFindings[item.id] {
+                if let number = model.openFinding(for: item) {
                     Label("Finding #\(number) for this item is waiting for review. Add to it on GitHub instead of opening another.", systemImage: "arrow.up.right.square")
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -181,7 +181,7 @@ struct SubmitView: View {
 func bulkFinding(for item: Item, model: AppModel) -> (rule: Rule?, why: String) {
     guard let verdict = model.verdicts[item.id] else { return (nil, "Not checked yet.") }
     // The detail pane links to it too, so whatever the source, the answer is the same.
-    if let number = model.openFindings[item.id] { return (nil, "Finding #\(number) for it is waiting for review. Add to that one on GitHub.") }
+    if let number = model.openFinding(for: item) { return (nil, "Finding #\(number) for it is waiting for review. Add to that one on GitHub.") }
     switch verdict.source {
     case .rules: return (nil, "The Kanarie findings cover it. To change that, use Suggest a Correction…")
     case .sdk, .none: return (nil, "No finding to send. Look it up with AI first, or write one with Submit a Finding…")

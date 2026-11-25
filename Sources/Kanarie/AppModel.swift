@@ -37,6 +37,8 @@ final class AppModel {
     /// Items with a finding issue open on GitHub, and its number, so the app links to it instead of starting another.
     private(set) var openFindings: [String: Int] = [:]
     private var openFindingsChecked: Date?
+    private var openFindingsRead: Task<Void, Never>?
+    private(set) var readingOpenFindings = false
     private(set) var scanning = false
     private(set) var batch: Task<Void, Never>?
     /// True when the login shell could not be asked for its variables, so variable-based settings may wrongly read as "on".
@@ -313,16 +315,32 @@ final class AppModel {
     }
 
     /// Reads which items have a finding waiting for review, at most every ten minutes. The list is the same for
-    /// everyone, so the request says nothing about this Mac. Off with the findings download.
+    /// everyone, so the request says nothing about this Mac. Off with the findings download. Every caller waits for
+    /// the read under way, so a sheet opened during one sees its result.
     func checkOpenFindings() async {
-        guard UserDefaults.standard.bool(forKey: "refreshRules"), openFindingsChecked.map({ -$0.timeIntervalSinceNow > 600 }) ?? true else { return }
-        openFindingsChecked = .now
-        do {
-            // shortcut: only the 100 newest open issues are read; follow GitHub's Link header if more are ever open.
-            openFindings = try Submission.openFindings(try await URLSession(configuration: .ephemeral).data(from: Submission.openIssues, limit: 5_000_000))
-        } catch {
-            NSLog("Kanarie: open findings not read: \(error.localizedDescription)")
+        guard UserDefaults.standard.bool(forKey: "refreshRules") else { openFindings = [:]; return }
+        if openFindingsChecked.map({ -$0.timeIntervalSinceNow > 600 }) ?? true {
+            openFindingsChecked = .now
+            readingOpenFindings = true
+            openFindingsRead = Task {
+                do {
+                    // shortcut: only the 100 newest open issues are read; follow GitHub's Link header if more are ever open.
+                    openFindings = try Submission.openFindings(try await URLSession(configuration: .ephemeral).data(from: Submission.openIssues, limit: 5_000_000))
+                } catch {
+                    NSLog("Kanarie: open findings not read: \(error.localizedDescription)")
+                    // Again in a minute, not ten: the network may just not be up yet.
+                    openFindingsChecked = .now - 540
+                }
+                readingOpenFindings = false
+            }
         }
+        await openFindingsRead?.value
+    }
+
+    /// The finding waiting for review for an item: by its own id, or by any id its finding covers, so a correction
+    /// sent from the cask also shows on the app.
+    func openFinding(for item: Item) -> Int? {
+        Submission.openFinding([item.id] + (verdicts[item.id]?.rule?.match ?? []), in: openFindings)
     }
 
     // MARK: AI lookup

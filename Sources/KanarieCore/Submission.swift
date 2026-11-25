@@ -324,6 +324,11 @@ public enum Submission {
         return found
     }
 
+    /// The oldest open finding for any of these ids. An id is looked up as the app writes it into an issue, cut and cleaned.
+    public static func openFinding(_ ids: [String], in found: [String: Int]) -> Int? {
+        ids.compactMap { found[plain($0)] }.min()
+    }
+
     /// The page of an issue in this repository.
     public static func issue(_ number: Int) -> URL { URL(string: "https://github.com/Dunky13/kanarie/issues/\(number)")! }
 
