@@ -15,7 +15,7 @@ cd findings
 ENTRIES=""
 for FILE in */*.json; do
   # The same plain names the app accepts, so nothing here needs escaping.
-  [[ "$FILE" =~ ^[a-z0-9-]+/[A-Za-z0-9_-][A-Za-z0-9._-]*\.json$ && "${FILE#*/}" =~ [0-9] ]] ||
+  [[ "$FILE" =~ ^[a-z0-9][a-z0-9-]*/[A-Za-z0-9_-][A-Za-z0-9._-]*\.json$ && "${FILE#*/}" =~ [0-9] ]] ||
     { echo "Unexpected file name: findings/$FILE (expected <app>/<first version>.json)" >&2; exit 1; }
   ENTRIES+="${ENTRIES:+,
 }    \"$FILE\": \"$(shasum -a 256 "$FILE" | cut -d' ' -f1)\""
