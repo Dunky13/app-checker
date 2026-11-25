@@ -135,7 +135,7 @@ public struct Rule: Codable, Sendable, Hashable {
         // Yellow promises a way out, so an opt-out verdict without one is not usable.
         if [.optOut, .optIn].contains(telemetry), (optOut?.instructions ?? "").isEmpty { found.append("the steps to switch it off are missing") }
         guard curated else { return found }
-        if telemetry == .unknown { found.append("unknown telemetry does not belong in the curated rules") }
+        if telemetry == .unknown { found.append(Self.unknownProblem) }
         if summary.isEmpty { found.append("the summary of what is collected is missing") }
         if (sources ?? []).isEmpty { found.append("Sources has no link") }
         if [.optOut, .optIn].contains(telemetry), (optOut?.url ?? "").isEmpty { found.append("Documentation has no link") }
@@ -151,42 +151,67 @@ public struct Rule: Codable, Sendable, Hashable {
         let links = [("Privacy policy", policyURL), ("Documentation", optOut?.url)].compactMap { field, link in link.map { (field, $0) } }
             + (sources ?? []).map { ("Sources", $0) }
         // An empty link is reported as missing above, not again here.
-        for (field, link) in links where !link.isEmpty {
-            let host = link.dropFirst("https://".count).prefix { !"/?#".contains($0) }
-            if safeURL(link) == nil || !link.hasPrefix("https://") || !link.allSatisfy(\.isASCII) || host.isEmpty
-                || !host.allSatisfy({ $0.isLetter || $0.isNumber || ".-:".contains($0) }) {
-                found.append("not a plain https link in \(field): \(link.prefix(200))")
-            }
+        for (field, link) in links where !link.isEmpty && !Self.isPlainLink(link) {
+            found.append("not a plain https link in \(field): \(link.prefix(200))")
         }
         return found
     }
 
-    /// Maps the rule plus this Mac's current settings to a status and a one-line explanation.
-    public func evaluate(_ probe: Probe) -> (status: Status, state: String) {
+    /// Maps the rule plus this Mac's current settings to a status and a one-line explanation, and whether a setting
+    /// read on this Mac decided it: not when the finding has nothing to read, when macOS refused the read, or when an
+    /// opt-out finding read only an unset "on" switch.
+    public func evaluate(_ probe: Probe) -> (status: Status, state: String, read: Bool) {
         switch telemetry {
-        case .none: return (.ok, "No telemetry.")
-        case .forced: return (.bad, "Telemetry is on and cannot be switched off.")
-        case .unknown: return (.unknown, "Telemetry behaviour could not be determined.")
+        case .none: return (.ok, "No telemetry.", false)
+        case .forced: return (.bad, "Telemetry is on and cannot be switched off.", false)
+        case .unknown: return (.unknown, "Telemetry behaviour could not be determined.", false)
         case .optOut:
             // An explicit "on" switch beats every "off" switch, as with gh: GH_TELEMETRY=enabled overrides DO_NOT_TRACK.
             let forced = (enabledWhen ?? []).map { $0.result(probe) }
-            if forced.contains(true) { return (.warn, "A setting on this Mac switches telemetry on. You can switch it off.") }
+            if forced.contains(true) { return (.warn, "A setting on this Mac switches telemetry on. You can switch it off.", true) }
             // An "on" switch that could not be read may still be set, so it must not end in green.
-            if forced.contains(nil) { return (.warn, "Telemetry is on by default. \(Self.blockedNote)") }
+            if forced.contains(nil) { return (.warn, "Telemetry is on by default. \(Self.blockedNote)", false) }
             let results = (disabledWhen ?? []).map { $0.result(probe) }
-            if results.contains(true) { return (.ok, "Telemetry is switched off on this Mac.") }
-            if results.contains(nil) { return (.warn, "Telemetry is on by default. \(Self.blockedNote)") }
-            return (.warn, results.isEmpty
-                ? "Telemetry is on by default. The current setting cannot be read from this Mac."
-                : "No opt-out setting was found on this Mac, so telemetry is on by default. You can switch it off.")
+            if results.contains(true) { return (.ok, "Telemetry is switched off on this Mac.", true) }
+            if results.contains(nil) { return (.warn, "Telemetry is on by default. \(Self.blockedNote)", false) }
+            // Only an "on" switch that is not set: the state is the default, not a reading of the "off" switch.
+            return results.isEmpty
+                ? (.warn, "Telemetry is on by default. The current setting cannot be read from this Mac.", false)
+                : (.warn, "No opt-out setting was found on this Mac, so telemetry is on by default. You can switch it off.", true)
         case .optIn:
             let results = (enabledWhen ?? []).map { $0.result(probe) }
-            if results.contains(true) { return (.warn, "Telemetry has been switched on. You can switch it off.") }
-            if results.contains(nil) { return (.ok, "Telemetry stays off unless you enable it. \(Self.blockedNote)") }
-            return (.ok, results.isEmpty
-                ? "Telemetry is off unless you agreed to it. Kanarie cannot read that choice on this Mac."
-                : "Telemetry stays off unless you enable it.")
+            if results.contains(true) { return (.warn, "Telemetry has been switched on. You can switch it off.", true) }
+            if results.contains(nil) { return (.ok, "Telemetry stays off unless you enable it. \(Self.blockedNote)", false) }
+            return results.isEmpty
+                ? (.ok, "Telemetry is off unless you agreed to it. Kanarie cannot read that choice on this Mac.", false)
+                : (.ok, "Telemetry stays off unless you enable it.", true)
         }
+    }
+
+    static let unknownProblem = "unknown telemetry does not belong in the curated rules"
+
+    static func isPlainLink(_ link: String) -> Bool {
+        let host = link.dropFirst("https://".count).prefix { !"/?#".contains($0) }
+        return safeURL(link) != nil && link.hasPrefix("https://") && link.allSatisfy(\.isASCII) && !host.isEmpty
+            && host.allSatisfy({ $0.isLetter || $0.isNumber || ".-:".contains($0) })
+    }
+
+    /// The link with its scheme written as plain https, when that alone makes it plain: "http://" and "HTTPS://" are the
+    /// common slips. The host is never changed, since its rule keeps look-alike links out, and a link with a port is
+    /// left alone: http on port 80 is not https on port 80.
+    public static func plainLink(_ link: String) -> String? {
+        guard let colon = link.firstIndex(of: ":"), ["http", "https"].contains(link[..<colon].lowercased()) else { return nil }
+        let fixed = "https" + link[colon...]
+        return fixed != link && isPlainLink(fixed) && URL(string: fixed)?.port == nil ? fixed : nil
+    }
+
+    /// This rule with every link that `plainLink` can fix fixed, and nothing else changed.
+    public func withPlainLinks() -> Rule {
+        let fix = { (link: String) in Self.plainLink(link.trimmingCharacters(in: .whitespaces)) ?? link }
+        var rule = self
+        (rule.policyURL, rule.sources) = (policyURL.map(fix), sources?.map(fix))
+        rule.optOut?.url = optOut?.url.map(fix)
+        return rule
     }
 
     static let blockedNote = "macOS did not let Kanarie read this app's setting. To allow it, open System Settings > Privacy & Security > Files & Folders, then rescan."
@@ -284,9 +309,13 @@ public struct Verdict: Sendable, Equatable {
     public var rule: Rule?
     public var source: Source
 
+    /// Whether the state was read from this Mac: a setting that decided it, or a search of its files.
+    /// Not when macOS refused the read, nor when an opt-out finding read only an unset "on" switch: then the state is the finding's default.
+    public var readsThisMac: Bool
+
     /// Curated rules win over AI lookups. Without either the item is unknown; SDK scan hits only add a hint.
     public init(item: Item, rules: [Rule], aiRules: [String: Rule], sdks: [String], probe: Probe) {
-        func judge(_ rule: Rule) -> (Status, String) {
+        func judge(_ rule: Rule) -> (status: Status, state: String, read: Bool) {
             guard !item.editors.isEmpty else { return rule.evaluate(probe) }
             // Green only when every editor that has the extension is off: show the first one that is not.
             let results = item.editors.map { (editor: $0, result: rule.evaluate(probe.forEditor($0))) }
@@ -294,23 +323,25 @@ public struct Verdict: Sendable, Equatable {
             let shown = results.first { $0.result.status != .ok } ?? results.first { $0.result.state.contains(Rule.blockedNote) } ?? results[0]
             let editor = shown.editor == "Code" ? "VS Code" : shown.editor
             let notable = shown.result.status != .ok || shown.result.state.contains(Rule.blockedNote)
-            return (shown.result.status, results.count > 1 && notable ? "In \(editor): \(shown.result.state)" : shown.result.state)
+            return (shown.result.status, results.count > 1 && notable ? "In \(editor): \(shown.result.state)" : shown.result.state, shown.result.read)
         }
         // shortcut: an extension with a different version per editor is judged by the first editor's version; pick per editor if an extension ever gets version files.
         let found = Rule.pick(rules.filter({ $0.match.contains(item.id) }), version: item.version).map { (rule: $0, result: judge($0)) }
         let severity = { (status: Status) in [Status.ok, .unknown, .warn, .bad].firstIndex(of: status) ?? 0 }
         // Several findings may hold: show the worst, and the newest of equally bad ones.
-        if let worst = found.map({ severity($0.result.0) }).max(), let shown = found.last(where: { severity($0.result.0) == worst }) {
-            (status, state) = shown.result
+        if let worst = found.map({ severity($0.result.status) }).max(), let shown = found.last(where: { severity($0.result.status) == worst }) {
+            (status, state, readsThisMac) = shown.result
             if found.count > 1 { state += " " + Rule.unsureNote }
             (rule, source) = (shown.rule, .rules)
         } else if let rule = aiRules[item.id] {
-            (status, state) = judge(rule)
+            (status, state, readsThisMac) = judge(rule)
             (self.rule, source) = (rule, .ai)
         } else if !sdks.isEmpty {
             // A string match is a lead, not evidence: bundled dependencies and domain lists contain these names too. So it stays grey.
-            (status, state, rule, source) = (.unknown, "Not in the Kanarie findings. Its files mention \(sdks.joined(separator: ", ")). That is a hint worth looking up, not proof of telemetry.", nil, .sdk)
+            readsThisMac = true
+            (status, state, rule, source) = (.unknown, "Not in the Kanarie findings. A search of its files found \(sdks.joined(separator: ", ")). That is a hint worth looking up, not proof of telemetry.", nil, .sdk)
         } else {
+            readsThisMac = false
             (status, state, rule, source) = (.unknown, "Nothing is known about this item yet.", nil, .none)
         }
     }

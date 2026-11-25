@@ -57,6 +57,9 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         #expect(optOut.status == .warn && optOut.state.contains("did not let Kanarie read"))
         let optIn = rule(.optIn, enabledWhen: [check]).evaluate(probe(blocked: ["protected.json"]))
         #expect(optIn.status == .ok && optIn.state.contains("did not let Kanarie read"))
+        // A refused read is not a reading, whichever switch it was.
+        let forcedBlocked = rule(.optOut, enabledWhen: [check]).evaluate(probe(blocked: ["protected.json"]))
+        #expect(!optOut.read && !optIn.read && !forcedBlocked.read && forcedBlocked.status == .warn)
     }
 
     @Test func wellFormedness() {
@@ -111,6 +114,24 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         #expect(Verdict(item: item, rules: [], aiRules: [:], sdks: [], probe: probe()).status == .unknown)
     }
 
+    @Test func saysWhetherTheStateWasReadFromThisMac() {
+        let item = Item(id: "brew:x", name: "x", version: "1", path: "/x")
+        let read = { (rules: [Rule], sdks: [String]) in Verdict(item: item, rules: rules, aiRules: [:], sdks: sdks, probe: probe()).readsThisMac }
+        #expect(read([rule(.optOut, disabledWhen: [Check(env: "OFF")])], []))
+        #expect(read([], ["Sentry"]))
+        #expect(read([rule(.optIn, enabledWhen: [Check(env: "ON")])], []))
+        // An opt-out finding with only an "on" switch that is not set falls back to its default: nothing decided it.
+        #expect(!read([rule(.optOut, enabledWhen: [Check(env: "ON")])], []))
+        #expect(Verdict(item: item, rules: [rule(.optOut, enabledWhen: [Check(env: "ON")])], aiRules: [:], sdks: [], probe: probe(env: ["ON": "1"])).readsThisMac)
+        #expect(!read([rule(.optOut)], []) && !read([rule(.forced)], ["Sentry"]) && !read([], []))
+        // An opt-in finding reads only what switches it on, and a read macOS refused is not a reading.
+        #expect(!read([rule(.optIn, disabledWhen: [Check(env: "OFF")])], []))
+        let blocked = Verdict(item: item, rules: [rule(.optOut, disabledWhen: [Check(json: "p.json", key: "a", equals: "1")])], aiRules: [:], sdks: [], probe: probe(blocked: ["p.json"]))
+        #expect(!blocked.readsThisMac)
+        let ai = Verdict(item: item, rules: [], aiRules: ["brew:x": rule(.optOut, disabledWhen: [Check(env: "OFF")])], sdks: [], probe: probe())
+        #expect(ai.readsThisMac && ai.source == .ai)
+    }
+
     @Test func anExtensionIsGreenOnlyWhenEveryEditorThatHasItIsOff() {
         let check = Check(json: "~/Library/Application Support/Code/User/settings.json", key: "telemetry.telemetryLevel", equals: "off")
         let rules = [rule(.optOut, disabledWhen: [check])]
@@ -139,6 +160,8 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         #expect(onInCursor.status == .warn && onInCursor.state.hasPrefix("In Cursor: "))
         let blockedInCursor = Verdict(item: item, rules: optIn, aiRules: [:], sdks: [], probe: probe(blocked: [cursorFile]))
         #expect(blockedInCursor.status == .ok && blockedInCursor.state.hasPrefix("In Cursor: ") && blockedInCursor.state.contains("did not let Kanarie read"))
+        // The read flag is the shown editor's: Cursor was refused, so nothing was read there.
+        #expect(onInCursor.readsThisMac && !blockedInCursor.readsThisMac)
     }
 
     @Test func onlyHTTPLinksAreSafe() {
@@ -354,6 +377,36 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         // Yellow means "there is a way out", so an AI answer that names none is refused.
         #expect(rule(.optOut).problems(curated: false) == ["the steps to switch it off are missing"])
         #expect(rule(.optIn).problems(curated: false) == ["the steps to switch it off are missing"])
+    }
+
+    @Test func switchesOnlyTheSchemeOfALinkToHTTPS() {
+        #expect(Rule.plainLink("http://mqtt-explorer.com/") == "https://mqtt-explorer.com/")
+        #expect(Rule.plainLink("HTTPS://example.com/a?b#c") == "https://example.com/a?b#c")
+        #expect(Rule.plainLink("https://example.com/") == nil)   // nothing to fix
+        #expect(Rule.plainLink("ftp://example.com/") == nil && Rule.plainLink("example.com") == nil)
+        #expect(Rule.plainLink("http://exämple.com/") == nil && Rule.plainLink("http://user@example.com/") == nil)
+        #expect(Rule.plainLink("http://example.com:80/") == nil)
+        for link in ["http://a.example/x", "Http://b.example"] { #expect(Rule.plainLink(link).map(Rule.isPlainLink) == true) }
+    }
+
+    @Test func aLookupWithHTTPLinksIsReadyOnceTheyAreFixed() {
+        let item = Item(id: "app:x", name: "x", version: "1", path: "/x")
+        var found = Rule(match: ["app:x"], telemetry: .forced, summary: "s")
+        (found.name, found.policyURL, found.sources) = ("x", "http://example.com/privacy", ["https://example.com/a", "http://example.com/"])
+        let fixed = found.withPlainLinks()
+        #expect(!Submission.Draft(from: found, item: item).problems(for: item).isEmpty)
+        #expect(Submission.Draft(from: fixed, item: item).problems(for: item).isEmpty)
+        #expect(fixed.sources == ["https://example.com/a", "https://example.com/"] && fixed.policyURL == "https://example.com/privacy")
+        var rest = fixed
+        (rest.policyURL, rest.sources) = (found.policyURL, found.sources)
+        #expect(rest == found)   // nothing but the links changed
+        #expect(Submission.unedited(fixed, item: item) == fixed)
+        found.sources = [" http://example.com/c "]
+        #expect(found.withPlainLinks().sources == ["https://example.com/c"])
+        // The form fixes each line in place and leaves a link it cannot fix as typed.
+        var draft = Submission.Draft(from: found, item: item)
+        draft.sources = "http://a.example/\nftp://b.example/\n"
+        #expect(draft.withPlainLinks.sources == "https://a.example/\nftp://b.example/\n" && draft.withPlainLinks.summary == draft.summary)
     }
 
     @Test func namesTheFieldOfALinkThatIsNotPlainHTTPS() {
@@ -1038,6 +1091,45 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
             (other.name, other.sources) = ("Example CLI", ["https://example.com/docs"])
             #expect(Submission.Draft(from: other, item: item).rule(for: item) == other)
         }
+    }
+
+    /// Items with a finding issue open: by the app's titles and Item lines, the oldest issue per item, pull requests skipped.
+    @Test func openFindingsAreReadFromTheIssueList() throws {
+        let list = #"""
+        [{"number": 34, "title": "Findings: cloudflared, agy", "body": "### Finding 1\n**Item:** `brew:cloudflared` (`cloudflared`, version `1`)\n### Finding 2\n**Item:** `bin:agy` (`agy`, version unknown)"},
+         {"number": 29, "title": "Finding: MQTT Explorer", "body": "**Item:** `app:de.t7n.apps.mqtt-explorer` (`MQTT Explorer`, version `0.3.5`)"},
+         {"number": 40, "title": "Finding: cloudflared again", "body": "**Item:** `brew:cloudflared` (`cloudflared`, version `2`)"},
+         {"number": 38, "title": "Finding: a pull request", "body": "**Item:** `brew:pr`", "pull_request": {"url": "x"}},
+         {"number": 39, "title": "Linux support", "body": "**Item:** `brew:other`"},
+         {"number": 41, "title": "Finding: quoted", "body": "> **Item:** `brew:quoted`", "user": {"login": "x"}},
+         {"number": 42, "title": "Finding: two items", "body": "**Item:** `brew:a`\n**Item:** `brew:b`"},
+         {"number": 43, "title": "Findings: too many", "body": "\#((1...11).map { "**Item:** `brew:n\($0)`" }.joined(separator: "\\n"))"},
+         {"number": 44, "title": "Findings: as many as fit", "body": "\#((1...10).map { "**Item:** `brew:t\($0)`" }.joined(separator: "\\n"))"}]
+        """#
+        let ten = Dictionary(uniqueKeysWithValues: (1...10).map { ("brew:t\($0)", 44) })
+        #expect(try Submission.openFindings(Data(list.utf8)) == ten.merging(["brew:cloudflared": 34, "bin:agy": 34, "app:de.t7n.apps.mqtt-explorer": 29]) { $1 })
+        #expect(Submission.issue(29).absoluteString == "https://github.com/Dunky13/kanarie/issues/29")
+        // Looked up as written into the issue, and by any of the ids a finding matches.
+        let long = "npm:" + String(repeating: "a", count: 150)
+        let written = Data(#"[{"number": 7, "title": "Finding: x", "body": "**Item:** `\#(Submission.plain(long))`"}]"#.utf8)
+        #expect(Submission.openFinding([long], in: try Submission.openFindings(written)) == 7)
+        #expect(Submission.openFinding(["cask:x", "brew:cloudflared", "app:de.t7n.apps.mqtt-explorer"], in: try Submission.openFindings(Data(list.utf8))) == 29)
+        #expect(Submission.openFinding(["cask:x"], in: try Submission.openFindings(Data(list.utf8))) == nil)
+    }
+
+    /// A lookup that could not tell stays so in the form: saved by hand it is still a lookup, sent it is refused until a class is chosen.
+    @Test func aLookupThatCouldNotTellStaysSo() {
+        var found = Rule(match: ["brew:x"], telemetry: .unknown, summary: "Nothing found about telemetry.")
+        found.name = "Example CLI"
+        var draft = Submission.Draft(from: found, item: item)
+        #expect(draft.telemetry == .unknown)
+        draft.summary = "The docs say nothing about telemetry."
+        #expect(draft.rule(for: item).telemetry == .unknown)
+        #expect(draft.rule(for: item).problems(curated: false).isEmpty)
+        #expect(draft.problems(for: item).first == "choose what Telemetry is: a finding cannot say Could not tell")
+        // Steps the lookup gave stay, though the form does not show them for this class.
+        found.optOut = OptOut(instructions: "Set the variable.", command: "echo 'export EXAMPLE_TELEMETRY=0' >> ~/.zshrc", url: nil)
+        #expect(Submission.Draft(from: found, item: item).rule(for: item).optOut == found.optOut)
     }
 
     @Test func theIssueCarriesTheFindingAndSurvivesTheLink() throws {
