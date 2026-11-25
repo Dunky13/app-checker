@@ -70,7 +70,7 @@ brew tap dunky13/kanarie https://github.com/Dunky13/kanarie
 brew install --cask dunky13/kanarie/kanarie
 ```
 
-Or download the latest `Kanarie-<version>-universal.zip` from [Releases](https://github.com/Dunky13/kanarie/releases), unzip it and move Kanarie to Applications.
+Or download the latest `Kanarie-<version>-universal.dmg` from [Releases](https://github.com/Dunky13/kanarie/releases), open it and drag Kanarie onto Applications.
 
 Either way it needs macOS 15 or later and updates itself through [Sparkle](https://sparkle-project.org). The cask lives in this repository ([Casks/kanarie.rb](Casks/kanarie.rb)), which is why the tap needs the address. Use the full name as shown for the first install: Homebrew refuses a short name from a tap it has not been told to trust.
 
