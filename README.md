@@ -48,7 +48,7 @@ The exact rules, and the crossed-out circle for apps you removed, are under [Wha
 An item with a finding shows what it collects, whether that is switched off on this Mac, and how to switch it off, with sources. Arie never flips a switch himself. When the switch is a command, you get one button, whichever fits:
 
 - **Run** runs the command once.
-- **Add to ~/.zshrc** puts the variable in the profile your login shell reads.
+- **Add to** your shell profile (`~/.zshrc` for zsh) puts the variable in the profile your login shell reads.
 - **Copy** is for anything else: you paste it wherever you like.
 
 > [!NOTE]
@@ -86,7 +86,7 @@ A verdict comes from, in this order:
 2. **An AI lookup**, only when you ask for one. The result is marked as unverified and lists its sources.
 3. **An offline hint.** For other apps, Homebrew items and commands, the app searches the program file for the names of well-known analytics services. A match stays grey: it is a lead worth looking up, not proof. npm packages and extensions are not searched.
 
-Kanarie changes nothing on its own. When the switch is a command, you can have it run once (**Run**), or, when the command only sets a variable, have the variable added to the profile your login shell reads (**Add to ~/.zshrc**: `.zshrc` for zsh, also below `ZDOTDIR`; for bash the first of `~/.bash_profile`, `~/.bash_login` and `~/.profile` that exists; `~/.profile` for sh; `config.fish` for fish, also below `XDG_CONFIG_HOME`; each in its own syntax). Both ask first and show the exact command or lines. **Copy** is offered instead for another shell, a command that is not plain short ASCII, and a variable that cannot be added safely: quoting, other redirections or files, a value other than a switch (`0`, `1`, `true`, `false`, `yes`, `no`, `on`, `off`, `disabled`), or a variable that changes what runs, where traffic goes or what is trusted (`PATH`, `DYLD_*`, `*_PROXY`, `*TLS*`, `*VERIFY*` and the like). A yellow item stays yellow until the app can see the switch: variables are read from your login shell, so a variable must be in your shell profile, and some switches (a setting inside an app, or a tool's own `telemetry disable` command) cannot be read at all. The item says which case applies.
+Kanarie changes nothing on its own. When the switch is a command, you can have it run once (**Run**), or, when the command only sets a variable, have the variable added to the profile your login shell reads (**Add to** followed by the file: `.zshrc` for zsh, also below `ZDOTDIR`; for bash the first of `~/.bash_profile`, `~/.bash_login` and `~/.profile` that exists; `~/.profile` for sh; `config.fish` for fish, also below `XDG_CONFIG_HOME`; each in its own syntax). Both ask first and show the exact command or lines. **Copy** is offered instead for another shell, a command that is not plain short ASCII, and a variable that cannot be added safely: quoting, other redirections or files, a value other than a switch (`0`, `1`, `true`, `false`, `yes`, `no`, `on`, `off`, `disabled`), or a variable that changes what runs, where traffic goes or what is trusted (`PATH`, `DYLD_*`, `*_PROXY`, `*TLS*`, `*VERIFY*` and the like). A yellow item stays yellow until the app can see the switch: variables are read from your login shell, so a variable must be in your shell profile, and some switches (a setting inside an app, or a tool's own `telemetry disable` command) cannot be read at all. The item says which case applies.
 
 ## Install
 
@@ -99,9 +99,9 @@ brew install --cask dunky13/kanarie/kanarie
 
 Or download the latest `Kanarie-<version>-universal.dmg` from [Releases](https://github.com/Dunky13/kanarie/releases), open it and drag Kanarie onto Applications.
 
-Then look for the bird in your menu bar. While its list window is open it is also in the Dock and the app switcher (Command-Tab). If you use a menu bar manager, or your Mac has a notch and a full menu bar, the icon may be hidden: opening the app again from Finder shows the list.
+Open Kanarie from Applications, then look for the bird in your menu bar. While its list window is open it is also in the Dock and the app switcher (Command-Tab). If you use a menu bar manager, or your Mac has a notch and a full menu bar, the icon may be hidden: opening the app again from Finder shows the list.
 
-Either way it updates itself through [Sparkle](https://sparkle-project.org). The cask lives in this repository ([Casks/kanarie.rb](Casks/kanarie.rb)), which is why the tap needs the address. Use the full name as shown for the first install: Homebrew refuses a short name from a tap it has not been told to trust.
+Both installs update themselves through [Sparkle](https://sparkle-project.org). The cask lives in this repository ([Casks/kanarie.rb](Casks/kanarie.rb)), which is why the tap needs the address. Use the full name as shown for the first install: Homebrew refuses a short name from a tap it has not been told to trust.
 
 If you installed it with Homebrew, remove it again, with its settings and the API key of the AI lookup, in one go:
 
