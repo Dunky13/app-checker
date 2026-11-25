@@ -3,6 +3,15 @@
     <channel>
         <title>Kanarie</title>
         <item>
+            <title>0.1.1</title>
+            <pubDate>Wed, 25 Nov 2026 10:37:30 +0100</pubDate>
+            <link>https://github.com/Dunky13/kanarie</link>
+            <sparkle:version>0.1.1</sparkle:version>
+            <sparkle:shortVersionString>0.1.1</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+            <enclosure url="https://github.com/Dunky13/kanarie/releases/download/v0.1.1/Kanarie-0.1.1-universal.zip" length="2720266" type="application/octet-stream" sparkle:edSignature="x+8rypIVjkKz7jfRPhE+6Ulau/JL9Xq+y8uWOA9Gn/ULvChzzUHZkDIob29esuvBKJR4bg0CNoU3XAiuhZqLDg=="/>
+        </item>
+        <item>
             <title>0.1.0</title>
             <pubDate>Tue, 24 Nov 2026 23:07:26 +0100</pubDate>
             <link>https://github.com/Dunky13/kanarie</link>

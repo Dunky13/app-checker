@@ -1,7 +1,7 @@
 # scripts/release.sh writes version and sha256 at every release.
 cask "kanarie" do
-  version "0.1.0"
-  sha256 "0011cd5925b25969455d78f8f307038991c487afbd99603039e001c943cb5cdf"
+  version "0.1.1"
+  sha256 "baed0f8ae1ec62b90a133558145e1674632baad10e58868483610efd55989966"
 
   url "https://github.com/Dunky13/kanarie/releases/download/v#{version}/Kanarie-#{version}-universal.zip"
   name "Kanarie"
