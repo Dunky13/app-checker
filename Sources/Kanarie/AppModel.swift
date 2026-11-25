@@ -41,7 +41,8 @@ final class AppModel {
     private var rescanQueued = false
     private var shell: ShellInfo?
     private var refreshShell = false
-    private var batchID = UUID()
+    /// Stop was asked, and the running request has not ended yet.
+    private(set) var stopping = false
 
     nonisolated static func loadSaved() -> Saved {
         guard let data = try? Data(contentsOf: stateFile) else { return Saved() }
@@ -279,30 +280,29 @@ final class AppModel {
     }
 
     /// Looks the given items up group by group. Stops when a whole group fails, which is usually a quota or configuration problem.
+    /// One batch at a time: a stopped one counts until its running request has ended.
     func analyseAll(_ items: [Item]) {
-        let id = UUID()
-        batchID = id
+        guard batch == nil else { return }
         batch = Task {
             var rest = items[...]
             while !rest.isEmpty, !Task.isCancelled {
-                // The list was made when the batch began. By now a rescan may have removed an item, the findings may
-                // cover it, or a lookup of its own may be running.
-                let group = rest.prefix(LLM.batchSize).filter { item in
-                    self.items.contains { $0.id == item.id } && verdicts[item.id]?.source != .rules && !analysing.contains(item.id)
+                // The list was made when the batch began. By now a rescan may have removed or updated an item, the
+                // findings may cover it, or a lookup of its own may be running.
+                let group = rest.prefix(LLM.batchSize).compactMap { old in self.items.first { $0.id == old.id } }.filter { item in
+                    verdicts[item.id]?.source != .rules && !analysing.contains(item.id)
                 }
                 rest = rest.dropFirst(LLM.batchSize)
                 if group.isEmpty { continue }
                 await analyse(group)
                 if group.allSatisfy({ errors[$0.id] != nil }) { break }
             }
-            // A stopped batch still finishes its current group; by then a newer batch may own `batch`.
-            if batchID == id { batch = nil }
+            (batch, stopping) = (nil, false)
         }
     }
 
     func stopBatch() {
         batch?.cancel()
-        batch = nil
+        stopping = batch != nil
     }
 
     private func backend() throws -> LLM.Backend {

@@ -144,8 +144,10 @@ struct MainView: View {
     /// What the lookup button works on. Several selected items: those, as far as the findings do not cover them, also
     /// when a lookup judged them before. Otherwise every listed item an AI lookup could still say something about.
     private func lookupCandidates(shown: [Item], picked: [Item]) -> [Item] {
-        guard picked.count > 1 else { return shown.filter { [.sdk, Verdict.Source.none].contains(model.verdicts[$0.id]?.source) } }
-        return picked.filter { model.verdicts[$0.id]?.source != .rules }
+        // An item that is being looked up right now is left out: a batch would skip it anyway.
+        let free = (picked.count > 1 ? picked : shown).filter { !model.analysing.contains($0.id) }
+        guard picked.count > 1 else { return free.filter { [.sdk, Verdict.Source.none].contains(model.verdicts[$0.id]?.source) } }
+        return free.filter { model.verdicts[$0.id]?.source != .rules }
     }
 
     private var filterLabel: String {
@@ -239,7 +241,7 @@ struct MainView: View {
             }
             ToolbarItemGroup {
                 if model.batch != nil {
-                    Button("Stop Lookups", systemImage: "stop.circle") { model.stopBatch() }
+                    Button("Stop Lookups", systemImage: "stop.circle") { model.stopBatch() }.disabled(model.stopping)
                 } else {
                     Button(picked.count > 1 ? "Look Up Selected Items with AI" : "Look Up Listed Items with AI", systemImage: "sparkles") { (pending, confirmBatch) = (lookupCandidates, true) }
                         .disabled(lookupCandidates.isEmpty)

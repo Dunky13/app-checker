@@ -146,8 +146,9 @@ public enum LLM {
         String(String.UnicodeScalarView(text.unicodeScalars.filter { !CharacterSet.controlCharacters.contains($0) }.prefix(100)))
     }
 
-    /// An item's identifier as the prompt shows it, and as an answer has to repeat it.
-    static func identifier(of id: String) -> String { clean(id.split(separator: ":", maxSplits: 1).last.map(String.init) ?? id) }
+    /// An item's identifier as the prompt shows it, and as an answer has to repeat it. With its kind: a formula and a
+    /// cask can have the same name.
+    static func identifier(of id: String) -> String { clean(id) }
 
     public static func prompt(for items: [Item]) -> String {
         let entries = items.enumerated().map { index, item in
@@ -227,12 +228,18 @@ public enum LLM {
     }
 
     /// The objects of the answer in a reply. Models put words around it: a citation like [1], an example in a fence of
-    /// its own. So fenced parts are tried first, then every bracket in turn, and the first JSON that holds a verdict wins.
+    /// its own, an object quoted from a page. So fenced parts are tried first, then every bracket in turn. JSON that
+    /// holds a verdict with an entry number wins; a verdict without one counts only when there is nothing better.
     static func answers(in text: String) -> [[String: Any]] {
+        // shortcut: gives up after two million scanned characters, which only a reply full of unclosed brackets
+        // reaches; find the brackets in one pass with a stack if replies ever get that large.
+        var budget = 2_000_000
         // From an opening bracket to the one that closes it, minding strings.
         func span(_ text: Substring) -> Substring? {
             var depth = 0, inString = false, escaped = false
             for index in text.indices {
+                budget -= 1
+                if budget < 0 { return nil }
                 let character = text[index]
                 if inString {
                     if escaped { escaped = false } else if character == "\\" { escaped = true } else if character == "\"" { inString = false }
@@ -247,14 +254,21 @@ public enum LLM {
             }
             return nil
         }
+        var unnumbered: [[String: Any]]?
         for candidate in blocks(of: text).filter(\.isCode).map(\.text) + [text] {
-            for start in candidate.indices where candidate[start] == "[" || candidate[start] == "{" {
-                guard let json = span(candidate[start...]).flatMap({ try? JSONSerialization.jsonObject(with: Data($0.utf8)) }) else { continue }
+            var rest = candidate[...]
+            while budget > 0, let open = rest.firstIndex(where: { $0 == "[" || $0 == "{" }) {
+                rest = rest[rest.index(after: open)...]
+                guard let found = span(candidate[open...]), let json = try? JSONSerialization.jsonObject(with: Data(found.utf8)) else { continue }
+                // What lies inside a JSON value is part of it, not an answer of its own.
+                rest = candidate[found.endIndex...]
                 let objects = json as? [[String: Any]] ?? (json as? [String: Any]).map { [$0] } ?? []
-                if objects.contains(where: { $0["telemetry"] != nil }) { return objects }
+                guard objects.contains(where: { $0["telemetry"] != nil }) else { continue }
+                if objects.contains(where: { $0["entry"] != nil }) { return objects }
+                unnumbered = unnumbered ?? objects
             }
         }
-        return []
+        return unnumbered ?? []
     }
 
     /// For one item, as the tests use it.

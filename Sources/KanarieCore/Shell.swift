@@ -43,14 +43,19 @@ public enum Shell {
         }
         // Its own flag: a program that handles the signal exits like any other, and one that crashes was not timed out.
         let timedOut = OSAllocatedUnfairLock(initialState: false)
-        DispatchQueue.global().asyncAfter(deadline: .now() + timeout) {
+        // A timer that can be cancelled: a plain delayed block would hold the process and its pipe until the timeout.
+        let timer = DispatchSource.makeTimerSource(queue: .global())
+        timer.schedule(deadline: .now() + timeout)
+        timer.setEventHandler {
             guard process.isRunning else { return }
             timedOut.withLock { $0 = true }
             end()
         }
+        timer.resume()
         stop?.attach(end)
         let data = out.fileHandleForReading.readDataToEndOfFile()
         process.waitUntilExit()
+        timer.cancel()
         let name = URL(fileURLWithPath: executable).lastPathComponent
         if stop?.asked == true { throw Failure(errorDescription: "\(name) was stopped.", output: data) }
         if timedOut.withLock({ $0 }) { throw Failure(errorDescription: "\(name) timed out after \(Int(timeout)) s.", output: data) }
