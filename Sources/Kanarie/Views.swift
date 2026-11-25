@@ -58,7 +58,8 @@ extension Verdict.Source {
         switch self {
         case .rules: "From the Kanarie findings on GitHub"
         case .ai: "From an AI lookup, not verified"
-        case .sdk: "Found in its files on this Mac"
+        // Tense-neutral: a removed item keeps the hint from when it was installed.
+        case .sdk: "From a search of its files on this Mac"
         case .none: "Nothing known"
         }
     }
@@ -404,6 +405,7 @@ struct DetailView: View {
                 // An AI lookup keeps its sparkles even when read here: the AI chose what to read.
                 let checked = switch (verdict.readsThisMac, verdict.source) {
                 case (true, .ai): "Checked on this Mac with checks an AI lookup suggested, not verified"
+                case (true, .sdk): verdict.source.help
                 case (true, _): "Checked on this Mac"
                 case (false, _): verdict.source.help
                 }

@@ -97,7 +97,7 @@ Several items go out in groups of five per request, which costs less than one re
 - **Claude Code CLI** (default): runs your local `claude` command with web search, using your own Claude login.
 - **OpenAI-compatible API**: any chat completions endpoint, for example [OpenRouter](https://openrouter.ai). The API key is stored in your keychain. On OpenRouter the web search plugin is switched on; other endpoints answer from what the model already knows.
 
-A lookup sends the item's name, identifier and version to that backend. Answers can be wrong, so check the listed sources before relying on one. Items judged by a lookup carry a sparkles mark in the list.
+A lookup sends the item's name, identifier and version to that backend. Answers can be wrong, so check the listed sources before relying on one. Items judged by a lookup carry a sparkles mark in the list. Each row also shows where its verdict comes from: a cloud for the Kanarie findings, a computer for a hint from a search of its files on this Mac. In the detail pane a computer marks a state that was read from a setting on this Mac.
 
 The search field looks in names and identifiers. The filter menu next to it narrows the list by status (red, yellow, green, grey), by where the verdict comes from (Kanarie findings, AI lookup, analytics code found, nothing known, or everything that is not from an AI lookup) and by kind. Filters and search work together, and both bulk lookups follow them.
 

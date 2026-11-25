@@ -116,7 +116,10 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         let read = { (rules: [Rule], sdks: [String]) in Verdict(item: item, rules: rules, aiRules: [:], sdks: sdks, probe: probe()).readsThisMac }
         #expect(read([rule(.optOut, disabledWhen: [Check(env: "OFF")])], []))
         #expect(read([], ["Sentry"]))
-        #expect(read([rule(.optOut, enabledWhen: [Check(env: "ON")])], []) && read([rule(.optIn, enabledWhen: [Check(env: "ON")])], []))
+        #expect(read([rule(.optIn, enabledWhen: [Check(env: "ON")])], []))
+        // An opt-out finding with only an "on" switch that is not set falls back to its default: nothing decided it.
+        #expect(!read([rule(.optOut, enabledWhen: [Check(env: "ON")])], []))
+        #expect(Verdict(item: item, rules: [rule(.optOut, enabledWhen: [Check(env: "ON")])], aiRules: [:], sdks: [], probe: probe(env: ["ON": "1"])).readsThisMac)
         #expect(!read([rule(.optOut)], []) && !read([rule(.forced)], ["Sentry"]) && !read([], []))
         // An opt-in finding reads only what switches it on, and a read macOS refused is not a reading.
         #expect(!read([rule(.optIn, disabledWhen: [Check(env: "OFF")])], []))
