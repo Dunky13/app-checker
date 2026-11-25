@@ -317,7 +317,7 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
     }
 
     /// The app only takes downloaded findings that its signed index lists, so an unsigned change would silently never reach users.
-    /// Pull requests cannot sign; the maintainer runs scripts/sign-findings.sh when merging.
+    /// A pull request from someone else cannot sign, and scripts/accept-finding.py runs the tests before it signs.
     @Test(.enabled(if: ProcessInfo.processInfo.environment["GITHUB_EVENT_NAME"] != "pull_request"))
     func indexIsSignedWithTheUpdateKeyAndListsEveryFile() throws {
         let info = try #require(NSDictionary(contentsOf: repoRoot.appendingPathComponent("Info.plist")))
@@ -674,16 +674,18 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent("issue-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: folder) }
-        func placed(_ rule: Rule) throws -> [Substring] {
+        // What the script prints for the issue of a finding: the file and its text, or why it is refused.
+        func read(_ rule: Rule, edit: (String) -> String = { $0 }) throws -> String {
             let check = Submission.sourceCheck(rule, pages: [], cited: 0)
             let issue = try Submission.issue(item: item, rule: rule, origin: "o", readings: [], sourceCheck: check, appVersion: "1")
             let body = try #require(URLComponents(url: issue.url, resolvingAgainstBaseURL: false)?.queryItems?.last?.value)
             let file = folder.appendingPathComponent("body.md")
             // GitHub hands the body of an issue back with CRLF line ends.
-            try Data(body.replacingOccurrences(of: "\n", with: "\r\n").utf8).write(to: file)
+            try Data(edit(body).replacingOccurrences(of: "\n", with: "\r\n").utf8).write(to: file)
             let script = repoRoot.appendingPathComponent("scripts/accept-finding.py").path
-            return String(decoding: try Shell.run("/usr/bin/env", ["python3", script, "--parse", file.path], timeout: 30), as: UTF8.self).split(separator: "\n", maxSplits: 1)
+            return String(decoding: try Shell.run("/usr/bin/env", ["python3", script, "--parse", file.path], timeout: 30, acceptFailure: true), as: UTF8.self)
         }
+        func placed(_ rule: Rule) throws -> [Substring] { try read(rule).split(separator: "\n", maxSplits: 1) }
         var found = draft { $0.name = "Example New Tool"; $0.summary = "Sends \"usage\" data: café." }.rule(for: item)
         let new = try placed(found)
         #expect(new[0] == "example-new-tool/0.json")
@@ -693,13 +695,29 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         // A correction goes to the file it corrects, wherever the issue says it should go.
         (found.match, found.since) = (["brew:gh"], "0")
         #expect(try placed(found)[0] == "github-cli/0.json")
-        // Refused: a new finding where one is already, a correction of nothing, and anything invisible.
+        // Refused: a new finding where one is already, and a correction of nothing.
         (found.name, found.since) = ("GitHub CLI", nil)
-        #expect(throws: Shell.Failure.self) { try placed(found) }
+        #expect(try read(found) == "Refused: findings/github-cli/0.json is there already, so this is a correction or needs a folder of its own.\n")
         (found.match, found.since) = (["brew:no-such-tool"], "0")
-        #expect(throws: Shell.Failure.self) { try placed(found) }
-        (found.name, found.since, found.summary) = ("Example New Tool", nil, "Seen\u{200B}unseen")
-        #expect(throws: Shell.Failure.self) { try placed(found) }
+        #expect(try read(found) == "Refused: 0 findings match this correction, so it has to be placed by hand.\n")
+        // Refused: what a review would not see. A zero-width space, a filler that counts as a letter, a line separator,
+        // and a control character that JSON writes as an escape.
+        (found.match, found.name, found.since) = (["brew:x"], "Example New Tool", nil)
+        for hidden in ["\u{200B}", "\u{3164}", "\u{2028}", "\u{7}"] {
+            found.summary = "Seen\(hidden)unseen"
+            #expect(try read(found) == "Refused: the summary holds invisible characters.\n")
+        }
+        // Refused: a look-alike letter in what is run, here a Cyrillic "е" in "echo".
+        found.summary = "Usage events."
+        found.optOut?.command = "\u{435}cho 1"
+        #expect(try read(found) == "Refused: optOut.command is not plain ASCII text.\n")
+        // Refused: a field no finding has, and a folder that a command would read as an option.
+        found.optOut?.command = nil
+        #expect(try read(found) { $0.replacingOccurrences(of: "\"match\"", with: "\"run\": \"x\", \"match\"") }
+            == "Refused: the finding has a field that is not part of a finding: 'run'.\n")
+        #expect(try read(found) { $0.replacingOccurrences(of: "findings/example-new-tool/", with: "findings/-example/") }
+            == "Refused: the issue names no file, so this finding has to be placed by hand.\n")
+        #expect(try read(found).hasPrefix("example-new-tool/0.json\n"))
     }
 
     @Test func theIssueCarriesTheFindingAndSurvivesTheLink() throws {
