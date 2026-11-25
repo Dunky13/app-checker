@@ -25,6 +25,7 @@ final class AppModel {
         var names: [String: String]?           // item id -> last seen name, to list an item after it is removed
         var editors: [String: [String]]?       // extension id -> editors it was last seen in, for its verdict after it is removed
         var submitted: [String: Rule]?         // item id -> AI lookup last sent from this Mac, so a bulk submission sends only new ones
+        var edited: Set<String>?               // item ids whose AI lookup was changed by hand on this Mac, until a new lookup replaces it
     }
 
     /// Installed items, followed by the ones that were removed since an earlier scan.
@@ -83,9 +84,13 @@ final class AppModel {
         // Answers saved by an older version must pass today's checks too.
         for (id, rule) in saved.aiRules where !rule.problems(curated: false).isEmpty {
             saved.aiRules[id] = nil
+            saved.edited?.remove(id)
             // Its log would show a lookup that looks fine next to an item nothing is known about.
             Self.lookupLogs.removeVerdictLog(for: id)
         }
+        // Lookups saved before http links were fixed on arrival, and what was sent of them, so "already sent" still matches.
+        saved.aiRules = saved.aiRules.mapValues { $0.withPlainLinks() }
+        saved.submitted = saved.submitted?.mapValues { $0.withPlainLinks() }
         Probe.blockedFiles = Set(saved.blocked ?? [])
         (serial, rules) = Self.loadFindings()
         saved.serial = max(saved.serial ?? 0, serial)
@@ -106,6 +111,16 @@ final class AppModel {
                 try? await Task.sleep(for: .seconds(86400))
             }
         }
+    }
+
+    func isEdited(_ id: String) -> Bool { saved.edited?.contains(id) == true }
+
+    /// Keeps a hand edit of an AI lookup on this Mac, in its place. A new lookup replaces it.
+    func saveEdit(_ rule: Rule, for id: String) {
+        saved.aiRules[id] = rule
+        saved.edited = (saved.edited ?? []).union([id])
+        save()
+        evaluate()
     }
 
     /// Whether this lookup was sent from this Mac before. A lookup done again with another result is new.
@@ -309,7 +324,11 @@ final class AppModel {
         }
         for (item, result) in zip(items, results) {
             var failed = false
-            do { saved.aiRules[item.id] = try result.rule.get() } catch {
+            // An http link that only needs its scheme is written as https, so the lookup can be submitted as it is. Its log keeps the answer as it came.
+            do {
+                saved.aiRules[item.id] = try result.rule.get().withPlainLinks()
+                saved.edited?.remove(item.id)
+            } catch {
                 failed = true
                 errors[item.id] = error.localizedDescription
             }
@@ -328,11 +347,14 @@ final class AppModel {
             var rest = items[...]
             // An item a lookup of its own judges while the batch waits is not looked up a second time.
             let judged = Set(items.map(\.id).filter { saved.aiRules[$0] != nil })
+            // Edits saved before the batch began were warned about in its dialog; one saved while it runs was not.
+            let edited = Set(items.map(\.id).filter(isEdited))
             while !rest.isEmpty, !Task.isCancelled {
                 // The list was made when the batch began. By now a rescan may have updated an item, the findings may
                 // cover it, or a lookup of its own may be running. An item removed meanwhile stays listed, and is looked up.
                 let group = rest.prefix(LLM.batchSize).compactMap { old in self.items.first { $0.id == old.id } }.filter { item in
                     verdicts[item.id]?.source != .rules && !analysing.contains(item.id) && (saved.aiRules[item.id] == nil || judged.contains(item.id))
+                        && (!isEdited(item.id) || edited.contains(item.id))
                 }
                 rest = rest.dropFirst(LLM.batchSize)
                 if group.isEmpty { continue }

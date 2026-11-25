@@ -356,6 +356,36 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         #expect(rule(.optIn).problems(curated: false) == ["the steps to switch it off are missing"])
     }
 
+    @Test func switchesOnlyTheSchemeOfALinkToHTTPS() {
+        #expect(Rule.plainLink("http://mqtt-explorer.com/") == "https://mqtt-explorer.com/")
+        #expect(Rule.plainLink("HTTPS://example.com/a?b#c") == "https://example.com/a?b#c")
+        #expect(Rule.plainLink("https://example.com/") == nil)   // nothing to fix
+        #expect(Rule.plainLink("ftp://example.com/") == nil && Rule.plainLink("example.com") == nil)
+        #expect(Rule.plainLink("http://exämple.com/") == nil && Rule.plainLink("http://user@example.com/") == nil)
+        #expect(Rule.plainLink("http://example.com:80/") == nil)
+        for link in ["http://a.example/x", "Http://b.example"] { #expect(Rule.plainLink(link).map(Rule.isPlainLink) == true) }
+    }
+
+    @Test func aLookupWithHTTPLinksIsReadyOnceTheyAreFixed() {
+        let item = Item(id: "app:x", name: "x", version: "1", path: "/x")
+        var found = Rule(match: ["app:x"], telemetry: .forced, summary: "s")
+        (found.name, found.policyURL, found.sources) = ("x", "http://example.com/privacy", ["https://example.com/a", "http://example.com/"])
+        let fixed = found.withPlainLinks()
+        #expect(!Submission.Draft(from: found, item: item).problems(for: item).isEmpty)
+        #expect(Submission.Draft(from: fixed, item: item).problems(for: item).isEmpty)
+        #expect(fixed.sources == ["https://example.com/a", "https://example.com/"] && fixed.policyURL == "https://example.com/privacy")
+        var rest = fixed
+        (rest.policyURL, rest.sources) = (found.policyURL, found.sources)
+        #expect(rest == found)   // nothing but the links changed
+        #expect(Submission.unedited(fixed, item: item) == fixed)
+        found.sources = [" http://example.com/c "]
+        #expect(found.withPlainLinks().sources == ["https://example.com/c"])
+        // The form fixes each line in place and leaves a link it cannot fix as typed.
+        var draft = Submission.Draft(from: found, item: item)
+        draft.sources = "http://a.example/\nftp://b.example/\n"
+        #expect(draft.withPlainLinks.sources == "https://a.example/\nftp://b.example/\n" && draft.withPlainLinks.summary == draft.summary)
+    }
+
     @Test func namesTheFieldOfALinkThatIsNotPlainHTTPS() {
         var finding = rule(.optOut)
         finding.optOut = OptOut(instructions: "i", url: "https://example.com/off")
@@ -1038,6 +1068,21 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
             (other.name, other.sources) = ("Example CLI", ["https://example.com/docs"])
             #expect(Submission.Draft(from: other, item: item).rule(for: item) == other)
         }
+    }
+
+    /// A lookup that could not tell stays so in the form: saved by hand it is still a lookup, sent it is refused until a class is chosen.
+    @Test func aLookupThatCouldNotTellStaysSo() {
+        var found = Rule(match: ["brew:x"], telemetry: .unknown, summary: "Nothing found about telemetry.")
+        found.name = "Example CLI"
+        var draft = Submission.Draft(from: found, item: item)
+        #expect(draft.telemetry == .unknown)
+        draft.summary = "The docs say nothing about telemetry."
+        #expect(draft.rule(for: item).telemetry == .unknown)
+        #expect(draft.rule(for: item).problems(curated: false).isEmpty)
+        #expect(draft.problems(for: item).first == "choose what Telemetry is: a finding cannot say Could not tell")
+        // Steps the lookup gave stay, though the form does not show them for this class.
+        found.optOut = OptOut(instructions: "Set the variable.", command: "echo 'export EXAMPLE_TELEMETRY=0' >> ~/.zshrc", url: nil)
+        #expect(Submission.Draft(from: found, item: item).rule(for: item).optOut == found.optOut)
     }
 
     @Test func theIssueCarriesTheFindingAndSurvivesTheLink() throws {

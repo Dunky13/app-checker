@@ -331,7 +331,7 @@ struct MainView: View {
         .confirmationDialog("Look up \(pending.count) items with AI?", isPresented: $confirmBatch) {
             Button("Look Up \(pending.count) Items") { model.analyseAll(pending) }
         } message: {
-            Text("A lookup sends each item's name, identifier and version to the AI backend chosen in Settings and uses your quota or credits. The items go out in groups of \(LLM.batchSize), one group at a time. Stopping ends the group that is running without an answer.")
+            Text("A lookup sends each item's name, identifier and version to the AI backend chosen in Settings and uses your quota or credits. The items go out in groups of \(LLM.batchSize), one group at a time. Stopping ends the group that is running without an answer.\(pending.contains { model.isEdited($0.id) } ? " A new lookup replaces the changes you saved on this Mac." : "")")
         }
         .sheet(isPresented: $showSettings) { SettingsView() }
         .sheet(isPresented: Binding { submitting != nil } set: { if !$0 { submitting = nil } }) { BulkSubmitView(model: model, items: submitting ?? []) }
@@ -349,11 +349,13 @@ struct DetailView: View {
     @State private var working = false
     @State private var submitting = false
     @State private var log: OpenedLog?
+    @State private var confirmRelookup = false
 
     private var sourceNote: String {
         switch verdict.source {
         case .rules: "From the Kanarie findings."
-        case .ai: "From an AI lookup. Not verified: check its sources before relying on it."
+        case .ai: model.isEdited(item.id) ? "From an AI lookup, edited by you on this Mac. Not verified: check its sources before relying on it."
+            : "From an AI lookup. Not verified: check its sources before relying on it."
         case .sdk: "The hint comes from an offline search of the installed files for analytics service names."
         case .none: "Not in the Kanarie findings."
         }
@@ -401,7 +403,7 @@ struct DetailView: View {
                                 .padding(8)
                                 .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
                                 if verdict.source == .ai {
-                                    Label("This command was suggested by an AI lookup. Read it and check the linked source before you run it.", systemImage: "exclamationmark.triangle")
+                                    Label(model.isEdited(item.id) ? "This command is from an AI lookup you edited. Read it and check the linked source before you run it." : "This command was suggested by an AI lookup. Read it and check the linked source before you run it.", systemImage: "exclamationmark.triangle")
                                         .font(.callout).foregroundStyle(.secondary)
                                 }
                                 switch outcome {
@@ -435,9 +437,15 @@ struct DetailView: View {
                 if verdict.source != .rules {
                     HStack {
                         Button(verdict.source == .ai ? "Look Up Again with AI" : "Look Up with AI", systemImage: "sparkles") {
-                            Task { await model.analyse([item]) }
+                            // A saved edit is not kept anywhere else: ask before a lookup replaces it.
+                            if model.isEdited(item.id) { confirmRelookup = true } else { Task { await model.analyse([item]) } }
                         }
                         .disabled(model.analysing.contains(item.id))
+                        .confirmationDialog("Look up \(item.name) again with AI?", isPresented: $confirmRelookup) {
+                            Button("Look Up Again") { Task { await model.analyse([item]) } }
+                        } message: {
+                            Text("A new lookup replaces the changes you saved on this Mac.")
+                        }
                         if model.analysing.contains(item.id) {
                             ProgressView().controlSize(.small).accessibilityHidden(true)
                             Text("Searching the web. This can take a minute or two.").foregroundStyle(.secondary)
@@ -456,7 +464,7 @@ struct DetailView: View {
                     if !model.removed.contains(item.id) {
                         Button("Show in Finder", systemImage: "folder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: item.path)]) }
                     }
-                    Button(verdict.source == .rules ? "Suggest a Correction…" : "Submit a Finding…", systemImage: "square.and.pencil") { submitting = true }
+                    Button(verdict.source == .rules ? "Suggest a Correction…" : verdict.source == .ai ? "Edit or Submit…" : "Submit a Finding…", systemImage: "square.and.pencil") { submitting = true }
                 }
                 Text(item.id).font(.caption.monospaced()).foregroundStyle(.secondary).textSelection(.enabled)
             }
