@@ -148,9 +148,10 @@ public struct Rule: Codable, Sendable, Hashable {
                 found.append("not a plain https link: \(link.prefix(200))")
             }
         }
-        // The same goes for the command: its end must not sit behind a screen of spaces.
-        if let command = optOut?.command, command.count > 300 || zip(command, command.dropFirst()).contains(where: { $0.isWhitespace && $1.isWhitespace }) {
-            found.append("the command is longer than 300 characters or padded with spaces")
+        // The same goes for the command: plain ASCII, so its end cannot sit behind a screen of blanks or stacked marks.
+        if let command = optOut?.command,
+           !command.allSatisfy(\.isASCII) || command.unicodeScalars.count > 300 || command.contains("  ") || command.contains("\t") {
+            found.append("the command is not plain ASCII, is longer than 300 characters, or is padded with spaces")
         }
         return found
     }

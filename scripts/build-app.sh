@@ -26,7 +26,8 @@ SDK="$(xcrun --sdk "${SDKROOT:-macosx}" --show-sdk-version)"
 [[ -n "$MINIMUM" && -n "$SDK" ]] || { echo "Could not read the minimum macOS version or the SDK version." >&2; exit 1; }
 xcrun vtool -set-build-version macos "$MINIMUM" "$SDK" -replace -output "$BINARY" "$BINARY"
 WRITTEN="$(xcrun vtool -show-build "$BINARY")"
-[[ "$(awk '$1 == "sdk" { print $2; exit }' <<< "$WRITTEN")" == "$SDK" ]] || { echo "The SDK version was not written into the binary." >&2; exit 1; }
+# Every architecture of the universal binary.
+awk -v sdk="$SDK" '$1 == "sdk" { n++; if ($2 != sdk) bad = 1 } END { exit !(n > 0 && !bad) }' <<< "$WRITTEN" || { echo "The SDK version was not written into the binary." >&2; exit 1; }
 cp -R "$PRODUCTS/Sparkle.framework" "$APP/Contents/Frameworks/"
 cp Resources/AppIcon.icns "$APP/Contents/Resources/"
 cp -R findings "$APP/Contents/Resources/"

