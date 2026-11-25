@@ -318,18 +318,25 @@ final class AppModel {
     /// everyone, so the request says nothing about this Mac. Off with the findings download. Every caller waits for
     /// the read under way, so a sheet opened during one sees its result.
     func checkOpenFindings() async {
-        guard UserDefaults.standard.bool(forKey: "refreshRules") else { (openFindings, openFindingsChecked) = ([:], nil); return }
+        guard UserDefaults.standard.bool(forKey: "refreshRules") else {
+            (openFindings, openFindingsChecked, readingOpenFindings) = ([:], nil, false)
+            return
+        }
         if openFindingsChecked.map({ -$0.timeIntervalSinceNow > 600 }) ?? true {
-            openFindingsChecked = .now
+            let started = Date.now
+            openFindingsChecked = started
             readingOpenFindings = true
             openFindingsRead = Task {
+                // A read the setting switched off, or a newer read replaced, while it ran changes nothing.
+                var current: Bool { openFindingsChecked == started && UserDefaults.standard.bool(forKey: "refreshRules") }
                 do {
                     // shortcut: only the 100 newest open issues are read; follow GitHub's Link header if more are ever open.
                     let found = try Submission.openFindings(try await URLSession(configuration: .ephemeral).data(from: Submission.openIssues, limit: 5_000_000))
-                    // Switched off while it was read: the list stays cleared.
-                    if UserDefaults.standard.bool(forKey: "refreshRules") { openFindings = found }
+                    guard current else { return }
+                    openFindings = found
                 } catch {
                     NSLog("Kanarie: open findings not read: \(error.localizedDescription)")
+                    guard current else { return }
                     // Again in a minute when the network was not there, which it may not be yet after waking; a refusal
                     // or a list over the limit would fail again, so those wait the ten minutes.
                     let offline: [URLError.Code] = [.notConnectedToInternet, .networkConnectionLost, .timedOut, .cannotFindHost, .cannotConnectToHost]
