@@ -15,7 +15,10 @@ concurrency:
 
 jobs:
   draft:
-    if: startsWith(github.event.issue.title, 'Finding')
+    # Also when an edit retitles a finding issue: its pull request then goes back to draft. The script checks the exact case.
+    if: >-
+      startsWith(github.event.issue.title, 'Finding: ') || startsWith(github.event.issue.title, 'Findings: ')
+      || startsWith(github.event.changes.title.from, 'Finding')
     runs-on: ubuntu-latest
     permissions:
       contents: write
