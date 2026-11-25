@@ -135,7 +135,7 @@ public struct Rule: Codable, Sendable, Hashable {
         // Yellow promises a way out, so an opt-out verdict without one is not usable.
         if [.optOut, .optIn].contains(telemetry), (optOut?.instructions ?? "").isEmpty { found.append("the steps to switch it off are missing") }
         guard curated else { return found }
-        if telemetry == .unknown { found.append("unknown telemetry does not belong in the curated rules") }
+        if telemetry == .unknown { found.append(Self.unknownProblem) }
         if summary.isEmpty { found.append("the summary of what is collected is missing") }
         if (sources ?? []).isEmpty { found.append("Sources has no link") }
         if [.optOut, .optIn].contains(telemetry), (optOut?.url ?? "").isEmpty { found.append("Documentation has no link") }
@@ -184,6 +184,8 @@ public struct Rule: Codable, Sendable, Hashable {
                 : "Telemetry stays off unless you enable it.")
         }
     }
+
+    static let unknownProblem = "unknown telemetry does not belong in the curated rules"
 
     static func isPlainLink(_ link: String) -> Bool {
         let host = link.dropFirst("https://".count).prefix { !"/?#".contains($0) }

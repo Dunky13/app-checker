@@ -1079,7 +1079,10 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         draft.summary = "The docs say nothing about telemetry."
         #expect(draft.rule(for: item).telemetry == .unknown)
         #expect(draft.rule(for: item).problems(curated: false).isEmpty)
-        #expect(!draft.problems(for: item).isEmpty)
+        #expect(draft.problems(for: item).first == "choose what Telemetry is: a finding cannot say Could not tell")
+        // Steps the lookup gave stay, though the form does not show them for this class.
+        found.optOut = OptOut(instructions: "Set the variable.", command: "echo 'export EXAMPLE_TELEMETRY=0' >> ~/.zshrc", url: nil)
+        #expect(Submission.Draft(from: found, item: item).rule(for: item).optOut == found.optOut)
     }
 
     @Test func theIssueCarriesTheFindingAndSurvivesTheLink() throws {

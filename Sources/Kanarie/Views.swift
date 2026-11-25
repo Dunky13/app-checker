@@ -349,6 +349,7 @@ struct DetailView: View {
     @State private var working = false
     @State private var submitting = false
     @State private var log: OpenedLog?
+    @State private var confirmRelookup = false
 
     private var sourceNote: String {
         switch verdict.source {
@@ -436,9 +437,15 @@ struct DetailView: View {
                 if verdict.source != .rules {
                     HStack {
                         Button(verdict.source == .ai ? "Look Up Again with AI" : "Look Up with AI", systemImage: "sparkles") {
-                            Task { await model.analyse([item]) }
+                            // A saved edit is not kept anywhere else: ask before a lookup replaces it.
+                            if model.isEdited(item.id) { confirmRelookup = true } else { Task { await model.analyse([item]) } }
                         }
                         .disabled(model.analysing.contains(item.id))
+                        .confirmationDialog("Look up \(item.name) again with AI?", isPresented: $confirmRelookup) {
+                            Button("Look Up Again") { Task { await model.analyse([item]) } }
+                        } message: {
+                            Text("A new lookup replaces the changes you saved on this Mac.")
+                        }
                         if model.analysing.contains(item.id) {
                             ProgressView().controlSize(.small).accessibilityHidden(true)
                             Text("Searching the web. This can take a minute or two.").foregroundStyle(.secondary)
