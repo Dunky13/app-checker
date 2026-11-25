@@ -322,6 +322,11 @@ def accept(issues):
                 sys.exit(f"Pull request #{number} no longer holds the signed commit, so it stays a draft. Run this again.")
             run("gh", "pr", "edit", number, "--title", title, "--body-file", "-", input=body)
             run("gh", "pr", "ready", number)
+            # A workflow push between the check and the ready: it read the draft state before this, so undo it here.
+            after = json.loads(run("gh", "pr", "view", number, "--json", "headRefOid", capture_output=True).stdout)["headRefOid"]
+            if after != signed_head:
+                run("gh", "pr", "ready", number, "--undo")
+                sys.exit(f"Pull request #{number} changed while it was marked ready, so it is a draft again. Run this again.")
         else:
             run("gh", "pr", "create", "--base", "main", "--head", branch, "--title", title, "--body", body)
     except subprocess.CalledProcessError:
@@ -333,59 +338,72 @@ def drafted(event):
     """For the workflow, on a finding issue: its findings on the branch findings-<number>, in a draft pull request
     that closes it. Nothing is signed. When an edit changes the findings, the branch is written again from main,
     which also drops a signature made for the earlier text, and the pull request goes back to draft."""
-    issue = json.loads(Path(event).read_text(encoding="utf-8"))["issue"]
-    number = str(int(issue["number"]))
+    number = str(int(json.loads(Path(event).read_text(encoding="utf-8"))["issue"]["number"]))
+    # The issue as it is now, not as the event had it: a run started again later must not write an older text.
+    issue = json.loads(run("gh", "issue", "view", number, "--json", "title,body,state,author", capture_output=True).stdout)
     branch = f"findings-{number}"
-    own = pulls(branch)
-    if issue["state"] != "open" or any(pull["state"] == "CLOSED" for pull in own[:1]):
-        # A closed issue, or a pull request the maintainer closed without merging: nothing more to do.
-        return
-    pull = own[0] if own and own[0]["state"] == "OPEN" else None
 
-    def unready():
+    def unready(pull):
         # Read again: the maintainer may have marked it ready since this run started.
         if pull and not json.loads(run("gh", "pr", "view", str(pull["number"]), "--json", "isDraft", capture_output=True).stdout)["isDraft"]:
             run("gh", "pr", "ready", str(pull["number"]), "--undo")
 
-    def refuse(reason):
+    def refuse(reason, pull):
+        # Back to draft first, so a comment that fails does not leave it ready.
+        unready(pull)
         # In a code block, so nothing from the issue shows as a link or notifies anyone.
         run("gh", "issue", "comment", number, "--body-file", "-",
             input=f"This issue could not be turned into a pull request:\n\n    {reason}.\n\nEdit the issue to try again.")
-        unready()
 
-    # The workflow also runs when an edit takes the title away from the form: then a pull request for the earlier text stays a draft.
-    if not issue["title"].startswith(("Finding: ", "Findings: ")):
-        return unready()
     for _ in range(3):
+        # Read on every try: the maintainer may open, close or take over the pull request while this runs.
+        own = pulls(branch)
+        if issue["state"] != "OPEN" or any(pull["state"] == "CLOSED" for pull in own[:1]):
+            # A closed issue, or a pull request the maintainer closed without merging: nothing more to do.
+            return
+        pull = own[0] if own and own[0]["state"] == "OPEN" else None
+        # The workflow also runs when an edit takes the title away from the form: then a pull request for the earlier text stays a draft.
+        if not issue["title"].startswith(("Finding: ", "Findings: ")):
+            return unready(pull)
         # Checked against main as it is now, not as it was when the event came in.
         run("git", "fetch", "-q", "origin", "main")
         run("git", "switch", "-q", "--detach", "origin/main")
         try:
             placed = targets(issue["body"] or "", findings())
         except ValueError as error:
-            return refuse(error)
+            return refuse(error, pull)
         head = remote_head(branch)
-        if pull and head:
+        if head:
             # What the branch changes, the index aside. The same findings, and nothing else, need no new commit.
             ref = f"refs/remotes/origin/{branch}"
             run("git", "fetch", "-q", "origin", f"+refs/heads/{branch}:{ref}")
             base = run("git", "merge-base", "origin/main", ref, capture_output=True).stdout.strip()
             changed = dict(reversed(line.split("\t")) for line in run(
                 "git", "diff", "--name-status", "--no-renames", base, ref, capture_output=True).stdout.splitlines())
+            if not pull and "findings/index.json.sig" in changed:
+                # Only the maintainer signs: accept-finding.py has pushed and is about to open its pull request. Leave it be.
+                print(f"The branch {branch} holds a signed index and has no open pull request yet: left alone.", file=sys.stderr)
+                return
             index = {"findings/index.json", "findings/index.json.sig"}
-            if (set(changed.values()) <= {"A", "M"} and set(changed) - index == {f"findings/{path}" for path, _ in placed}
+            if (pull and set(changed.values()) <= {"A", "M"} and set(changed) - index == {f"findings/{path}" for path, _ in placed}
                     and all(run("git", "show", f"{ref}:findings/{path}", capture_output=True).stdout == text for path, text in placed)):
                 return
         run("git", "switch", "-q", "--no-track", "-C", branch, "origin/main")
-        described = write(number, issue["user"]["login"], placed)
+        described = write(number, issue["author"]["login"], placed)
         run("git", "add", "findings")
         if not run("git", "diff", "--cached", "--name-only", capture_output=True).stdout:
-            return refuse("its findings are on main already")
+            return refuse("its findings are on main already", pull)
         title = titled([folder for _, folder in described])
         run("git", "commit", "-q", "-s", "-m", title + "\n\n" + "\n".join(line for line, _ in described))
+        # Back to draft before the branch changes, so a step that fails after the push does not leave it ready.
+        unready(pull)
         # Only over what this run compared: a signed push in the meantime makes this run start again.
-        if subprocess.run(["git", "push", "-q", f"--force-with-lease={branch}:{head}", "origin", branch], cwd=ROOT).returncode == 0:
+        pushed = subprocess.run(["git", "push", "-q", f"--force-with-lease={branch}:{head}", "origin", branch],
+                                cwd=ROOT, capture_output=True, text=True)
+        if pushed.returncode == 0:
             break
+        if "stale info" not in pushed.stderr and "rejected" not in pushed.stderr:
+            sys.exit(f"The branch {branch} could not be pushed:\n{pushed.stderr}")
     else:
         sys.exit(f"The branch {branch} kept changing while this ran.")
     body = ("\n".join(line for line, _ in described) + "\n\nWritten from the issue by a workflow. The findings passed the parser's checks; "
@@ -397,7 +415,8 @@ def drafted(event):
         run("gh", "pr", "create", "--draft", "--base", "main", "--head", branch, "--title", title, "--body-file", "-", input=body)
         return
     run("gh", "pr", "edit", str(pull["number"]), "--title", title, "--body-file", "-", input=body)
-    unready()
+    # Again: the maintainer may have marked it ready between the first time and the push.
+    unready(pull)
 
 if __name__ == "__main__":
     arguments = sys.argv[1:]
