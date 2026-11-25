@@ -23,6 +23,7 @@ final class AppModel {
         var blocked: [String]?                 // files macOS would not let the app read; optional so older state files still load
         var serial: Int?                       // highest findings index accepted so far, which also holds when the cache is lost
         var names: [String: String]?           // item id -> last seen name, to list an item after it is removed
+        var editors: [String: [String]]?       // extension id -> editors it was last seen in, for its verdict after it is removed
     }
 
     /// Installed items, followed by the ones that were removed since an earlier scan.
@@ -140,6 +141,8 @@ final class AppModel {
         var shell: ShellInfo
         var items: [Item]
         var watch: [String]
+        /// Kinds this scan could not fully read, whose missing items are not called removed.
+        var unread: Set<String>
     }
 
     nonisolated static func scan(shell: ShellInfo?) -> Snapshot {
@@ -158,7 +161,9 @@ final class AppModel {
         let watch = (appDirs + brewPrefixes.flatMap { [$0.appendingPathComponent("Cellar"), $0.appendingPathComponent("Caskroom")] }
             + binDirs + shell.npmRoots + editors.map(\.dir))
             .map(\.path).filter { FileManager.default.fileExists(atPath: $0) }
-        return Snapshot(shell: shell, items: items, watch: watch)
+        // Without a login shell or a package manager that answers, the npm folders were not looked in.
+        let unread = Scanner.unread(brewPrefixes: brewPrefixes, editors: editors).union(shell.complete && !shell.npmRoots.isEmpty ? [] : ["npm"])
+        return Snapshot(shell: shell, items: items, watch: watch, unread: unread)
     }
 
     /// `userInitiated` also retries files macOS blocked earlier, in case access was granted since.
@@ -173,8 +178,9 @@ final class AppModel {
         let snapshot = await Task.detached { Self.scan(shell: known) }.value
         shell = snapshot.shell
         saved.names = (saved.names ?? [:]).merging(snapshot.items.map { ($0.id, $0.name) }) { $1 }
+        saved.editors = (saved.editors ?? [:]).merging(snapshot.items.filter { !$0.editors.isEmpty }.map { ($0.id, $0.editors) }) { $1 }
         let names = saved.aiRules.compactMapValues(\.name).merging(saved.names ?? [:]) { $1 }
-        let gone = Scanner.gone(known: saved.known, names: names, present: snapshot.items, unread: snapshot.shell.complete ? [] : ["npm"])
+        let gone = Scanner.gone(known: saved.known, names: names, editors: saved.editors ?? [:], present: snapshot.items, unread: snapshot.unread)
         removed = Set(gone.map(\.id))
         (env, shellFailed, items) = (snapshot.shell.env, snapshot.shell.failed, snapshot.items + gone)
         evaluate()
@@ -295,8 +301,8 @@ final class AppModel {
             // An item a lookup of its own judges while the batch waits is not looked up a second time.
             let judged = Set(items.map(\.id).filter { saved.aiRules[$0] != nil })
             while !rest.isEmpty, !Task.isCancelled {
-                // The list was made when the batch began. By now a rescan may have removed or updated an item, the
-                // findings may cover it, or a lookup of its own may be running.
+                // The list was made when the batch began. By now a rescan may have updated an item, the findings may
+                // cover it, or a lookup of its own may be running. An item removed meanwhile stays listed, and is looked up.
                 let group = rest.prefix(LLM.batchSize).compactMap { old in self.items.first { $0.id == old.id } }.filter { item in
                     verdicts[item.id]?.source != .rules && !analysing.contains(item.id) && (saved.aiRules[item.id] == nil || judged.contains(item.id))
                 }

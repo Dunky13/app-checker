@@ -129,7 +129,7 @@ struct SubmitView: View {
         // and stays out of the public issue, so such a check cannot be used to ask a question about the Mac.
         let readings = source == .ai && !draft.checks.isEmpty ? nil : Submission.readings(rule, item: item, probe: model.probe)
         do {
-            let issue = try Submission.issue(item: item, rule: rule, origin: origin, readings: readings, sourceCheck: check, appVersion: version)
+            let issue = try Submission.issue(item: item, rule: rule, origin: origin, readings: readings, sourceCheck: check, appVersion: version, removed: model.removed.contains(item.id))
             if let text = issue.clipboard {
                 guard mayCopy else { return mayCopy = true }
                 NSPasteboard.general.clearContents()

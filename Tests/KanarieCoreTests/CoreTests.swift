@@ -365,6 +365,16 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         #expect(gone.map(\.id).sorted() == ["app:com.example.gone", "brew:nameless"])
         #expect(gone.first { $0.id == "app:com.example.gone" }.map { [$0.name, $0.version, $0.path] } == ["Gone", "2.1", ""])
         #expect(gone.first { $0.id == "brew:nameless" }?.name == "nameless")
+        let ext = Scanner.gone(known: ["ext:a.b": "1"], names: [:], editors: ["ext:a.b": ["Cursor"]], present: [], unread: [])
+        #expect(ext.first?.editors == ["Cursor"])
+    }
+
+    @Test func aHalfWrittenExtensionListIsNotReadAsEmpty() throws {
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try write("good/extensions.json", "[]")
+        #expect(Scanner.unread(brewPrefixes: [dir], editors: [("Code", dir.appendingPathComponent("good"))]).isEmpty)
+        try write("half/extensions.json", "[{\"identifier\": ")
+        #expect(Scanner.unread(brewPrefixes: [dir], editors: [("Code", dir.appendingPathComponent("half"))]) == ["ext"])
     }
 
     let dir = FileManager.default.temporaryDirectory.appendingPathComponent("kanarie-tests-\(UUID().uuidString)")
@@ -861,10 +871,11 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: folder) }
         // What the script prints for the issue of a finding: the file and its text, or why it is refused.
-        func read(_ rule: Rule, edit: (String) -> String = { $0 }) throws -> String {
+        func read(_ rule: Rule, removed: Bool = false, edit: (String) -> String = { $0 }) throws -> String {
             let check = Submission.sourceCheck(rule, pages: [], cited: 0)
-            let issue = try Submission.issue(item: item, rule: rule, origin: "o", readings: [], sourceCheck: check, appVersion: "1")
+            let issue = try Submission.issue(item: item, rule: rule, origin: "o", readings: [], sourceCheck: check, appVersion: "1", removed: removed)
             let body = try #require(URLComponents(url: issue.url, resolvingAgainstBaseURL: false)?.queryItems?.last?.value)
+            #expect(body.contains("**No longer installed:**") == removed)
             let file = folder.appendingPathComponent("body.md")
             // GitHub hands the body of an issue back with CRLF line ends.
             try Data(edit(body).replacingOccurrences(of: "\n", with: "\r\n").utf8).write(to: file)
@@ -907,6 +918,8 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         #expect(try read(found) { $0.replacingOccurrences(of: "findings/example-new-tool/", with: "findings/-example/") }
             == "Refused: the issue names no file, so this finding has to be placed by hand.\n")
         #expect(try read(found).hasPrefix("example-new-tool/0.json\n"))
+        // The note on a removed item is no part of what the script reads.
+        #expect(try read(found, removed: true).hasPrefix("example-new-tool/0.json\n"))
     }
 
     @Test func theIssueCarriesTheFindingAndSurvivesTheLink() throws {

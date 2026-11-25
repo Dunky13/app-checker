@@ -47,14 +47,14 @@ extension Verdict.Source {
 
 struct StatusIcon: View {
     var status: Status
-    /// No longer installed: a crossed-out circle instead of the status, which the detail pane still shows.
+    /// No longer installed: a crossed-out circle instead of the status, which the detail pane and VoiceOver still give.
     var removed = false
 
     var body: some View {
         // Every status takes the room of the widest symbol, so the texts next to the icons line up.
         Image(systemName: Status.warn.symbol).hidden()
             .overlay { Image(systemName: removed ? "circle.slash" : status.symbol).foregroundStyle(removed ? .secondary : status.color) }
-            .accessibilityElement().accessibilityLabel(removed ? "Removed, \(status.label)" : status.label).accessibilityAddTraits(.isImage)
+            .accessibilityElement().accessibilityLabel(status.label).accessibilityAddTraits(.isImage)
     }
 }
 

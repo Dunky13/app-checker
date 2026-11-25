@@ -38,6 +38,7 @@ Not covered: apps kept anywhere else, iPhone and iPad apps running on a Mac, and
 | Yellow warning | Telemetry is on, or on by default where the setting cannot be read, and there is a way to switch it off. The item shows how, with a link, and a copy button when the switch is a command. |
 | Red cross | Telemetry is on and no opt-out is known |
 | Grey question mark | Unknown |
+| Grey crossed-out circle | No longer installed. Listed last, so a finding can still be submitted for it; its verdict is in the detail pane. |
 
 A verdict comes from, in this order:
 
