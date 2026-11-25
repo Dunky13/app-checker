@@ -97,7 +97,7 @@ Several items go out in groups of five per request, which costs less than one re
 - **Claude Code CLI** (default): runs your local `claude` command with web search, using your own Claude login.
 - **OpenAI-compatible API**: any chat completions endpoint, for example [OpenRouter](https://openrouter.ai). The API key is stored in your keychain. On OpenRouter the web search plugin is switched on; other endpoints answer from what the model already knows.
 
-A lookup sends the item's name, identifier and version to that backend. Answers can be wrong, so check the listed sources before relying on one. Items judged by a lookup carry a sparkles mark in the list. A cited link that only lacks https (`http://`) is written as https when the answer arrives, so the lookup can be submitted as it is; its log keeps the answer as it came.
+A lookup sends the item's name, identifier and version to that backend. Answers can be wrong, so check the listed sources before relying on one. Items judged by a lookup carry a sparkles mark in the list. A cited link that only lacks https (`http://`) is written as https when the answer arrives, so the lookup can be submitted as it is; its log keeps the answer as it came. To correct a lookup yourself, use **Edit or Submit…** on the item and **Save on This Mac**: your version replaces the lookup on this Mac, is marked as edited by you, and stays until you look the item up again. **Continue on GitHub…** in the same form proposes it as a finding instead.
 
 The search field looks in names and identifiers. The filter menu next to it narrows the list by status (red, yellow, green, grey), by where the verdict comes from (Kanarie findings, AI lookup, analytics code found, nothing known, or everything that is not from an AI lookup) and by kind. Filters and search work together, and both bulk lookups follow them.
 
@@ -173,7 +173,7 @@ File paths must start with `~/` or a Homebrew prefix. Checks cannot run commands
 
 A `command` is one line, and it should make the change permanent: `echo 'export NAME=1' >> ~/.zshrc`, not `export NAME=1`.
 
-Found a wrong or missing finding? Use **Submit a Finding…** (or **Suggest a Correction…**) on the item in the app (removed items stay in the list for this), or select several items (or all of them) and use **Submit Findings…** to send the AI lookups not sent before in one issue, or open a pull request with a source. `swift test` validates every file.
+Found a wrong or missing finding? Use **Submit a Finding…** (**Suggest a Correction…** for a finding, **Edit or Submit…** for an AI lookup) on the item in the app (removed items stay in the list for this), or select several items (or all of them) and use **Submit Findings…** to send the AI lookups not sent before in one issue, or open a pull request with a source. `swift test` validates every file.
 
 ### Submitting from the app
 

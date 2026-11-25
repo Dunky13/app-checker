@@ -25,6 +25,7 @@ final class AppModel {
         var names: [String: String]?           // item id -> last seen name, to list an item after it is removed
         var editors: [String: [String]]?       // extension id -> editors it was last seen in, for its verdict after it is removed
         var submitted: [String: Rule]?         // item id -> AI lookup last sent from this Mac, so a bulk submission sends only new ones
+        var edited: Set<String>?               // item ids whose AI lookup was changed by hand on this Mac, until a new lookup replaces it
     }
 
     /// Installed items, followed by the ones that were removed since an earlier scan.
@@ -109,6 +110,16 @@ final class AppModel {
                 try? await Task.sleep(for: .seconds(86400))
             }
         }
+    }
+
+    func isEdited(_ id: String) -> Bool { saved.edited?.contains(id) == true }
+
+    /// Keeps a hand edit of an AI lookup on this Mac, in its place. A new lookup replaces it.
+    func saveEdit(_ rule: Rule, for id: String) {
+        saved.aiRules[id] = rule
+        saved.edited = (saved.edited ?? []).union([id])
+        save()
+        evaluate()
     }
 
     /// Whether this lookup was sent from this Mac before. A lookup done again with another result is new.
@@ -313,7 +324,10 @@ final class AppModel {
         for (item, result) in zip(items, results) {
             var failed = false
             // An http link that only needs its scheme is written as https, so the lookup can be submitted as it is. Its log keeps the answer as it came.
-            do { saved.aiRules[item.id] = try result.rule.get().withPlainLinks() } catch {
+            do {
+                saved.aiRules[item.id] = try result.rule.get().withPlainLinks()
+                saved.edited?.remove(item.id)
+            } catch {
                 failed = true
                 errors[item.id] = error.localizedDescription
             }

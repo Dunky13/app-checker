@@ -349,7 +349,8 @@ struct DetailView: View {
     private var sourceNote: String {
         switch verdict.source {
         case .rules: "From the Kanarie findings."
-        case .ai: "From an AI lookup. Not verified: check its sources before relying on it."
+        case .ai: model.isEdited(item.id) ? "From an AI lookup, edited by you on this Mac. Not verified: check its sources before relying on it."
+            : "From an AI lookup. Not verified: check its sources before relying on it."
         case .sdk: "The hint comes from an offline search of the installed files for analytics service names."
         case .none: "Not in the Kanarie findings."
         }
@@ -452,7 +453,7 @@ struct DetailView: View {
                     if !model.removed.contains(item.id) {
                         Button("Show in Finder", systemImage: "folder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: item.path)]) }
                     }
-                    Button(verdict.source == .rules ? "Suggest a Correction…" : "Submit a Finding…", systemImage: "square.and.pencil") { submitting = true }
+                    Button(verdict.source == .rules ? "Suggest a Correction…" : verdict.source == .ai ? "Edit or Submit…" : "Submit a Finding…", systemImage: "square.and.pencil") { submitting = true }
                 }
                 Text(item.id).font(.caption.monospaced()).foregroundStyle(.secondary).textSelection(.enabled)
             }

@@ -169,6 +169,7 @@ A finding sent from the app arrives as an issue. `scripts/accept-finding.py <iss
 
 - **http links fixed.** When only the scheme keeps a link from being plain (`http://`, or upper case), an AI lookup's links are written as https when the answer arrives and in lookups saved before (with the record of what was sent, so "already sent" still matches). The lookup log keeps the answer as it came. So such lookups go in a bulk submission as they are. A link typed into the submit form gets a **Switch Links to https** button, shown only when it changes the finding sent. The host is never changed and a link with a port is left alone; the issue's "Fetched X of Y cited pages" line shows a page that has no https.
   - Evidence: see the PR. 62 tests pass.
+- **Edit an AI lookup by hand.** The item's button is **Edit or Submit…** for an AI lookup (**Submit a Finding…** and **Suggest a Correction…** as before for the others), and its form has **Save on This Mac**. That keeps the edited finding in place of the lookup (`Saved.aiRules`) and marks the item in `Saved.edited`, so the detail pane says "edited by you on this Mac" and an issue sent later says "AI lookup, edited by hand". A new lookup replaces the edit and clears the mark. Saving needs a change and only the checks the app applies when it loads a lookup (`problems(curated: false)`), not the stricter ones for an issue. Not for findings or hand-written ones: those would show as an AI lookup.
 
 ## In 0.1.5
 

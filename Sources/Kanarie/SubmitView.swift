@@ -30,7 +30,7 @@ struct SubmitView: View {
     private var origin: String {
         switch source {
         case .rules: "Correction of the current finding"
-        case .ai: draft == initial ? "AI lookup, not edited" : "AI lookup, edited by hand"
+        case .ai: draft == initial && !model.isEdited(item.id) ? "AI lookup, not edited" : "AI lookup, edited by hand"
         case .sdk, .none: "Written by hand"
         }
     }
@@ -111,6 +111,15 @@ struct SubmitView: View {
                     Spacer()
                     if task != nil { ProgressView().controlSize(.small).accessibilityLabel("Fetching the cited pages") }
                     Button("Cancel") { dismiss() }
+                    if source == .ai {
+                        // The checks the app applies when it loads a lookup, not the stricter ones for an issue.
+                        Button("Save on This Mac") {
+                            model.saveEdit(rule, for: item.id)
+                            dismiss()
+                        }
+                        .help("Keeps your changes in place of the AI lookup, on this Mac only. A new lookup replaces them.")
+                        .disabled(draft == initial || !rule.problems(curated: false).isEmpty || task != nil)
+                    }
                     Button(mayCopy ? "Copy and Continue" : check?.missing.isEmpty == false ? "Continue Anyway" : "Continue on GitHub…") {
                         // Set here and not inside the task, so a second press in the same moment starts nothing.
                         guard task == nil else { return }
@@ -167,12 +176,12 @@ func bulkFinding(for item: Item, model: AppModel) -> (rule: Rule?, why: String) 
     case .ai: break
     }
     // The form turns "unknown" into a telemetry class, which would be a claim the lookup did not make.
-    guard let found = verdict.rule, found.telemetry != .unknown else { return (nil, "The lookup could not tell. Use Submit a Finding… to write one.") }
+    guard let found = verdict.rule, found.telemetry != .unknown else { return (nil, "The lookup could not tell. Use Edit or Submit… to write one.") }
     let draft = Submission.Draft(from: found, item: item)
     let problems = draft.problems(for: item)
-    guard problems.isEmpty else { return (nil, "Not ready: \(problems.joined(separator: "; ")). Fix it with Submit a Finding…") }
-    guard let sent = Submission.unedited(found, item: item) else { return (nil, "The form would change this lookup: it has steps or checks its kind of telemetry does not use, or it has no steps. Check it with Submit a Finding…") }
-    guard !model.wasSubmitted(item.id, sent) else { return (nil, "Already sent from this Mac. To send it again, use Submit a Finding…") }
+    guard problems.isEmpty else { return (nil, "Not ready: \(problems.joined(separator: "; ")). Fix it with Edit or Submit…") }
+    guard let sent = Submission.unedited(found, item: item) else { return (nil, "The form would change this lookup: it has steps or checks its kind of telemetry does not use, or it has no steps. Check it with Edit or Submit…") }
+    guard !model.wasSubmitted(item.id, sent) else { return (nil, "Already sent from this Mac. To send it again, use Edit or Submit…") }
     return (sent, "")
 }
 
@@ -199,7 +208,7 @@ struct BulkSubmitView: View {
             let (rule, why) = bulkFinding(for: item, model: model)
             guard let rule else { skipped.append((item, why)); continue }
             // The script refuses an issue whose findings would share a file, so the later one waits for its own issue.
-            guard let folder = Submission.folder(for: item, rule: rule) else { skipped.append((item, "No folder name can be made from its name. Use Submit a Finding…")); continue }
+            guard let folder = Submission.folder(for: item, rule: rule) else { skipped.append((item, "No folder name can be made from its name. Use Edit or Submit…")); continue }
             if let other = folders[folder] { skipped.append((item, "It would go to the same folder as \(other). Send it on its own.")); continue }
             guard included.count < Submission.bulkLimit else { skipped.append((item, "One issue holds at most \(Submission.bulkLimit) findings. Send it in a next one.")); continue }
             folders[folder] = item.name
@@ -257,7 +266,7 @@ struct BulkSubmitView: View {
                     Label("These findings are too long for a link. Continuing copies them to your clipboard, replacing what is there, so you can paste them into the issue.", systemImage: "doc.on.clipboard")
                         .fixedSize(horizontal: false, vertical: true)
                 } else if missing {
-                    Label("A name that no cited page mentions may be misspelled or invented. Correct that item with Submit a Finding…, or continue and say so in the issue.", systemImage: "exclamationmark.triangle")
+                    Label("A name that no cited page mentions may be misspelled or invented. Correct that item with Edit or Submit…, or continue and say so in the issue.", systemImage: "exclamationmark.triangle")
                         .fixedSize(horizontal: false, vertical: true)
                 } else {
                     Text("Kanarie fetches the cited pages to look for the names, then opens one public GitHub issue with all of them in your browser. Nothing is sent until you submit it there.")
