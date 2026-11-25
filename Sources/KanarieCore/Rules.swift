@@ -140,12 +140,16 @@ public struct Rule: Codable, Sendable, Hashable {
         if (sources ?? []).isEmpty { found.append("a source link is missing") }
         if [.optOut, .optIn].contains(telemetry), safeURL(optOut?.url) == nil { found.append("the documentation link for switching it off is missing or not an http(s) link") }
         // A curated link is read once, by whoever reviews the finding. After that it is a label to click.
-        for link in [policyURL, optOut?.url].compactMap(\.self) + (sources ?? [])
-        where safeURL(link).map({ $0.scheme == "https" && $0.user == nil && $0.host != nil }) != true {
-            found.append("not a plain https link: \(link.prefix(200))")
+        // So its host is written in plain letters, digits, dots and hyphens: no user name before it, no escape, no look-alike letter.
+        for link in [policyURL, optOut?.url].compactMap(\.self) + (sources ?? []) {
+            let host = link.dropFirst("https://".count).prefix { !"/?#".contains($0) }
+            if safeURL(link) == nil || !link.hasPrefix("https://") || !link.allSatisfy(\.isASCII) || host.isEmpty
+                || !host.allSatisfy({ $0.isLetter || $0.isNumber || ".-:".contains($0) }) {
+                found.append("not a plain https link: \(link.prefix(200))")
+            }
         }
         // The same goes for the command: its end must not sit behind a screen of spaces.
-        if let command = optOut?.command, command.count > 300 || command.contains("  ") {
+        if let command = optOut?.command, command.count > 300 || zip(command, command.dropFirst()).contains(where: { $0.isWhitespace && $1.isWhitespace }) {
             found.append("the command is longer than 300 characters or padded with spaces")
         }
         return found

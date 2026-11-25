@@ -229,7 +229,8 @@ public enum LLM {
     /// The objects of the answer in a reply. Models put words around it: a citation like [1], an example in a fence of
     /// its own, an object quoted from a page, an object around the list. So fenced parts are tried first, then every
     /// bracket in turn. JSON that holds a verdict with an entry number wins; a verdict without one counts only when
-    /// there is nothing better. Of several, the last one: the answer comes after what the model quotes on its way.
+    /// there is nothing better. Of several numbered lists the one that answers the most entries counts, and of equals
+    /// the later one: a quote from a page answers one entry, before or after the answer itself.
     static func answers(in text: String) -> [[String: Any]] {
         // shortcut: gives up after two million scanned characters, which only a reply full of unclosed brackets
         // reaches; find the brackets in one pass with a stack if replies ever get that large.
@@ -255,9 +256,9 @@ public enum LLM {
             }
             return nil
         }
-        var unnumbered: [[String: Any]]?
-        for candidate in blocks(of: text).filter(\.isCode).map(\.text).reversed() + [text] {
-            var rest = candidate[...], numbered: [[String: Any]]?, plain: [[String: Any]]?
+        var numbered: (objects: [[String: Any]], entries: Int)?, unnumbered: [[String: Any]]?
+        for candidate in blocks(of: text).filter(\.isCode).map(\.text) + [text] {
+            var rest = candidate[...]
             while budget > 0, let open = rest.unicodeScalars.firstIndex(where: { $0 == "[" || $0 == "{" }) {
                 rest = rest[rest.unicodeScalars.index(after: open)...]
                 guard let found = span(candidate[open...]), let json = try? JSONSerialization.jsonObject(with: Data(found.utf8)) else { continue }
@@ -267,12 +268,11 @@ public enum LLM {
                 guard objects.contains(where: { $0["telemetry"] != nil }) else { continue }
                 // What lies inside an answer is part of it, not an answer of its own.
                 rest = candidate[found.endIndex...]
-                if objects.contains(where: { entry($0) != nil }) { numbered = objects } else { plain = objects }
+                let entries = Set(objects.compactMap(entry)).count
+                if entries == 0 { unnumbered = unnumbered ?? objects } else if entries >= numbered?.entries ?? 0 { numbered = (objects, entries) }
             }
-            if let numbered { return numbered }
-            unnumbered = unnumbered ?? plain
         }
-        return unnumbered ?? []
+        return numbered?.objects ?? unnumbered ?? []
     }
 
     /// The number an answer gives for its entry. A page's object with some other "entry" has none.

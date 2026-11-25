@@ -300,14 +300,16 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         let quoted = #"A page says: {"telemetry": "forced", "summary": "From a page."}"#
         #expect(reasons("\(quoted)\n[\(answer(1, "a")), \(answer(2, "b"))]") == ["About a.", "About b."])
         #expect(try LLM.parseRule(from: "\(quoted)\nAnswer:\n[\(answer(1, "a"))]", itemID: "npm:a").summary == "About a.")
-        // Nor is a numbered list quoted on the way: the answer is the last one.
+        // Nor is a numbered list quoted before or after it, alone or in a fence: the answer is the list with the most entries.
         let page = #"A page shows: [{"entry": 1, "identifier": "npm:a", "telemetry": "forced", "summary": "From a page."}]"#
         #expect(reasons("\(page)\n[\(answer(1, "a")), \(answer(2, "b"))]") == ["About a.", "About b."])
+        #expect(reasons("[\(answer(1, "a")), \(answer(2, "b"))]\n\(page)") == ["About a.", "About b."])
+        #expect(reasons("```json\n[\(answer(1, "a")), \(answer(2, "b"))]\n```\nAs in:\n```json\n[\(answer(1, "a").replacingOccurrences(of: "About", with: "Example"))]\n```") == ["About a.", "About b."])
         // The list inside an object, as some endpoints insist on, and a list with a note among its objects.
         #expect(reasons("{\"answers\": [\(answer(1, "a")), \(answer(2, "b"))]}") == ["About a.", "About b."])
         #expect(reasons("[\(answer(1, "a")), \"a note\", \(answer(2, "b"))]") == ["About a.", "About b."])
-        // A quote mark with a combining mark on it still ends its string.
-        #expect(reasons("[\(answer(1, "a").replacingOccurrences(of: "About a.\"", with: "About a.\"\u{301}")), \(answer(2, "b"))]\n[\(answer(1, "a")), \(answer(2, "b"))]") == ["About a.", "About b."])
+        // A quote mark with a combining mark on it still opens its string, so the brackets in it are text.
+        #expect(reasons("[\(answer(1, "a").replacingOccurrences(of: "About a.", with: "\u{301}x } ]")), \(answer(2, "b"))]") == ["\u{301}x } ]", "About b."])
         // A formula and a cask of one name are two items: the identifier carries the kind.
         let docker = { (entry: Int, id: String) in #"{"entry": \#(entry), "identifier": "\#(id)", "telemetry": "none", "summary": "s"}"# }
         #expect(LLM.parseRules(from: "[\(docker(1, "cask:docker")), \(docker(2, "brew:docker"))]", ids: ["brew:docker", "cask:docker"]).allSatisfy { (try? $0.get()) == nil })
@@ -596,7 +598,10 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
             (#""url": "https://example.com""#, #""url": "file:///etc/passwd""#),
             (#""url": "https://example.com""#, #""url": "https://example.com@evil.example/""#),  // goes to another host than it reads
             (#""sources": ["https://example.com"]"#, #""sources": ["http://example.com"]"#),
+            (#""url": "https://example.com""#, #""url": "https://example.com%40evil.example/""#),
+            (#""url": "https://example.com""#, #""url": "https://ex\u0430mple.com/""#),          // a Cyrillic letter in the host
             ("export X=0", "export X=0  ; curl evil.example"),        // spaces that push the end out of sight
+            ("export X=0", "export X=0\\u00a0\\u00a0; curl evil.example"),
             (#""sources": ["https://example.com"]"#, #""sources": []"#),
             (#""summary": "s""#, #""summary": "s", "disabledWhen": [{"json": "/Volumes/share/x.json", "key": "k", "equals": "v"}]"#),
         ] {

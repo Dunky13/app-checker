@@ -147,7 +147,11 @@ def signed():
     """Has the test of the signature confirm the index in the checkout. A test that is skipped or not found also ends well, so its output is read."""
     environment = {key: value for key, value in os.environ.items() if key != "GITHUB_EVENT_NAME"}
     done = subprocess.run(["swift", "test", "--filter", SIGNATURE_TEST], cwd=ROOT, text=True, capture_output=True, env=environment)
-    return f"Test {SIGNATURE_TEST}() passed" in done.stdout + done.stderr
+    passed = f"Test {SIGNATURE_TEST}() passed" in done.stdout + done.stderr
+    if not passed:
+        # Why: a signature that does not hold reads differently from tests that do not build.
+        print((done.stdout + done.stderr)[-2000:], file=sys.stderr)
+    return passed
 
 
 def shown():
@@ -174,8 +178,9 @@ def accept(issues):
         # The signature covers every finding in the checkout, the diff below only what the issues change.
         # So what is on main must be signed already: then the yes is about the diff and nothing else.
         if not signed():
-            sys.exit("The index on main does not cover the findings on main. Run scripts/sign-findings.sh there, "
-                     "after reading what changed since the last signature, and get that merged first.")
+            sys.exit("The signature test did not pass on main, see above. If the tests do not build, fix that. If the index "
+                     "does not cover the findings on main: run scripts/sign-findings.sh there, after reading what changed "
+                     "since the last signature, and get that merged first.")
         lines, folders, written = [], [], set()
         for number in issues:
             issue = json.loads(run("gh", "issue", "view", number, "--json", "body,author,state", capture_output=True).stdout)
@@ -220,10 +225,11 @@ def accept(issues):
             sys.exit("What was signed is not what was committed. The commit is dropped.")
     except BaseException:
         # Nothing has left this Mac: put findings/ back and drop the branch. The checkout was clean, so only this
-        # script's files go, and the switch refuses if something else was edited in the meantime.
+        # script's files go; what was edited elsewhere in the meantime stays.
         run("git", "restore", "-q", "--staged", "--worktree", "--source=HEAD", "--", "findings")
         run("git", "clean", "-fdq", "findings")
-        run("git", "switch", "-q", "-")
+        # checkout, not switch: the run may have started from a commit without a branch.
+        run("git", "checkout", "-q", "-")
         run("git", "branch", "-q", "-D", branch)
         raise
     try:
@@ -233,7 +239,7 @@ def accept(issues):
               "or delete the branch before you run this again.", file=sys.stderr)
         raise
     finally:
-        run("git", "switch", "-q", "-")
+        run("git", "checkout", "-q", "-")
     try:
         body = "\n".join(lines) + "\n\nThe findings passed the tests, and the maintainer read this change before signing the index."
         run("gh", "pr", "create", "--base", "main", "--head", branch, "--title", title, "--body", body)
