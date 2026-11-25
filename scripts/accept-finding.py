@@ -332,7 +332,7 @@ def accept(issues):
     except subprocess.CalledProcessError:
         print(f"The branch {branch} is pushed, with the signed index. " + (
             f"Check on GitHub that pull request #{draft[0]['number']} holds {signed_head} before you mark it ready by hand: "
-            "it may be ready already, or changed since." if draft else "Open its pull request by hand."), file=sys.stderr)
+            "it may be ready already, or changed since. If it holds another commit, put it back to draft." if draft else "Open its pull request by hand."), file=sys.stderr)
         raise
 
 
@@ -380,7 +380,10 @@ def drafted(event):
             ref = f"refs/remotes/origin/{branch}"
             run("git", "fetch", "-q", "origin", f"+refs/heads/{branch}:{ref}")
             # A branch with no history in common with main: compared with main itself, so it counts as changed.
-            base = subprocess.run(["git", "merge-base", "origin/main", ref], cwd=ROOT, capture_output=True, text=True).stdout.strip() or "origin/main"
+            found = subprocess.run(["git", "merge-base", "origin/main", ref], cwd=ROOT, capture_output=True, text=True)
+            if found.returncode not in (0, 1):
+                sys.exit(f"git merge-base failed:\n{found.stderr}")
+            base = found.stdout.strip() or "origin/main"
             changed = dict(reversed(line.split("\t")) for line in run(
                 "git", "diff", "--name-status", "--no-renames", base, ref, capture_output=True).stdout.splitlines())
             if not pull and changed.get("findings/index.json.sig") in ("A", "M"):
@@ -407,10 +410,11 @@ def drafted(event):
         if pushed.returncode == 0:
             break
         # Another try only when the branch moved; a push the server declined would be declined again.
+        print(pushed.stderr, file=sys.stderr)
         if remote_head(branch) == head:
-            sys.exit(f"The branch {branch} could not be pushed:\n{pushed.stderr}")
+            sys.exit(f"The branch {branch} could not be pushed; git's message is above.")
     else:
-        sys.exit(f"The branch {branch} kept changing while this ran. The last push said:\n{pushed.stderr}")
+        sys.exit(f"The branch {branch} kept changing while this ran; the last push's message is above.")
     body = ("\n".join(line for line, _ in described) + "\n\nWritten from the issue by a workflow. The findings passed the parser's checks; "
             "the tests and the review are still to come. The index is not signed, so the app would not take this change: "
             f"do not merge it as it is. To accept it, run `scripts/accept-finding.py {number}`. It writes the branch again from main, "
