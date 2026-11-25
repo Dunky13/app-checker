@@ -64,7 +64,8 @@ public enum Submission {
         public func problems(for item: Item) -> [String] {
             // Only where the field is in use: with another telemetry class or with kept checks it is not shown.
             let name = telemetry == .optOut && kept.off.isEmpty && kept.on.isEmpty ? variable.trimmingCharacters(in: .whitespacesAndNewlines) : ""
-            return rule(for: item).problems(curated: true) + (name.isEmpty || Check.isName(name) ? [] : ["the variable is a name only, such as EXAMPLE_TELEMETRY; its value goes in the other field"])
+            // Before the finding's own problems, which end with the links: the form shows only the first few.
+            return (name.isEmpty || Check.isName(name) ? [] : ["the variable is a name only, such as EXAMPLE_TELEMETRY; its value goes in the other field"]) + rule(for: item).problems(curated: true)
         }
     }
 

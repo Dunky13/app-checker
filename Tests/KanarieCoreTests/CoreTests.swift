@@ -397,7 +397,14 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         #expect(finding.problems(curated: true) == ["not a plain https link in Privacy policy: http://example.com/privacy",
             "not a plain https link in Documentation: http://example.com/off", "not a plain https link in Sources: http://example.com/"])
         finding.optOut?.url = nil
-        #expect(finding.problems(curated: true).contains("Documentation has no link"))
+        finding.policyURL = nil
+        finding.sources = []
+        finding.optOut?.command = "echo  padded"
+        // Missing links once each, and the command before any link problem.
+        #expect(finding.problems(curated: true) == ["Sources has no link", "Documentation has no link",
+            "the command is not plain ASCII, is longer than 300 characters, or is padded with spaces"])
+        finding.optOut?.url = ""
+        #expect(finding.problems(curated: true).filter { $0.contains("Documentation") } == ["Documentation has no link"])
     }
 }
 
