@@ -1,8 +1,11 @@
 import Foundation
+import os
 
 public enum Shell {
     public struct Failure: LocalizedError {
         public var errorDescription: String?
+        /// What the program had printed when it was stopped.
+        public var output = Data()
     }
 
     /// Runs a program and returns its stdout. Blocking: call from a background task.
@@ -22,14 +25,22 @@ public enum Shell {
         process.standardOutput = out
         process.standardError = FileHandle.nullDevice
         try process.run()
-        DispatchQueue.global().asyncAfter(deadline: .now() + timeout) { if process.isRunning { process.terminate() } }
+        // Its own flag: a program that handles the signal exits like any other, and one that crashes was not timed out.
+        let timedOut = OSAllocatedUnfairLock(initialState: false)
+        DispatchQueue.global().asyncAfter(deadline: .now() + timeout) {
+            guard process.isRunning else { return }
+            timedOut.withLock { $0 = true }
+            process.terminate()
+        }
         let data = out.fileHandleForReading.readDataToEndOfFile()
         process.waitUntilExit()
+        let name = URL(fileURLWithPath: executable).lastPathComponent
+        if timedOut.withLock({ $0 }) { throw Failure(errorDescription: "\(name) timed out after \(Int(timeout)) s.", output: data) }
         guard process.terminationReason == .exit else {
-            throw Failure(errorDescription: "\(URL(fileURLWithPath: executable).lastPathComponent) timed out after \(Int(timeout)) s.")
+            throw Failure(errorDescription: "\(name) was stopped by signal \(process.terminationStatus).", output: data)
         }
         guard process.terminationStatus == 0 || (acceptFailure && !data.isEmpty) else {
-            throw Failure(errorDescription: "\(URL(fileURLWithPath: executable).lastPathComponent) exited with status \(process.terminationStatus).")
+            throw Failure(errorDescription: "\(name) exited with status \(process.terminationStatus).")
         }
         return data
     }

@@ -9,6 +9,8 @@ final class AppModel {
     nonisolated static let findingsURL = URL(string: "https://raw.githubusercontent.com/Dunky13/kanarie/main/findings/")!
     nonisolated static let supportDir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Kanarie")
     nonisolated static let stateFile = supportDir.appendingPathComponent("state.json"), cachedFindings = supportDir.appendingPathComponent("findings")
+    /// One file per item: a log holds pages of web results, too much for the state file that is rewritten on every save.
+    nonisolated static let lookupLogs = LookupLogs(folder: supportDir.appendingPathComponent("lookups"))
     /// Same key as the app's own updates: only findings the maintainer signed are accepted.
     nonisolated static var publicKey: String { Bundle.main.infoDictionary?["SUPublicEDKey"] as? String ?? "" }
     nonisolated static var bundledFindings: URL? { Bundle.main.url(forResource: "findings", withExtension: nil) }
@@ -73,7 +75,11 @@ final class AppModel {
         try? FileManager.default.createDirectory(at: Self.supportDir, withIntermediateDirectories: true)
         saved = Self.loadSaved()
         // Answers saved by an older version must pass today's checks too.
-        saved.aiRules = saved.aiRules.filter { $0.value.problems(curated: false).isEmpty }
+        for (id, rule) in saved.aiRules where !rule.problems(curated: false).isEmpty {
+            saved.aiRules[id] = nil
+            // Its log would show a lookup that looks fine next to an item nothing is known about.
+            Self.lookupLogs.removeVerdictLog(for: id)
+        }
         Probe.blockedFiles = Set(saved.blocked ?? [])
         (serial, rules) = Self.loadFindings()
         saved.serial = max(saved.serial ?? 0, serial)
@@ -252,13 +258,21 @@ final class AppModel {
         guard !analysing.contains(item.id) else { return }
         analysing.insert(item.id)
         errors[item.id] = nil
+        var (log, rule): ([LLM.Turn], Result<Rule, any Error>)
+        do { (log, rule) = await LLM.analyse(item, backend: try backend(), env: env) } catch {
+            // A lookup that could not start is logged too: otherwise the log would still show an older failure.
+            (log, rule) = ([LLM.Turn(role: .error, text: error.localizedDescription)], .failure(error))
+        }
+        var failed = false
         do {
-            saved.aiRules[item.id] = try await LLM.analyse(item, backend: backend(), env: env)
+            saved.aiRules[item.id] = try rule.get()
             save()
             evaluate()
         } catch {
+            failed = true
             errors[item.id] = error.localizedDescription
         }
+        do { try Self.lookupLogs.save(log, for: item.id, failed: failed) } catch { NSLog("Kanarie: could not save the lookup log: \(error)") }
         analysing.remove(item.id)
     }
 

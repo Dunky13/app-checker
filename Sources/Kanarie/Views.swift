@@ -194,6 +194,7 @@ struct DetailView: View {
     var verdict: Verdict
     @State private var copied = false
     @State private var submitting = false
+    @State private var log: OpenedLog?
 
     private var sourceNote: String {
         switch verdict.source {
@@ -267,6 +268,11 @@ struct DetailView: View {
                         if model.analysing.contains(item.id) {
                             ProgressView().controlSize(.small).accessibilityHidden(true)
                             Text("Searching the web. This can take a minute or two.").foregroundStyle(.secondary)
+                        } else if AppModel.lookupLogs.hasLog(for: item.id) {
+                            Button("Show Lookup Log…", systemImage: "text.bubble") {
+                                let parts = AppModel.lookupLogs.load(for: item.id)
+                                log = OpenedLog(name: item.name, verdict: parts.verdict, failed: parts.failed, fromLookup: verdict.source == .ai)
+                            }
                         }
                     }
                     if let error = model.errors[item.id] {
@@ -284,6 +290,109 @@ struct DetailView: View {
         }
         .onChange(of: item.id) { copied = false }
         .sheet(isPresented: $submitting) { SubmitView(model: model, item: item, verdict: verdict) }
+        .sheet(item: $log) { LookupLogView(log: $0) }
+    }
+}
+
+/// A log as it was read when its window opened, so a lookup that ends or a selection that changes meanwhile does not change it.
+private struct OpenedLog: Identifiable {
+    let id = UUID()
+    var name: String
+    /// The lookup the verdict comes from and a later one that failed. nil: not there, or not readable.
+    var verdict: [LLM.Turn]?, failed: [LLM.Turn]?
+    /// The verdict is a lookup's, so there should be a log for it.
+    var fromLookup: Bool
+}
+
+/// What an AI lookup asked and got back. All of it is shown as plain text: tool results are web pages.
+struct LookupLogView: View {
+    @Environment(\.dismiss) private var dismiss
+    fileprivate var log: OpenedLog
+
+    var body: some View {
+        // Two lookups in one list would read as one conversation, so each gets its heading.
+        let twoParts = log.failed != nil && (log.verdict != nil || log.fromLookup)
+        VStack(spacing: 0) {
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 12) {
+                    if log.verdict == nil, log.failed == nil { Text("This log could not be read.").foregroundStyle(.secondary) }
+                    if twoParts {
+                        Text("The lookup behind the verdict").font(.headline)
+                        if log.verdict == nil { Text("Its log is not on this Mac, or cannot be read.").foregroundStyle(.secondary) }
+                    }
+                    LogTurns(turns: log.verdict ?? [])
+                    if twoParts { Text("A later lookup, which failed").font(.headline).padding(.top, 8) }
+                    LogTurns(turns: log.failed ?? [])
+                }
+                .padding()
+            }
+            Divider()
+            HStack {
+                Text("AI lookup log of \(log.name). Kept on this Mac only.").font(.callout).foregroundStyle(.secondary)
+                Spacer()
+                Button("Done") { dismiss() }.keyboardShortcut(.defaultAction)
+            }
+            .padding()
+            .background(.bar)
+        }
+        .frame(width: 640, height: 600)
+    }
+}
+
+/// One lookup: its messages, with the tool calls between two messages folded into a group.
+private struct LogTurns: View {
+    var turns: [LLM.Turn]
+
+    var body: some View {
+        ForEach(Array(LLM.grouped(turns).enumerated()), id: \.offset) { _, group in
+            if group[0].role == .tool {
+                DisclosureGroup(group.count == 1 ? "1 tool call" : "\(group.count) tool calls") {
+                    ForEach(Array(group.enumerated()), id: \.offset) { _, call in
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(verbatim: call.tool ?? "Tool").font(.callout).bold()
+                            LogText(text: call.text)
+                            LogText(text: call.result ?? "No result was recorded.").foregroundStyle(.secondary)
+                        }
+                        .font(.callout)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.top, 6)
+                    }
+                }
+            } else {
+                VStack(alignment: .leading, spacing: 4) {
+                    switch group[0].role {
+                    case .user: Text("Prompt").font(.caption).bold().foregroundStyle(.secondary)
+                    case .error: Label("The lookup failed", systemImage: "exclamationmark.triangle").font(.caption).bold().foregroundStyle(.red)
+                    default: Text("Model").font(.caption).bold().foregroundStyle(.secondary)
+                    }
+                    LogText(text: group[0].text)
+                }
+                .padding(8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
+            }
+        }
+    }
+}
+
+/// A text of the log, with its JSON and fenced code set as code blocks.
+private struct LogText: View {
+    var text: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            ForEach(Array(LLM.blocks(of: text).enumerated()), id: \.offset) { _, block in
+                if block.isCode {
+                    Text(verbatim: block.text).font(.callout.monospaced())
+                        .padding(8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 6))
+                } else {
+                    Text(verbatim: block.text)
+                }
+            }
+        }
+        .textSelection(.enabled)
     }
 }
 

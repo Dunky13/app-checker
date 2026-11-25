@@ -166,6 +166,102 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         #expect(rule.evaluate(probe(env: ["TOOL_TELEMETRY": "0"])).status == .ok)
     }
 
+    @Test func readsMessagesAndToolCallsFromTheCLIStream() {
+        let long = String(repeating: "x", count: LLM.resultLimit + 1)
+        let stream = #"""
+        {"type":"system","subtype":"init","cwd":"/somewhere"}
+        not json
+        {"type":"assistant","message":{"content":[{"type":"thinking","thinking":""},{"type":"text","text":"Searching."},{"type":"tool_use","id":"a","name":"WebSearch","input":{"query":"tool telemetry"}}]}}
+        {"type":"assistant","message":{"content":[{"type":"tool_use","id":"b","name":"WebFetch","input":{"url":"https://example.com/a"}},{"type":"tool_use","id":"c","name":"WebFetch","input":{}}]}}
+        {"type":"user","message":{"content":[{"type":"text","text":"Not from the model."},{"type":"tool_result","tool_use_id":"c","is_error":true,"content":"HTTP 404"}]}}
+        {"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"b","content":[{"type":"text","text":"\#(long)"}]}]}}
+        {"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"a","content":"Links: none"}]}}
+        {"type":"assistant","message":{"content":[{"type":"text","text":"{}"}]}}
+        {"type":"result","subtype":"success","is_error":false,"result":"{}"}
+        """#
+        let log = LLM.transcript(ofStream: Data(stream.utf8))
+        #expect(log.result == "{}" && !log.failed)
+        #expect(log.turns.map(\.role) == [.assistant, .tool, .tool, .tool, .assistant])
+        #expect(log.turns[3].result == "Failed: HTTP 404")
+        #expect(LLM.grouped([LLM.Turn(role: .user, text: "p")] + log.turns).map(\.count) == [1, 1, 3, 1])
+        #expect(log.turns[1] == LLM.Turn(role: .tool, text: #"{"query":"tool telemetry"}"#, tool: "WebSearch", result: "Links: none"))
+        #expect(log.turns[2].text == #"{"url":"https://example.com/a"}"# && log.turns[2].result == String(repeating: "x", count: LLM.resultLimit) + "\n… (shortened)")
+        let empty = #"""
+        {"type":"assistant","message":{"content":[{"type":"tool_use","id":"a","name":"WebFetch","input":{}}]}}
+        {"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"a","is_error":true,"content":""}]}}
+        """#
+        #expect(LLM.transcript(ofStream: Data(empty.utf8)).turns[0].result == "Failed")
+        let failed = LLM.transcript(ofStream: Data(#"{"type":"result","is_error":true,"result":"Not logged in"}"#.utf8))
+        #expect(failed.turns.isEmpty && failed.failed && failed.result == "Not logged in")
+    }
+
+    @Test func setsJSONAndFencedCodeAsCodeBlocks() {
+        let blocks = LLM.blocks(of: "Here you go:\n```json\n{\"b\":[1],\"a\":\"https://example.com/x\"}\n```\nDone. ```ls -l```")
+        #expect(blocks.map(\.isCode) == [false, true, false, true])
+        #expect(blocks.map(\.text) == ["Here you go:", "{\n  \"b\": [\n    1\n  ],\n  \"a\": \"https://example.com/x\"\n}", "Done.", "ls -l"])
+        #expect(LLM.blocks(of: #"{"query":"x"}"#).map(\.isCode) == [true])
+        #expect(LLM.blocks(of: "Links: [1]").map(\.isCode) == [false])
+    }
+
+    /// The log shows what was said: laying it out may only change white space.
+    @Test func layingOutTheLogLosesNothing() {
+        // Numbers, escapes, key order, a repeated key and brackets inside a string stay as written.
+        let json = #"{"n":0.1,"e":1e3,"u":"\u00e9 \/ \" , : { [","a":{},"l":[],"n":1.0}"#
+        let laidOut = LLM.blocks(of: json)[0].text
+        #expect(laidOut.filter { !$0.isWhitespace } == json.filter { !$0.isWhitespace })
+        #expect(laidOut.contains(#""u": "\u00e9 \/ \" , : { [""#) && laidOut.contains(#""a": {},"#) && laidOut.contains(#""l": [],"#))
+        // A fence that never closes is text, with what follows it.
+        #expect(LLM.blocks(of: "Type ``` to open a block. Then\nthe rest").map(\.text) == ["Type ``` to open a block. Then\nthe rest"])
+        // Only a line that reads like a language name is taken as one.
+        #expect(LLM.blocks(of: "```first line\nsecond```").map(\.text) == ["first line\nsecond"])
+        // Fences inside a JSON string do not split it, with a fence around the JSON or without.
+        #expect(LLM.blocks(of: #"{"summary":"use ```json fences```"}"#).map(\.text) == ["{\n  \"summary\": \"use ```json fences```\"\n}"])
+        let fenced = LLM.blocks(of: "Here:\n```json\n{\"command\": \"echo ```hi```\", \"n\": 1}\n```\nDone.")
+        #expect(fenced.map(\.text) == ["Here:", "{\n  \"command\": \"echo ```hi```\",\n  \"n\": 1\n}", "Done."] && fenced.map(\.isCode) == [false, true, false])
+    }
+
+    @Test func readsAFencedAnswerAmongBraces() throws {
+        let reply = "See {below}.\n```json\n{\"telemetry\": \"none\", \"summary\": \"Nothing is sent.\"}\n```"
+        #expect(try LLM.parseRule(from: reply, itemID: "npm:tool").match == ["npm:tool"])
+    }
+
+    @Test func keepsTheLogBehindTheVerdictApartFromAFailedLookup() throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("lookups-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let logs = LookupLogs(folder: folder), id = "npm:@scope/tool"
+        let (good, bad, worse) = ([LLM.Turn(role: .user, text: "p")], [LLM.Turn(role: .error, text: "no")], [LLM.Turn(role: .error, text: "again no")])
+        #expect(!logs.hasLog(for: id) && logs.load(for: id).verdict == nil)
+        try logs.save(good, for: id, failed: false)
+        try logs.save(bad, for: id, failed: true)
+        try logs.save(worse, for: id, failed: true)
+        #expect(logs.load(for: id).verdict == good && logs.load(for: id).failed == worse)
+        // A lookup that works makes the earlier failure history.
+        try logs.save(good, for: id, failed: false)
+        #expect(logs.load(for: id).failed == nil && logs.hasLog(for: id))
+        try logs.save(bad, for: id, failed: true)
+        logs.removeVerdictLog(for: id)
+        #expect(logs.load(for: id).verdict == nil && logs.load(for: id).failed == bad)
+        #expect(!logs.hasLog(for: "npm:@scope/Tool"))
+    }
+
+    /// A lookup that fails keeps what it asked and got back, and says why it failed.
+    @Test func failedLookupKeepsItsLog() async throws {
+        let cli = FileManager.default.temporaryDirectory.appendingPathComponent("claude-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: cli) }
+        let script = """
+        #!/bin/sh
+        echo '{"type":"assistant","message":{"content":[{"type":"text","text":"I could not find anything."}]}}'
+        echo '{"type":"result","is_error":false,"result":"I could not find anything."}'
+        """
+        try Data(script.utf8).write(to: cli)
+        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: cli.path)
+        let item = Item(id: "npm:tool", name: "Tool", version: "1.0", path: "/x")
+        let (log, rule) = await LLM.analyse(item, backend: .claudeCLI(path: cli.path, model: ""), env: ["PATH": "/usr/bin:/bin"])
+        #expect(throws: LLM.Failure.self) { try rule.get() }
+        #expect(log.map(\.role) == [.user, .assistant, .error])
+        #expect(log.first?.text == LLM.prompt(for: item) && log.last?.text == "The model did not answer with JSON.")
+    }
+
     @Test func rejectsUnusableReplies() {
         #expect(throws: LLM.Failure.self) { try LLM.parseRule(from: "I could not find anything.", itemID: "npm:tool") }
         #expect(throws: LLM.Failure.self) { try LLM.parseRule(from: #"{"telemetry": "maybe", "summary": "x"}"#, itemID: "npm:tool") }
@@ -748,5 +844,25 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
     @Test func failingProgramIsAnErrorUnlessTheCallerExpectsOutput() throws {
         #expect(throws: Shell.Failure.self) { try Shell.run("/bin/sh", ["-c", "echo out; exit 3"], timeout: 10) }
         #expect(try Shell.run("/bin/sh", ["-c", "echo out; exit 3"], timeout: 10, acceptFailure: true) == Data("out\n".utf8))
+    }
+
+    @Test func timeoutKeepsWhatWasPrinted() {
+        do {
+            _ = try Shell.run("/bin/sh", ["-c", "echo part; exec sleep 30"], timeout: 1)
+            Issue.record("expected a timeout")
+        } catch {
+            #expect((error as? Shell.Failure)?.output == Data("part\n".utf8))
+        }
+    }
+
+    /// A program that handles the signal and exits by itself has still run out of time.
+    @Test func timeoutIsToldApartFromAnExit() {
+        #expect {
+            try Shell.run("/bin/sh", ["-c", "trap 'kill $!; exit 0' TERM; echo part; sleep 30 >/dev/null & wait"], timeout: 1, acceptFailure: true)
+        } throws: { error in
+            // What was printed is not checked here: on a slow machine the signal may come before the shell has set its trap.
+            error.localizedDescription == "sh timed out after 1 s."
+        }
+        #expect { try Shell.run("/bin/sh", ["-c", "kill -KILL $$"], timeout: 10) } throws: { $0.localizedDescription == "sh was stopped by signal 9." }
     }
 }
