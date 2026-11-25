@@ -311,6 +311,8 @@ h1 .hl {
   transform-origin: 50% calc(100% + 150px);
 }
 .placard a { color: inherit; text-decoration-thickness: 2px; text-underline-offset: 3px; }
+/* Seven quick taps on Arie: no double-tap zoom or text selection on the way. */
+.arie-hero .disc { touch-action: manipulation; user-select: none; -webkit-user-select: none; }
 .placard::after {
   content: ""; position: absolute; z-index: -1;
   left: 50%; top: 100%; width: 10px; height: 150px; margin-left: -5px;
@@ -450,6 +452,7 @@ h1 .hl {
   .placard { animation: sway 5s cubic-bezier(.45, 0, .55, 1) infinite; }
   .motion-paused .arie *, .motion-paused .placard { animation-play-state: paused; }
   .placard a { display: inline-block; animation: turn .6s cubic-bezier(.16, 1, .3, 1); }
+  .motion-paused .placard a { animation: none; }
 }
 @keyframes turn { from { transform: rotateY(90deg); } }
 @keyframes sway { 0%, 100% { transform: rotate(-5deg); } 50% { transform: rotate(-2deg); } }
@@ -1052,29 +1055,30 @@ for (const slot of document.querySelectorAll('[data-mood]')) {
   slot.append(svg);
 }
 
-// Seven quick taps on Arie and he turns his placard round.
-const disc = document.querySelector('.arie-hero .disc');
-const placard = document.querySelector('.placard');
-let taps = 0, tapTimer;
-disc.addEventListener('click', () => {
-  clearTimeout(tapTimer);
-  tapTimer = setTimeout(() => { taps = 0; }, 1500);
-  if (++taps < 7 || placard.querySelector('a')) return;
-  const back = document.createElement('a');
-  back.href = 'https://youtu.be/-wpT_x5tgeQ';
-  back.rel = 'noreferrer';
-  back.textContent = 'Where I come from';
-  placard.replaceChildren(back);
-});
-
-console.log('Psst. Arie here. I do not sing, except at a hum in the background.\nWhere I come from: https://youtu.be/-wpT_x5tgeQ');
-
 const hush = document.querySelector('.hush');
 hush.addEventListener('click', () => {
   const still = hush.getAttribute('aria-pressed') !== 'true';
   hush.setAttribute('aria-pressed', still);
   document.documentElement.classList.toggle('motion-paused', still);
 });
+
+// Seven quick taps on Arie and he turns his placard round.
+const disc = document.querySelector('.arie-hero .disc');
+const placard = document.querySelector('.placard');
+let taps = 0, tapTimer;
+disc?.addEventListener('click', () => {
+  clearTimeout(tapTimer);
+  tapTimer = setTimeout(() => { taps = 0; }, 1500);
+  if (++taps < 7 || !placard || placard.querySelector('a')) return;
+  const back = document.createElement('a');
+  back.href = 'https://youtu.be/-wpT_x5tgeQ';
+  back.rel = 'noreferrer';
+  back.textContent = 'Where I come from';
+  placard.replaceChildren(back);
+  back.focus();
+});
+
+console.log('Psst. Arie here. I do not sing, except at a hum in the background.\nWhere I come from: https://youtu.be/-wpT_x5tgeQ');
 
 for (const btn of document.querySelectorAll('button.copy')) {
   const status = btn.nextElementSibling;

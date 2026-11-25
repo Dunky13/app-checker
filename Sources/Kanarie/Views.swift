@@ -96,23 +96,21 @@ struct MenuView: View {
             }
             Button("Rescan Now") { Task { await model.rescan(userInitiated: true) } }.disabled(model.scanning)
             Button("Check for Updates…") { updater.checkForUpdates() }
-            if option, let origin {
-                Button("About Arie") {
-                    dismiss()
+            // One button, so focus and a click in progress survive Option going down or up. The click reads the key itself.
+            Button(option && origin != nil ? "About Arie" : "About Kanarie") {
+                dismiss()
+                if NSEvent.modifierFlags.contains(.option), let origin {
                     NSWorkspace.shared.open(origin)
+                    return
                 }
-            } else {
-                Button("About Kanarie") {
-                    dismiss()
-                    NSApp.activate(ignoringOtherApps: true)
-                    let centred = NSMutableParagraphStyle()
-                    centred.alignment = .center
-                    // Without attributes the credits are set in Helvetica, black also in dark mode.
-                    let credits = NSAttributedString(
-                        string: "Arie, the canary, does not sing. He stays quiet while nothing on your Mac phones home, and sings right back at whatever does.",
-                        attributes: [.font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize), .foregroundColor: NSColor.labelColor, .paragraphStyle: centred])
-                    NSApp.orderFrontStandardAboutPanel(options: [.credits: credits])
-                }
+                NSApp.activate(ignoringOtherApps: true)
+                let centred = NSMutableParagraphStyle()
+                centred.alignment = .center
+                // Without attributes the credits are set in Helvetica, black also in dark mode.
+                let credits = NSAttributedString(
+                    string: "Arie, the canary, does not sing. He stays quiet while nothing on your Mac phones home, and sings right back at whatever does.",
+                    attributes: [.font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize), .foregroundColor: NSColor.labelColor, .paragraphStyle: centred])
+                NSApp.orderFrontStandardAboutPanel(options: [.credits: credits])
             }
             Button("Quit Kanarie") { NSApp.terminate(nil) }
         }
@@ -120,6 +118,7 @@ struct MenuView: View {
         .padding()
         .onAppear {
             option = NSEvent.modifierFlags.contains(.option)
+            guard flags == nil else { return }
             flags = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { event in
                 option = event.modifierFlags.contains(.option)
                 return event
@@ -128,6 +127,10 @@ struct MenuView: View {
         .onDisappear {
             if let flags { NSEvent.removeMonitor(flags) }
             flags = nil
+        }
+        // Option may have changed while another app was active, where the monitor does not hear it.
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { _ in
+            option = NSEvent.modifierFlags.contains(.option)
         }
         .frame(width: 300)
     }
