@@ -1073,15 +1073,17 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
          {"number": 39, "title": "Linux support", "body": "**Item:** `brew:other`"},
          {"number": 41, "title": "Finding: quoted", "body": "> **Item:** `brew:quoted`", "user": {"login": "x"}},
          {"number": 42, "title": "Finding: two items", "body": "**Item:** `brew:a`\n**Item:** `brew:b`"},
-         {"number": 43, "title": "Findings: too many", "body": "\#((1...11).map { "**Item:** `brew:n\($0)`" }.joined(separator: "\\n"))"}]
+         {"number": 43, "title": "Findings: too many", "body": "\#((1...11).map { "**Item:** `brew:n\($0)`" }.joined(separator: "\\n"))"},
+         {"number": 44, "title": "Findings: as many as fit", "body": "\#((1...10).map { "**Item:** `brew:t\($0)`" }.joined(separator: "\\n"))"}]
         """#
-        #expect(try Submission.openFindings(Data(list.utf8)) == ["brew:cloudflared": 34, "bin:agy": 34, "app:de.t7n.apps.mqtt-explorer": 29])
+        let ten = Dictionary(uniqueKeysWithValues: (1...10).map { ("brew:t\($0)", 44) })
+        #expect(try Submission.openFindings(Data(list.utf8)) == ten.merging(["brew:cloudflared": 34, "bin:agy": 34, "app:de.t7n.apps.mqtt-explorer": 29]) { $1 })
         #expect(Submission.issue(29).absoluteString == "https://github.com/Dunky13/kanarie/issues/29")
         // Looked up as written into the issue, and by any of the ids a finding matches.
         let long = "npm:" + String(repeating: "a", count: 150)
         let written = Data(#"[{"number": 7, "title": "Finding: x", "body": "**Item:** `\#(Submission.plain(long))`"}]"#.utf8)
         #expect(Submission.openFinding([long], in: try Submission.openFindings(written)) == 7)
-        #expect(Submission.openFinding(["cask:x", "app:de.t7n.apps.mqtt-explorer", "brew:cloudflared"], in: try Submission.openFindings(Data(list.utf8))) == 29)
+        #expect(Submission.openFinding(["cask:x", "brew:cloudflared", "app:de.t7n.apps.mqtt-explorer"], in: try Submission.openFindings(Data(list.utf8))) == 29)
         #expect(Submission.openFinding(["cask:x"], in: try Submission.openFindings(Data(list.utf8))) == nil)
     }
 

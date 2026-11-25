@@ -314,22 +314,26 @@ final class AppModel {
         }
     }
 
-    /// Reads which items have a finding waiting for review, at most every ten minutes. The list is the same for
+    /// Reads which items have a finding waiting for review, at most every ten minutes (a minute after the network was not there). The list is the same for
     /// everyone, so the request says nothing about this Mac. Off with the findings download. Every caller waits for
     /// the read under way, so a sheet opened during one sees its result.
     func checkOpenFindings() async {
-        guard UserDefaults.standard.bool(forKey: "refreshRules") else { openFindings = [:]; return }
+        guard UserDefaults.standard.bool(forKey: "refreshRules") else { (openFindings, openFindingsChecked) = ([:], nil); return }
         if openFindingsChecked.map({ -$0.timeIntervalSinceNow > 600 }) ?? true {
             openFindingsChecked = .now
             readingOpenFindings = true
             openFindingsRead = Task {
                 do {
                     // shortcut: only the 100 newest open issues are read; follow GitHub's Link header if more are ever open.
-                    openFindings = try Submission.openFindings(try await URLSession(configuration: .ephemeral).data(from: Submission.openIssues, limit: 5_000_000))
+                    let found = try Submission.openFindings(try await URLSession(configuration: .ephemeral).data(from: Submission.openIssues, limit: 5_000_000))
+                    // Switched off while it was read: the list stays cleared.
+                    if UserDefaults.standard.bool(forKey: "refreshRules") { openFindings = found }
                 } catch {
                     NSLog("Kanarie: open findings not read: \(error.localizedDescription)")
-                    // Again in a minute, not ten: the network may just not be up yet.
-                    openFindingsChecked = .now - 540
+                    // Again in a minute when the network was not there, which it may not be yet after waking; a refusal
+                    // or a list over the limit would fail again, so those wait the ten minutes.
+                    let offline: [URLError.Code] = [.notConnectedToInternet, .networkConnectionLost, .timedOut, .cannotFindHost, .cannotConnectToHost]
+                    if let error = error as? URLError, offline.contains(error.code) { openFindingsChecked = .now - 540 }
                 }
                 readingOpenFindings = false
             }
