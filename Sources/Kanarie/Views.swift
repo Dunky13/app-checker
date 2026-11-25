@@ -252,7 +252,7 @@ struct MainView: View {
                 if model.items.isEmpty, model.scanning {
                     ProgressView("Scanning installed software…")
                 } else if model.items.isEmpty {
-                    ContentUnavailableView("No software found", systemImage: "bird")
+                    ContentUnavailableView { Arie.emptyState("No software found") }
                 } else if shown.isEmpty, search.isEmpty {
                     ContentUnavailableView("No items match the filter", systemImage: "line.3.horizontal.decrease.circle")
                 } else if shown.isEmpty, filter != nil || source != .any || kind != nil {
@@ -279,7 +279,11 @@ struct MainView: View {
                 // Its own state per item: a copy, a run's outcome or an open confirmation does not carry over to the next item.
                 DetailView(model: model, item: item, verdict: verdict).id(item.id)
             } else {
-                ContentUnavailableView("Select an item", systemImage: "bird", description: Text("\(model.items.count - model.removed.count) apps, packages and extensions checked."))
+                ContentUnavailableView {
+                    Arie.emptyState("Select an item")
+                } description: {
+                    Text("\(model.items.count - model.removed.count) apps, packages and extensions checked.")
+                }
             }
         }
         // In the toolbar: a sidebar search field scrolls out of sight with a long list.

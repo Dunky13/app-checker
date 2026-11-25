@@ -54,7 +54,7 @@ struct MenuBarLabel: View {
     @AppStorage("didShowWindow") private var didShowWindow = false
 
     var body: some View {
-        Image(systemName: attention > 0 ? "bird.fill" : "bird")
+        Image(nsImage: attention > 0 ? Arie.menuAttention : Arie.menu)
             .accessibilityLabel(attention > 0 ? "Kanarie: \(attention) items may send telemetry" : "Kanarie")
             .onReceive(NotificationCenter.default.publisher(for: .openMainWindow)) { _ in open() }
             .task {
