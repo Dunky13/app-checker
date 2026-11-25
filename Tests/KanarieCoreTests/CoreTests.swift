@@ -57,6 +57,9 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         #expect(optOut.status == .warn && optOut.state.contains("did not let Kanarie read"))
         let optIn = rule(.optIn, enabledWhen: [check]).evaluate(probe(blocked: ["protected.json"]))
         #expect(optIn.status == .ok && optIn.state.contains("did not let Kanarie read"))
+        // A refused read is not a reading, whichever switch it was.
+        let forcedBlocked = rule(.optOut, enabledWhen: [check]).evaluate(probe(blocked: ["protected.json"]))
+        #expect(!optOut.read && !optIn.read && !forcedBlocked.read && forcedBlocked.status == .warn)
     }
 
     @Test func wellFormedness() {
@@ -111,6 +114,24 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         #expect(Verdict(item: item, rules: [], aiRules: [:], sdks: [], probe: probe()).status == .unknown)
     }
 
+    @Test func saysWhetherTheStateWasReadFromThisMac() {
+        let item = Item(id: "brew:x", name: "x", version: "1", path: "/x")
+        let read = { (rules: [Rule], sdks: [String]) in Verdict(item: item, rules: rules, aiRules: [:], sdks: sdks, probe: probe()).readsThisMac }
+        #expect(read([rule(.optOut, disabledWhen: [Check(env: "OFF")])], []))
+        #expect(read([], ["Sentry"]))
+        #expect(read([rule(.optIn, enabledWhen: [Check(env: "ON")])], []))
+        // An opt-out finding with only an "on" switch that is not set falls back to its default: nothing decided it.
+        #expect(!read([rule(.optOut, enabledWhen: [Check(env: "ON")])], []))
+        #expect(Verdict(item: item, rules: [rule(.optOut, enabledWhen: [Check(env: "ON")])], aiRules: [:], sdks: [], probe: probe(env: ["ON": "1"])).readsThisMac)
+        #expect(!read([rule(.optOut)], []) && !read([rule(.forced)], ["Sentry"]) && !read([], []))
+        // An opt-in finding reads only what switches it on, and a read macOS refused is not a reading.
+        #expect(!read([rule(.optIn, disabledWhen: [Check(env: "OFF")])], []))
+        let blocked = Verdict(item: item, rules: [rule(.optOut, disabledWhen: [Check(json: "p.json", key: "a", equals: "1")])], aiRules: [:], sdks: [], probe: probe(blocked: ["p.json"]))
+        #expect(!blocked.readsThisMac)
+        let ai = Verdict(item: item, rules: [], aiRules: ["brew:x": rule(.optOut, disabledWhen: [Check(env: "OFF")])], sdks: [], probe: probe())
+        #expect(ai.readsThisMac && ai.source == .ai)
+    }
+
     @Test func anExtensionIsGreenOnlyWhenEveryEditorThatHasItIsOff() {
         let check = Check(json: "~/Library/Application Support/Code/User/settings.json", key: "telemetry.telemetryLevel", equals: "off")
         let rules = [rule(.optOut, disabledWhen: [check])]
@@ -139,6 +160,8 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         #expect(onInCursor.status == .warn && onInCursor.state.hasPrefix("In Cursor: "))
         let blockedInCursor = Verdict(item: item, rules: optIn, aiRules: [:], sdks: [], probe: probe(blocked: [cursorFile]))
         #expect(blockedInCursor.status == .ok && blockedInCursor.state.hasPrefix("In Cursor: ") && blockedInCursor.state.contains("did not let Kanarie read"))
+        // The read flag is the shown editor's: Cursor was refused, so nothing was read there.
+        #expect(onInCursor.readsThisMac && !blockedInCursor.readsThisMac)
     }
 
     @Test func onlyHTTPLinksAreSafe() {

@@ -43,6 +43,26 @@ extension Verdict.Source {
         case .none: "Nothing known"
         }
     }
+
+    /// Where the finding came from: a cloud for the Kanarie findings on GitHub, a computer for this Mac's own files.
+    var symbol: String? {
+        switch self {
+        case .rules: "cloud"
+        case .ai: "sparkles"
+        case .sdk: "desktopcomputer"
+        case .none: nil
+        }
+    }
+
+    var help: String {
+        switch self {
+        case .rules: "From the Kanarie findings on GitHub"
+        case .ai: "From an AI lookup, not verified"
+        // Tense-neutral: a removed item keeps the hint from when it was installed.
+        case .sdk: "From a search of its files on this Mac"
+        case .none: "Nothing known"
+        }
+    }
 }
 
 struct StatusIcon: View {
@@ -233,8 +253,8 @@ struct MainView: View {
                             .font(.caption).foregroundStyle(.secondary)
                     }
                     Spacer()
-                    if model.verdicts[item.id]?.source == .ai {
-                        Image(systemName: "sparkles").foregroundStyle(.secondary).help("From an AI lookup, not verified").accessibilityLabel("From an AI lookup, not verified")
+                    if let source = model.verdicts[item.id]?.source, let symbol = source.symbol {
+                        Image(systemName: symbol).foregroundStyle(.secondary).help(source.help).accessibilityLabel(source.help)
                     }
                     if model.analysing.contains(item.id) {
                         ProgressView().controlSize(.small).accessibilityLabel("Looking up")
@@ -303,7 +323,12 @@ struct MainView: View {
                     Picker("Verdict from", selection: $source) {
                         Text("Any source (\(listed(filter, .any, kind).count))").tag(SourceFilter.any)
                         ForEach([Verdict.Source.rules, .ai, .sdk, .none].map(SourceFilter.only) + [.notAI], id: \.self) { entry in
-                            Text("\(entry.label ?? "") (\(listed(filter, entry, kind).count))").tag(entry)
+                            let title = "\(entry.label ?? "") (\(listed(filter, entry, kind).count))"
+                            if case .only(let source) = entry, let symbol = source.symbol {
+                                Label(title, systemImage: symbol).tag(entry)
+                            } else {
+                                Text(title).tag(entry)
+                            }
                         }
                     }
                     Picker("Kind", selection: $kind) {
@@ -354,10 +379,12 @@ struct DetailView: View {
 
     private var sourceNote: String {
         switch verdict.source {
-        case .rules: "From the Kanarie findings."
+        case .rules: "From the Kanarie findings, kept on GitHub."
         case .ai: model.isEdited(item.id) ? "From an AI lookup, edited by you on this Mac. Not verified: check its sources before relying on it."
             : "From an AI lookup. Not verified: check its sources before relying on it."
-        case .sdk: "The hint comes from an offline search of the installed files for analytics service names."
+        case .sdk: model.removed.contains(item.id)
+            ? "The hint came from an offline search of its files on this Mac, while it was installed, for analytics service names."
+            : "The hint comes from an offline search of the installed files on this Mac for analytics service names."
         case .none: "Not in the Kanarie findings."
         }
     }
@@ -377,8 +404,22 @@ struct DetailView: View {
                     Label(item.version.isEmpty ? "No longer installed." : "No longer installed. Last seen: version \(item.version).", systemImage: "circle.slash")
                         .foregroundStyle(.secondary)
                 }
-                Text(verdict.state).font(.headline)
-                if let summary = verdict.rule?.summary { Text(summary) }
+                // Each part says where it comes from: this Mac, the Kanarie findings or an AI lookup.
+                // An AI lookup keeps its sparkles even when read here: the AI chose what to read.
+                let checked = switch (verdict.readsThisMac, verdict.source) {
+                case (true, .ai): "Checked on this Mac with checks an AI lookup suggested, not verified"
+                case (true, .sdk): verdict.source.help
+                case (true, _): "Checked on this Mac"
+                case (false, _): verdict.source.help
+                }
+                if let symbol = verdict.readsThisMac && verdict.source != .ai ? "desktopcomputer" : verdict.source.symbol {
+                    Label(verdict.state, systemImage: symbol).font(.headline).help(checked).accessibilityLabel("\(checked): \(verdict.state)")
+                } else {
+                    Text(verdict.state).font(.headline)
+                }
+                if let summary = verdict.rule?.summary, !summary.isEmpty, let symbol = verdict.source.symbol {
+                    Label(summary, systemImage: symbol).help(verdict.source.help).accessibilityLabel("\(verdict.source.help): \(summary)")
+                }
 
                 if let optOut = verdict.rule?.optOut {
                     GroupBox {
@@ -434,7 +475,11 @@ struct DetailView: View {
                 }
 
                 Divider()
-                Text(sourceNote).font(.callout).foregroundStyle(.secondary)
+                if let symbol = verdict.source.symbol {
+                    Label(sourceNote, systemImage: symbol).font(.callout).foregroundStyle(.secondary)
+                } else {
+                    Text(sourceNote).font(.callout).foregroundStyle(.secondary)
+                }
                 if verdict.source != .rules {
                     HStack {
                         Button(verdict.source == .ai ? "Look Up Again with AI" : "Look Up with AI", systemImage: "sparkles") {
