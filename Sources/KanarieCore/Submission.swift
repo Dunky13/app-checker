@@ -197,6 +197,10 @@ public enum Submission {
         }
     }
 
+    struct TooMany: LocalizedError {
+        var errorDescription: String? { "One issue holds from 1 to \(bulkLimit) findings." }
+    }
+
     /// The most findings one issue holds. Each can fetch up to `pageLimit` pages, and the maintainer reads them all.
     public static let bulkLimit = 10
 
@@ -216,7 +220,7 @@ public enum Submission {
     /// One issue for several findings, each in a section headed "### Finding <n>", which is how scripts/accept-finding.py
     /// tells them apart. One finding gets no heading.
     public static func issue(_ entries: [Entry], appVersion: String) throws -> (url: URL, clipboard: String?) {
-        guard let first = entries.first, entries.count <= bulkLimit else { throw URLError(.badURL) }
+        guard let first = entries.first, entries.count <= bulkLimit else { throw TooMany() }
         let sections = try entries.map(section)
         let several = entries.count > 1
         let body = (several ? "\(entries.count) findings, each in a section of its own.\n\n" : "")

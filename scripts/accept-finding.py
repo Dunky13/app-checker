@@ -106,6 +106,10 @@ def target(body, findings):
     """Where a submitted finding goes and what is written there: (path below findings/, text).
     An issue is text from anyone, so only its JSON block and a file name of the known form are used."""
     body = body.replace("\r\n", "\n")
+    # Exactly one of each: a second one would be left out without a word, and its issue closed.
+    blocks = re.findall(r"^````json$", body, re.M)
+    if len(blocks) > 1 or len(re.findall(r"^\*\*Proposed as:\*\*", body, re.M)) > 1:
+        raise ValueError("there is more than one finding where one is expected, perhaps under a heading that is not exactly \"### Finding <n>\"")
     block = re.search(r"^````json\n(.*?)\n````$", body, re.S | re.M)
     if not block:
         raise ValueError("there is no finding in the issue")
@@ -229,7 +233,9 @@ def accept(issues):
                 folders.append(file.parent.name)
                 file.parent.mkdir(exist_ok=True)
                 file.write_text(finding, encoding="utf-8")
-        title = "Findings: " + ", ".join(folders)
+        # A title GitHub takes, which is also the commit's subject: the folders that fit, and how many more.
+        fit = max([count for count in range(1, len(folders) + 1) if len(", ".join(folders[:count])) <= 100] or [1])
+        title = "Findings: " + ", ".join(folders[:fit]) + (f" and {len(folders) - fit} more" if fit < len(folders) else "")
         # First the tests, with their own switch for an index that is not signed yet: what they reject is never signed.
         run("swift", "test", "--parallel", "--num-workers", "2", capture_output=True, env={**os.environ, "GITHUB_EVENT_NAME": "pull_request"})
         run("git", "add", "findings")

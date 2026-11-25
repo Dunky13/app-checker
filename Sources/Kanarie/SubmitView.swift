@@ -157,7 +157,11 @@ func bulkFinding(for item: Item, model: AppModel) -> (rule: Rule?, why: String) 
     let draft = Submission.Draft(from: found, item: item)
     let problems = draft.problems(for: item)
     guard problems.isEmpty else { return (nil, "Not ready: \(problems.joined(separator: "; ")). Fix it with Submit a Finding…") }
-    return (draft.rule(for: item), "")
+    // "Not edited" must hold: the form fills in what a lookup left out, such as steps for an opt-in without any.
+    var sent = found
+    sent.match = [item.id]
+    guard draft.rule(for: item) == sent else { return (nil, "The form would change this lookup. Check it with Submit a Finding…") }
+    return (sent, "")
 }
 
 /// Proposes the AI lookups of several items in one GitHub issue. Nothing can be edited here: an item that needs
@@ -165,9 +169,10 @@ func bulkFinding(for item: Item, model: AppModel) -> (rule: Rule?, why: String) 
 struct BulkSubmitView: View {
     var model: AppModel
     @Environment(\.dismiss) private var dismiss
-    /// Decided when the sheet opens. The verdicts may change behind it.
-    private let included: [(item: Item, rule: Rule)]
-    private let skipped: [(item: Item, why: String)]
+    /// Decided when the sheet opens, in state: the view is made again whenever a verdict changes behind it, and the
+    /// source checks are matched to these by position.
+    @State private var included: [(item: Item, rule: Rule)]
+    @State private var skipped: [(item: Item, why: String)]
     @State private var checks: [Submission.SourceCheck]?
     @State private var task: Task<Void, Never>?
     @State private var mayCopy = false
@@ -187,7 +192,7 @@ struct BulkSubmitView: View {
             folders[folder] = item.name
             included.append((item, rule))
         }
-        (self.included, self.skipped) = (included, skipped)
+        (_included, _skipped) = (State(initialValue: included), State(initialValue: skipped))
     }
 
     var body: some View {
@@ -202,6 +207,7 @@ struct BulkSubmitView: View {
                                 .font(.caption).foregroundStyle(.orange)
                         }
                     }
+                    .accessibilityElement(children: .combine)
                 }
             } header: {
                 Text("Sent as AI lookups, not edited (\(included.count))")
@@ -213,6 +219,7 @@ struct BulkSubmitView: View {
                             Text(entry.item.name)
                             Text(entry.why).font(.caption).foregroundStyle(.secondary)
                         }
+                        .accessibilityElement(children: .combine)
                     }
                 }
             }
@@ -261,10 +268,15 @@ struct BulkSubmitView: View {
     private func proceed() async {
         if checks == nil {
             let rules = included.map(\.rule)
+            // Three findings at a time: each can fetch eight pages of up to 3 MB.
             let pages = await withTaskGroup(of: (Int, (texts: [String], cited: Int)).self) { group in
-                for (index, rule) in rules.enumerated() { group.addTask { (index, await Submission.pages(for: rule)) } }
                 var pages = [(texts: [String], cited: Int)](repeating: ([], 0), count: rules.count)
-                for await (index, result) in group { pages[index] = result }
+                var next = rules.enumerated().makeIterator()
+                for _ in 0..<3 { if let (index, rule) = next.next() { group.addTask { (index, await Submission.pages(for: rule)) } } }
+                for await (index, result) in group {
+                    pages[index] = result
+                    if let (index, rule) = next.next() { group.addTask { (index, await Submission.pages(for: rule)) } }
+                }
                 return pages
             }
             guard !Task.isCancelled else { return }

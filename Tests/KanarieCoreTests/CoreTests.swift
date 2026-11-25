@@ -968,7 +968,13 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         let first = try #require(text.components(separatedBy: "### Finding 2").first?.components(separatedBy: "### Finding 1\n").last)
         let eleven = (1...11).map { "### Finding \($0)\n\(first)" }.joined()
         #expect(try parse(eleven) == "Refused: the issue holds more than 10 findings.\n")
-        #expect(throws: URLError.self) { try Submission.issue(Array(repeating: entry("Example One"), count: 11), appVersion: "1") }
+        // Refused: a heading that is not exactly one, which would put two findings in one section; and two findings without headings.
+        let twice = "Refused: finding 1: there is more than one finding where one is expected, perhaps under a heading that is not exactly \"### Finding <n>\".\n"
+        #expect(try parse(text.replacingOccurrences(of: "### Finding 2\n", with: "### Finding 2 \n")) == twice)
+        #expect(try parse(first + "\n" + first).hasPrefix("Refused: there is more than one finding where one is expected"))
+        // What stands before the first heading is not read.
+        #expect(try parse(text.replacingOccurrences(of: "2 findings, each in a section of its own.", with: first)) == placed)
+        #expect(throws: Submission.TooMany.self) { try Submission.issue(Array(repeating: entry("Example One"), count: 11), appVersion: "1") }
         // A long list of names is cut short in the title, which GitHub limits to 256 characters.
         let many = try Submission.issue((1...10).map { entry("Example Tool With A Rather Long Name \($0)") }, appVersion: "1")
         let title = try #require(URLComponents(url: many.url, resolvingAgainstBaseURL: false)?.queryItems?.first?.value)
