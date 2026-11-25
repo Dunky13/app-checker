@@ -22,9 +22,13 @@ final class AppModel {
         var sdks: [String: [String]] = [:]     // "id@version" -> SDK scan result
         var blocked: [String]?                 // files macOS would not let the app read; optional so older state files still load
         var serial: Int?                       // highest findings index accepted so far, which also holds when the cache is lost
+        var names: [String: String]?           // item id -> last seen name, to list an item after it is removed
+        var editors: [String: [String]]?       // extension id -> editors it was last seen in, for its verdict after it is removed
     }
 
+    /// Installed items, followed by the ones that were removed since an earlier scan.
     private(set) var items: [Item] = []
+    private(set) var removed: Set<String> = []
     private(set) var verdicts: [String: Verdict] = [:]
     private(set) var analysing: Set<String> = []
     private(set) var errors: [String: String] = [:]
@@ -103,7 +107,7 @@ final class AppModel {
         }
     }
 
-    func count(_ status: Status) -> Int { verdicts.values.count { $0.status == status } }
+    func count(_ status: Status) -> Int { verdicts.count { !removed.contains($0.key) && $0.value.status == status } }
 
     // MARK: Scanning
 
@@ -137,6 +141,8 @@ final class AppModel {
         var shell: ShellInfo
         var items: [Item]
         var watch: [String]
+        /// Kinds this scan could not fully read, whose missing items are not called removed.
+        var unread: Set<String>
     }
 
     nonisolated static func scan(shell: ShellInfo?) -> Snapshot {
@@ -155,7 +161,9 @@ final class AppModel {
         let watch = (appDirs + brewPrefixes.flatMap { [$0.appendingPathComponent("Cellar"), $0.appendingPathComponent("Caskroom")] }
             + binDirs + shell.npmRoots + editors.map(\.dir))
             .map(\.path).filter { FileManager.default.fileExists(atPath: $0) }
-        return Snapshot(shell: shell, items: items, watch: watch)
+        // Without a login shell or a package manager that answers, the npm folders were not looked in.
+        let unread = Scanner.unread(brewPrefixes: brewPrefixes, editors: editors).union(shell.complete && !shell.npmRoots.isEmpty ? [] : ["npm"])
+        return Snapshot(shell: shell, items: items, watch: watch, unread: unread)
     }
 
     /// `userInitiated` also retries files macOS blocked earlier, in case access was granted since.
@@ -169,11 +177,16 @@ final class AppModel {
         refreshShell = false
         let snapshot = await Task.detached { Self.scan(shell: known) }.value
         shell = snapshot.shell
-        (env, shellFailed, items) = (snapshot.shell.env, snapshot.shell.failed, snapshot.items)
+        saved.names = (saved.names ?? [:]).merging(snapshot.items.map { ($0.id, $0.name) }) { $1 }
+        saved.editors = (saved.editors ?? [:]).merging(snapshot.items.filter { !$0.editors.isEmpty }.map { ($0.id, $0.editors) }) { $1 }
+        let names = saved.aiRules.compactMapValues(\.name).merging(saved.names ?? [:]) { $1 }
+        let gone = Scanner.gone(known: saved.known, names: names, editors: saved.editors ?? [:], present: snapshot.items, unread: snapshot.unread)
+        removed = Set(gone.map(\.id))
+        (env, shellFailed, items) = (snapshot.shell.env, snapshot.shell.failed, snapshot.items + gone)
         evaluate()
 
         // Slow part, once per item version: look for telemetry SDKs in items nothing else is known about.
-        let unscanned = items.filter { verdicts[$0.id]?.source == Verdict.Source.none && saved.sdks[Self.sdkKey($0)] == nil }
+        let unscanned = items.filter { !removed.contains($0.id) && verdicts[$0.id]?.source == Verdict.Source.none && saved.sdks[Self.sdkKey($0)] == nil }
         let found = await Task.detached { unscanned.map { SDKScan.scan($0) } }.value
         for (item, sdks) in zip(unscanned, found) { saved.sdks[Self.sdkKey(item)] = sdks }
         let current = Set(items.map(Self.sdkKey))
@@ -288,8 +301,8 @@ final class AppModel {
             // An item a lookup of its own judges while the batch waits is not looked up a second time.
             let judged = Set(items.map(\.id).filter { saved.aiRules[$0] != nil })
             while !rest.isEmpty, !Task.isCancelled {
-                // The list was made when the batch began. By now a rescan may have removed or updated an item, the
-                // findings may cover it, or a lookup of its own may be running.
+                // The list was made when the batch began. By now a rescan may have updated an item, the findings may
+                // cover it, or a lookup of its own may be running. An item removed meanwhile stays listed, and is looked up.
                 let group = rest.prefix(LLM.batchSize).compactMap { old in self.items.first { $0.id == old.id } }.filter { item in
                     verdicts[item.id]?.source != .rules && !analysing.contains(item.id) && (saved.aiRules[item.id] == nil || judged.contains(item.id))
                 }

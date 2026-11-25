@@ -38,6 +38,7 @@ Not covered: apps kept anywhere else, iPhone and iPad apps running on a Mac, and
 | Yellow warning | Telemetry is on, or on by default where the setting cannot be read, and there is a way to switch it off. The item shows how, with a link, and a copy button when the switch is a command. |
 | Red cross | Telemetry is on and no opt-out is known |
 | Grey question mark | Unknown |
+| Grey crossed-out circle | No longer installed. Listed last, so a finding can still be submitted for it; its verdict is in the detail pane. |
 
 A verdict comes from, in this order:
 
@@ -157,7 +158,7 @@ File paths must start with `~/` or a Homebrew prefix. Rules cannot run commands,
 
 A `command` is one line, and it should make the change permanent: `echo 'export NAME=1' >> ~/.zshrc`, not `export NAME=1`.
 
-Found a wrong or missing finding? Use **Submit a Finding…** (or **Suggest a Correction…**) on the item in the app, or open a pull request with a source. `swift test` validates every file.
+Found a wrong or missing finding? Use **Submit a Finding…** (or **Suggest a Correction…**) on the item in the app (removed items stay in the list for this), or open a pull request with a source. `swift test` validates every file.
 
 ### Submitting from the app
 

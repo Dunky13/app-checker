@@ -23,6 +23,34 @@ public struct Item: Sendable, Identifiable, Hashable {
 public enum Scanner {
     static var fm: FileManager { .default }
 
+    /// Items an earlier scan found that this one does not, so a finding can still be sent for them. A kind in `unread` was
+    /// not fully read this time (npm without a login shell), and a missing item of that kind is not called gone.
+    /// `editors` keeps the editors a removed extension was in, so its verdict keeps reading the same settings.
+    public static func gone(known: [String: String], names: [String: String], editors: [String: [String]] = [:], present: [Item], unread: Set<String>) -> [Item] {
+        let here = Set(present.map(\.id))
+        return known.filter { !here.contains($0.key) }
+            .map {
+                var item = Item(id: $0.key, name: names[$0.key] ?? String($0.key.drop { $0 != ":" }.dropFirst()), version: $0.value, path: "")
+                item.editors = editors[$0.key] ?? []
+                return item
+            }
+            .filter { !unread.contains($0.kind) }
+    }
+
+    /// Kinds whose list is there but could not be read this time, such as an extensions.json caught mid-write.
+    /// shortcut: a single formula or cask whose receipt is being written still looks removed until the next scan.
+    public static func unread(brewPrefixes: [URL], editors: [(editor: String, dir: URL)]) -> Set<String> {
+        let unreadable = { (dir: URL) in fm.fileExists(atPath: dir.path) && (try? fm.contentsOfDirectory(atPath: dir.path)) == nil }
+        var kinds = Set<String>()
+        if brewPrefixes.contains(where: { unreadable($0.appendingPathComponent("Cellar")) || unreadable($0.appendingPathComponent("Caskroom")) }) {
+            kinds.formUnion(["brew", "cask"])
+        }
+        if editors.contains(where: { let file = $0.dir.appendingPathComponent("extensions.json"); return fm.fileExists(atPath: file.path) && !(json(file) is [[String: Any]]) }) {
+            kinds.insert("ext")
+        }
+        return kinds
+    }
+
     static func children(_ dir: URL) -> [URL] {
         // Numeric-aware, so version folder 1.10 sorts after 1.9 and `last` is the newest.
         ((try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)) ?? [])

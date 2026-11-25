@@ -190,8 +190,8 @@ public enum Submission {
     }
 
     /// The prefilled GitHub issue. A body too long for a link comes back as `clipboard`, and the issue then asks to paste it.
-    /// `readings` is nil when they must stay on the Mac: see `SubmitView`.
-    public static func issue(item: Item, rule: Rule, origin: String, readings: [String]?, sourceCheck: SourceCheck, appVersion: String) throws -> (url: URL, clipboard: String?) {
+    /// `readings` is nil when they must stay on the Mac: see `SubmitView`. `removed`: the item is no longer installed.
+    public static func issue(item: Item, rule: Rule, origin: String, readings: [String]?, sourceCheck: SourceCheck, appVersion: String, removed: Bool = false) throws -> (url: URL, clipboard: String?) {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
         let json = String(decoding: try encoder.encode(rule), as: UTF8.self)
@@ -203,7 +203,7 @@ public enum Submission {
         let read = readings.map { $0.map { "- `\(plain($0, limit: 300))`" } }
             ?? ["- Not included: the checks came from an AI lookup, so what they read stays on the submitter's Mac."]
         let body = """
-        **Item:** `\(plain(item.id))` (`\(plain(item.name))`, \(item.version.isEmpty ? "version unknown" : "version `\(plain(item.version))`"))
+        **Item:** `\(plain(item.id))` (`\(plain(item.name))`, \(item.version.isEmpty ? "version unknown" : "version `\(plain(item.version))`"))\(removed ? "\n**Not found on this Mac when sent:** Kanarie no longer finds it installed\(readings == nil ? "" : ", so the readings below are of this Mac without it")." : "")
         **Origin:** \(origin)
         **Proposed as:** \(file)
 
