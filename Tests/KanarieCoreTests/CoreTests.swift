@@ -363,7 +363,11 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         finding.sources = ["https://example.com/a", "http://example.com/"]
         #expect(finding.problems(curated: true) == ["not a plain https link in Sources: http://example.com/"])
         finding.optOut?.url = "http://example.com/off"
-        #expect(finding.problems(curated: true).first == "not a plain https link in Documentation: http://example.com/off")
+        finding.policyURL = "http://example.com/privacy"
+        #expect(finding.problems(curated: true) == ["not a plain https link in Privacy policy: http://example.com/privacy",
+            "not a plain https link in Documentation: http://example.com/off", "not a plain https link in Sources: http://example.com/"])
+        finding.optOut?.url = nil
+        #expect(finding.problems(curated: true).contains("Documentation has no link"))
     }
 }
 

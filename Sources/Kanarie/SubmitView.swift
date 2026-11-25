@@ -48,6 +48,7 @@ struct SubmitView: View {
                     Text("On, cannot be switched off").tag(Telemetry.forced)
                 }
                 TextField("What is collected", text: $draft.summary, prompt: Text("What is sent, and who receives it"), axis: .vertical).lineLimit(2...)
+                // Rule.problems names Privacy policy, Documentation and Sources by these labels: rename both together.
                 TextField("Privacy policy", text: $draft.policyURL, prompt: Text("https://"))
             }
             if [.optOut, .optIn].contains(draft.telemetry) {
@@ -84,7 +85,9 @@ struct SubmitView: View {
             VStack(alignment: .leading) {
                 // Below the form, where it stays in view whatever the form is scrolled to.
                 if !problems.isEmpty {
-                    Label("Not ready yet: \(problems.joined(separator: "; ")).", systemImage: "exclamationmark.triangle")
+                    // The first few only: many bad links would otherwise grow the footer over the form and its buttons.
+                    let more = problems.count > 3 ? "; and \(problems.count - 3) more" : ""
+                    Label("Not ready yet: \(problems.prefix(3).joined(separator: "; "))\(more).", systemImage: "exclamationmark.triangle")
                         .fixedSize(horizontal: false, vertical: true)
                 } else if let failure {
                     Label("The issue could not be prepared: \(failure)", systemImage: "exclamationmark.triangle").fixedSize(horizontal: false, vertical: true)
@@ -209,7 +212,7 @@ struct BulkSubmitView: View {
                 ForEach(Array(included.enumerated()), id: \.element.item.id) { index, entry in
                     VStack(alignment: .leading, spacing: 2) {
                         Text(entry.rule.name ?? entry.item.name)
-                        Text(entry.rule.summary).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                        Text(entry.rule.summary).font(.caption).foregroundStyle(.secondary).lineLimit(2).help(entry.rule.summary)
                         if let missing = checks?[index].missing, !missing.isEmpty {
                             Label("Not found on any cited page: \(missing.joined(separator: ", "))", systemImage: "exclamationmark.triangle")
                                 .font(.caption).foregroundStyle(.orange)

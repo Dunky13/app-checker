@@ -182,5 +182,5 @@ A finding sent from the app arrives as an issue. `scripts/accept-finding.py <iss
 
 ## Since 0.1.5, not released yet
 
-- **Submit form fields grow.** What is collected, Steps and Sources now grow with their text instead of scrolling inside a few lines, so every link is visible and scrolling over them moves the form. A link that is not plain https is named with its field ("not a plain https link in Sources: …").
+- **Submit form fields grow.** What is collected, Steps and Sources now grow with their text instead of scrolling inside a few lines, so every link is visible and scrolling over them moves the form. A link that is not plain https is named with its field ("not a plain https link in Sources: …"). The footer lists the first three problems and counts the rest, so many bad links cannot push the buttons out of the sheet.
   - Evidence: a test copy (own home folder) showed six links in Sources in full, and typing an http link there showed the message naming Sources. 60 tests pass. Not seen: a real trackpad scroll over the field.

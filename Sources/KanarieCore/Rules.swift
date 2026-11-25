@@ -137,8 +137,8 @@ public struct Rule: Codable, Sendable, Hashable {
         guard curated else { return found }
         if telemetry == .unknown { found.append("unknown telemetry does not belong in the curated rules") }
         if summary.isEmpty { found.append("the summary of what is collected is missing") }
-        if (sources ?? []).isEmpty { found.append("a source link is missing") }
-        if [.optOut, .optIn].contains(telemetry), safeURL(optOut?.url) == nil { found.append("the documentation link for switching it off is missing or not an http(s) link") }
+        if (sources ?? []).isEmpty { found.append("Sources has no link") }
+        if [.optOut, .optIn].contains(telemetry), (optOut?.url ?? "").isEmpty { found.append("Documentation has no link") }
         // A curated link is read once, by whoever reviews the finding. After that it is a label to click.
         // So its host is written in plain letters, digits, dots and hyphens: no user name before it, no escape, no look-alike letter.
         // Named as the submit form labels the field, so a person knows where to look.
