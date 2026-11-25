@@ -139,22 +139,24 @@ public struct Rule: Codable, Sendable, Hashable {
         if summary.isEmpty { found.append("the summary of what is collected is missing") }
         if (sources ?? []).isEmpty { found.append("Sources has no link") }
         if [.optOut, .optIn].contains(telemetry), (optOut?.url ?? "").isEmpty { found.append("Documentation has no link") }
+        // The command: plain ASCII, so its end cannot sit behind a screen of blanks or stacked marks.
+        if let command = optOut?.command,
+           !command.allSatisfy(\.isASCII) || command.unicodeScalars.count > 300 || command.contains("  ") || command.contains("\t") {
+            found.append("the command is not plain ASCII, is longer than 300 characters, or is padded with spaces")
+        }
+        // Links last: there can be many, and the form shows only the first few problems.
         // A curated link is read once, by whoever reviews the finding. After that it is a label to click.
         // So its host is written in plain letters, digits, dots and hyphens: no user name before it, no escape, no look-alike letter.
         // Named as the submit form labels the field, so a person knows where to look.
         let links = [("Privacy policy", policyURL), ("Documentation", optOut?.url)].compactMap { field, link in link.map { (field, $0) } }
             + (sources ?? []).map { ("Sources", $0) }
-        for (field, link) in links {
+        // An empty link is reported as missing above, not again here.
+        for (field, link) in links where !link.isEmpty {
             let host = link.dropFirst("https://".count).prefix { !"/?#".contains($0) }
             if safeURL(link) == nil || !link.hasPrefix("https://") || !link.allSatisfy(\.isASCII) || host.isEmpty
                 || !host.allSatisfy({ $0.isLetter || $0.isNumber || ".-:".contains($0) }) {
                 found.append("not a plain https link in \(field): \(link.prefix(200))")
             }
-        }
-        // The same goes for the command: plain ASCII, so its end cannot sit behind a screen of blanks or stacked marks.
-        if let command = optOut?.command,
-           !command.allSatisfy(\.isASCII) || command.unicodeScalars.count > 300 || command.contains("  ") || command.contains("\t") {
-            found.append("the command is not plain ASCII, is longer than 300 characters, or is padded with spaces")
         }
         return found
     }

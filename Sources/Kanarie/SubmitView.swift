@@ -55,7 +55,7 @@ struct SubmitView: View {
                 Section("How to switch it off") {
                     TextField("Steps", text: $draft.instructions, axis: .vertical).lineLimit(1...)
                     TextField("Command", text: $draft.command, prompt: Text("echo 'export NAME=0' >> ~/.zshrc"))
-                    TextField("Documentation", text: $draft.optOutURL, prompt: Text("https://"))
+                    TextField("Documentation", text: $draft.optOutURL, prompt: Text("https://"))  // label named in Rule.problems
                     if !draft.checks.isEmpty {
                         LabeledContent("Checked on a Mac") { VStack(alignment: .trailing) { ForEach(draft.checks, id: \.self) { Text($0) } } }
                         Button("Replace These Checks") { draft.replaceChecks = true }
@@ -67,7 +67,7 @@ struct SubmitView: View {
                 }
             }
             Section {
-                TextField("Sources", text: $draft.sources, prompt: Text("One link per line"), axis: .vertical).lineLimit(2...)
+                TextField("Sources", text: $draft.sources, prompt: Text("One link per line"), axis: .vertical).lineLimit(2...)  // label named in Rule.problems
             } footer: {
                 Text("Pages that say so: the vendor's documentation, its source code or an issue.").frame(maxWidth: .infinity, alignment: .leading)
             }
