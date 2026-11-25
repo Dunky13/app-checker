@@ -997,10 +997,21 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         (empty.name, empty.sources, empty.disabledWhen, empty.enabledWhen) = ("Example CLI", ["https://example.com/docs"], [], [])
         #expect(Submission.unedited(empty, item: item)?.disabledWhen == nil)
         #expect(Submission.unedited(empty, item: item)?.enabledWhen == nil)
-        // An opt-in without steps would get them filled in by the form, so it is not sent as unedited.
-        var optIn = Rule(match: ["brew:x"], telemetry: .optIn, summary: "Usage events.")
-        (optIn.name, optIn.sources) = ("Example CLI", ["https://example.com/docs"])
-        #expect(Submission.unedited(optIn, item: item) == nil)
+        // Written as the form writes it: trimmed, empty fields left out, a missing name filled in. Still the same finding.
+        var loose = found
+        (loose.name, loose.summary, loose.policyURL, loose.sources) = (nil, "Usage events. ", "", [" https://example.com/docs", ""])
+        loose.optOut?.command = ""
+        var tidy = found
+        tidy.name = item.name
+        tidy.optOut?.command = nil
+        #expect(Submission.unedited(loose, item: item) == tidy)
+        // What the form would change is not sent: steps for a class that has none, and an opt-out without steps.
+        var forced = empty
+        forced.optOut = OptOut(instructions: "Set the variable.", command: nil, url: nil)
+        #expect(Submission.unedited(forced, item: item) == nil)
+        var bare = found
+        bare.optOut = nil
+        #expect(Submission.unedited(bare, item: item) == nil)
         for telemetry in [Telemetry.none, .forced] {
             var other = Rule(match: ["brew:x"], telemetry: telemetry, summary: "Usage events.")
             (other.name, other.sources) = ("Example CLI", ["https://example.com/docs"])

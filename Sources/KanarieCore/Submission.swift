@@ -84,13 +84,19 @@ public enum Submission {
         return lines(rule.disabledWhen, "switches it off") + lines(rule.enabledWhen, "switches it on") + ["Verdict with this finding: \(colour). \(verdict.state)"]
     }
 
-    /// A lookup as a bulk submission sends it: for this item, and only when the form would send the same, so that
-    /// "not edited" holds. The form fills in what a lookup left out, such as steps for an opt-in without any.
+    /// A lookup as a bulk submission sends it: for this item, written as the form writes it, and only when the form
+    /// changes nothing more than that, so that "not edited" holds. The form trims text, leaves empty fields out and fills
+    /// in a missing name, all of which keep the finding; it also drops steps and checks the telemetry class does not use,
+    /// and adds empty steps to an opt-out without any, which change it.
     public static func unedited(_ found: Rule, item: Item) -> Rule? {
+        let text = { (field: String) in field.trimmingCharacters(in: .whitespacesAndNewlines) }
+        let optional = { (field: String?) in field.map(text).flatMap { $0.isEmpty ? nil : $0 } }
         var sent = found
-        sent.match = [item.id]
+        (sent.match, sent.name, sent.summary, sent.policyURL) = ([item.id], optional(found.name) ?? item.name, text(found.summary), optional(found.policyURL))
+        sent.sources = (found.sources ?? []).joined(separator: "\n").split(whereSeparator: \.isNewline).map { text(String($0)) }.filter { !$0.isEmpty }
+        sent.optOut = found.optOut.map { OptOut(instructions: text($0.instructions), command: optional($0.command), url: optional($0.url)) }
         // A lookup writes "no checks" as an empty list, the form leaves the field out: the same finding.
-        (sent.disabledWhen, sent.enabledWhen) = (sent.disabledWhen?.isEmpty == false ? sent.disabledWhen : nil, sent.enabledWhen?.isEmpty == false ? sent.enabledWhen : nil)
+        (sent.disabledWhen, sent.enabledWhen) = (found.disabledWhen?.isEmpty == false ? found.disabledWhen : nil, found.enabledWhen?.isEmpty == false ? found.enabledWhen : nil)
         return Draft(from: found, item: item).rule(for: item) == sent ? sent : nil
     }
 
