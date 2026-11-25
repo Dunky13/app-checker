@@ -1,0 +1,1083 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Kanarie: see which software on your Mac sends telemetry</title>
+<meta name="description" content="Kanarie is a free, open-source macOS menu bar app that lists the software on your Mac, tells you which of it sends telemetry, and shows how to switch that off.">
+<link rel="icon" href="logo.png">
+<style>
+:root {
+  color-scheme: light dark;
+  --ink: oklch(0.27 0.03 265);
+  --ink-soft: oklch(0.42 0.03 265);
+  --paint: oklch(0.38 0.07 255);
+  --btn: oklch(0.38 0.08 255);
+  --on-btn: oklch(0.985 0.008 95);
+  --paper: oklch(0.985 0.008 95);
+  --pink: oklch(0.935 0.04 10);
+  --mint: oklch(0.945 0.04 160);
+  --sky: oklch(0.925 0.04 235);
+  --butter: oklch(0.955 0.06 95);
+  --peach: oklch(0.925 0.05 60);
+  --lilac: oklch(0.93 0.03 300);
+  --kraft: oklch(0.86 0.06 70);
+  --canary: oklch(0.89 0.14 95);
+  --disc: oklch(0.88 0.05 235);
+  --red: oklch(0.53 0.18 27);
+  --on-red: oklch(0.985 0.008 95);
+  --yellow: oklch(0.86 0.15 92);
+  --green: oklch(0.5 0.12 150);
+  --on-green: oklch(0.985 0.008 95);
+  --grey: oklch(0.8 0.008 260);
+  --wood: oklch(0.68 0.07 65);
+  --tape: oklch(0.97 0.025 90 / 0.7);
+  --shadow: oklch(0.35 0.04 50 / 0.16);
+  --shadow-deep: oklch(0.3 0.05 50 / 0.3);
+  --wall: oklch(0.885 0.014 70);
+  --light: radial-gradient(ellipse 80% 700px at 8% 0, oklch(0.99 0.05 92 / 0.6), oklch(0.99 0.04 92 / 0.2) 55%, transparent 80%);
+  --bulb: oklch(0.9 0.01 90);
+  --bricks: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='64'%3E%3Crect width='240' height='64' fill='oklch(0.885 0.014 70)'/%3E%3Cg fill='oklch(0.945 0.013 82)'%3E%3Crect x='1' y='1' width='58' height='30' rx='3'/%3E%3Crect x='121' y='1' width='58' height='30' rx='3'/%3E%3Crect x='31' y='33' width='58' height='30' rx='3'/%3E%3Crect x='151' y='33' width='58' height='30' rx='3'/%3E%3C/g%3E%3Cg fill='oklch(0.935 0.016 76)'%3E%3Crect x='61' y='1' width='58' height='30' rx='3'/%3E%3Crect x='91' y='33' width='58' height='30' rx='3'/%3E%3Crect x='-29' y='33' width='58' height='30' rx='3'/%3E%3Crect x='211' y='33' width='58' height='30' rx='3'/%3E%3C/g%3E%3Crect x='181' y='1' width='58' height='30' rx='3' fill='oklch(0.955 0.011 88)'/%3E%3C/svg%3E");
+  --noise: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .42 0 0 0 0 .36 0 0 0 0 .28 0 0 0 .16 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  --round: "Arial Rounded MT Bold", "SF Pro Rounded", ui-rounded, "Avenir Next", system-ui, sans-serif;
+  --marker: "Marker Felt", "Chalkboard SE", "Comic Sans MS", ui-rounded, cursive;
+  --hand: "Noteworthy", "Chalkboard SE", "Bradley Hand", ui-rounded, cursive;
+  --type: "American Typewriter", "Courier New", ui-monospace, monospace;
+  --body: "Avenir Next", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* the same wall at night, under one warm lamp */
+    --ink: oklch(0.22 0.03 265);
+    --ink-soft: oklch(0.34 0.03 265);
+    --paint: oklch(0.92 0.04 85);
+    --btn: oklch(0.34 0.07 255);
+    --on-btn: oklch(0.94 0.03 85);
+    --paper: oklch(0.87 0.03 80);
+    --pink: oklch(0.83 0.05 15);
+    --mint: oklch(0.84 0.045 160);
+    --sky: oklch(0.83 0.04 235);
+    --butter: oklch(0.86 0.07 90);
+    --peach: oklch(0.82 0.06 60);
+    --lilac: oklch(0.82 0.035 300);
+    --kraft: oklch(0.76 0.07 68);
+    --canary: oklch(0.82 0.14 90);
+    --disc: oklch(0.42 0.06 250);
+    --red: oklch(0.48 0.16 27);
+    --on-red: oklch(0.93 0.03 85);
+    --yellow: oklch(0.8 0.15 90);
+    --green: oklch(0.45 0.11 150);
+    --on-green: oklch(0.93 0.03 85);
+    --grey: oklch(0.72 0.01 260);
+    --wood: oklch(0.55 0.07 60);
+    --tape: oklch(0.9 0.04 85 / 0.55);
+    --shadow: oklch(0.1 0.03 260 / 0.4);
+    --shadow-deep: oklch(0.08 0.03 260 / 0.6);
+    --wall: oklch(0.25 0.02 255);
+    --light: radial-gradient(ellipse 60% 820px at 86% 0, oklch(0.82 0.13 75 / 0.34), oklch(0.8 0.12 75 / 0.12) 50%, transparent 80%);
+    --bulb: oklch(0.95 0.11 88);
+    --bricks: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='64'%3E%3Crect width='240' height='64' fill='oklch(0.25 0.02 255)'/%3E%3Cg fill='oklch(0.31 0.025 255)'%3E%3Crect x='1' y='1' width='58' height='30' rx='3'/%3E%3Crect x='121' y='1' width='58' height='30' rx='3'/%3E%3Crect x='31' y='33' width='58' height='30' rx='3'/%3E%3Crect x='151' y='33' width='58' height='30' rx='3'/%3E%3C/g%3E%3Cg fill='oklch(0.3 0.028 250)'%3E%3Crect x='61' y='1' width='58' height='30' rx='3'/%3E%3Crect x='91' y='33' width='58' height='30' rx='3'/%3E%3Crect x='-29' y='33' width='58' height='30' rx='3'/%3E%3Crect x='211' y='33' width='58' height='30' rx='3'/%3E%3C/g%3E%3Crect x='181' y='1' width='58' height='30' rx='3' fill='oklch(0.33 0.022 258)'/%3E%3C/svg%3E");
+  }
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  color: var(--ink);
+  font: 400 1.0625rem/1.5 var(--body);
+  background: var(--light), var(--bricks) var(--wall);
+  background-size: auto, 240px 64px;
+  min-height: 100vh;
+}
+img, svg { display: block; max-width: 100%; height: auto; }
+a { color: inherit; text-underline-offset: 0.18em; text-decoration-thickness: 0.08em; }
+code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.92em; }
+:focus-visible {
+  outline: 3px solid var(--ink);
+  outline-offset: 2px;
+  /* ink ring reads on paper, the canary halo reads on the wall by day and by night */
+  box-shadow: 0 0 0 8px var(--canary) !important;
+  border-radius: 6px;
+}
+.skip {
+  position: absolute; left: 12px; top: -80px; z-index: 10;
+  background: var(--canary); color: var(--ink); padding: 10px 14px; border-radius: 8px;
+  font: 700 1rem/1 var(--body); text-decoration: none;
+}
+.skip:focus { top: 12px; }
+
+/* ---------- the wall ---------- */
+.wall { overflow-x: clip; }
+.patch {
+  position: relative;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: clamp(34px, 5vw, 64px) clamp(14px, 4vw, 40px);
+}
+/* scraps of older bills that never came off */
+.complaint::before, .demands::before, .points::before, .rules::before {
+  content: ""; position: absolute; z-index: 0; pointer-events: none;
+  background: var(--noise) var(--scrap);
+  border-radius: 6px;
+  opacity: 0.75;
+}
+.complaint::before { --scrap: var(--sky); top: 8%; left: 44%; width: 300px; height: 230px; transform: rotate(6deg); }
+.demands::before { --scrap: var(--butter); bottom: 2%; left: 30%; width: 260px; height: 170px; transform: rotate(-4deg); }
+.points::before { --scrap: var(--pink); bottom: 6%; left: 2%; width: 200px; height: 120px; transform: rotate(3deg); }
+.rules::before { --scrap: var(--mint); top: 4%; right: 10%; width: 240px; height: 140px; transform: rotate(-7deg); }
+
+/* lettering painted straight onto the wall */
+.painted {
+  font: 700 clamp(1.9rem, 5.6vw, 3.6rem)/1.02 var(--round);
+  color: var(--paint);
+  margin: 0 0 0.6em;
+  transform: rotate(-1deg);
+  max-width: 20ch;
+  text-wrap: balance;
+}
+.painted small { display: block; font: 400 0.46em/1.35 var(--hand); margin-top: 0.45em; }
+.stencil {
+  font: 700 clamp(0.95rem, 3.4vw, 1.8rem)/1 var(--round);
+  letter-spacing: 0.16em;
+  white-space: nowrap;
+  color: var(--paint);
+  margin: 0;
+}
+
+/* ---------- a bill: pastel paper, taped to the wall ---------- */
+.bill {
+  --r: 0deg;
+  --bg: var(--paper);
+  --fg: var(--ink);
+  position: relative;
+  color: var(--fg);
+  background-color: var(--bg);
+  background-image: var(--noise);
+  padding: 26px 24px 28px;
+  border-radius: 5px 7px 6px 4px;
+  transform: rotate(var(--r));
+  box-shadow: 0 1px 2px var(--shadow), 0 16px 26px -16px var(--shadow-deep);
+}
+.tape::after {
+  content: "";
+  position: absolute; z-index: 2;
+  top: -12px; left: 50%; width: 92px; height: 26px;
+  margin-left: -46px;
+  background: var(--tape);
+  border-radius: 2px;
+  transform: rotate(-4deg);
+  box-shadow: 0 1px 1px oklch(0.3 0.02 60 / 0.08);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .bill { transition: transform 0.3s cubic-bezier(.3, 1.4, .5, 1); }
+  .bill:hover { transform: rotate(calc(var(--r) * 0.5)) translateY(-2px); }
+  .settle { animation: settle 0.6s cubic-bezier(.2, 1.2, .4, 1) backwards; animation-delay: calc(var(--i, 0) * 110ms + 60ms); }
+  @keyframes settle { from { opacity: 0; transform: rotate(calc(var(--r) - 2deg)) translateY(-10px); } }
+}
+
+/* ---------- header ---------- */
+.street {
+  position: relative;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 18px clamp(14px, 4vw, 40px) 0;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 14px 22px;
+}
+.namesign {
+  --r: -2deg;
+  --bg: var(--canary);
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 18px 8px 10px;
+  border-radius: 14px;
+  text-decoration: none;
+}
+.namesign img { width: 48px; height: 48px; }
+.namesign span { font: 700 1.75rem/1 var(--round); }
+.street nav ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 10px; }
+.street nav a {
+  display: inline-block;
+  padding: 7px 14px;
+  font: 700 0.95rem/1.2 var(--body);
+  text-decoration: none;
+  color: var(--ink);
+  background: var(--paper);
+  border-radius: 999px;
+  box-shadow: 0 1px 2px var(--shadow), 0 6px 10px -6px var(--shadow-deep);
+}
+.street nav li:nth-child(1) a { transform: rotate(2deg); background: var(--mint); }
+.street nav li:nth-child(2) a { transform: rotate(-1.5deg); background: var(--pink); }
+.street nav li:nth-child(3) a { transform: rotate(1deg); background: var(--sky); }
+.street nav a:hover { text-decoration: underline; }
+.lamp {
+  position: absolute; right: clamp(8px, 4vw, 48px); top: 0;
+  width: 92px; height: auto;
+  pointer-events: none;
+}
+.lamp .bulb { fill: var(--bulb); }
+@media (max-width: 640px) { .lamp { width: 62px; } }
+
+/* ---------- hero ---------- */
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 28px;
+  padding-top: 26px;
+  padding-bottom: 72px;
+}
+.ghosts { position: absolute; inset: 0; pointer-events: none; z-index: 0; }
+.ghost {
+  position: absolute;
+  font: 700 clamp(1.7rem, 5vw, 3.2rem)/0.95 var(--round);
+  padding: 14px 18px;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  background: var(--noise) var(--sky);
+  border-radius: 6px;
+  opacity: 0.85;
+}
+.ghost.g1 { bottom: 2%; left: 56%; transform: rotate(-5deg); }
+@media (max-width: 859px) { .ghost.g1 { display: none; } }
+.ghost.g2 { bottom: 4%; left: -3%; transform: rotate(-3deg); background-color: var(--mint); }
+.no-paste { position: absolute; left: clamp(10px, 3vw, 40px); bottom: 10px; z-index: 0; pointer-events: none; }
+.poster {
+  --r: -1deg;
+  padding: clamp(26px, 4vw, 44px) clamp(20px, 4vw, 44px) clamp(30px, 4vw, 48px);
+  z-index: 1;
+}
+.kicker {
+  display: inline-block;
+  margin: 0 0 18px;
+  padding: 5px 12px;
+  font: 700 0.85rem/1.3 var(--body);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  background: var(--sky);
+  border-radius: 999px;
+  transform: rotate(-1.5deg);
+}
+h1 {
+  margin: 0;
+  font: 700 clamp(2.8rem, 10vw, 6.4rem)/0.98 var(--round);
+  letter-spacing: -0.01em;
+}
+h1 .hl {
+  display: inline-block;
+  padding: 0.02em 0.14em 0.06em;
+  margin: 0.04em 0;
+  background: var(--canary);
+  border-radius: 0.28em 0.18em 0.32em 0.16em;
+  transform: rotate(1.6deg);
+}
+.lede {
+  margin: 22px 0 0;
+  max-width: 34ch;
+  font: 500 clamp(1.1rem, 2.1vw, 1.35rem)/1.45 var(--body);
+}
+.lede strong { font-weight: 800; }
+.actions { margin: 24px 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 14px 22px; }
+.stamp {
+  display: inline-block;
+  padding: 13px 22px 12px;
+  font: 700 1.15rem/1 var(--round);
+  text-decoration: none;
+  color: var(--on-btn);
+  background: var(--btn);
+  border-radius: 999px;
+  transform: rotate(-2deg);
+  box-shadow: 0 2px 0 var(--shadow-deep), 0 10px 16px -10px var(--shadow-deep);
+}
+.stamp:hover { text-decoration: underline; }
+.actions a:not(.stamp) { font-weight: 700; }
+.side { display: grid; gap: 24px; align-content: start; justify-items: center; position: relative; z-index: 1; }
+
+/* hero Arie: a painted disc on the wall, his placard planted behind him */
+.arie-hero { margin: 0; width: min(100%, 290px); }
+.rally { position: relative; padding-top: 92px; }
+.placard {
+  position: absolute; top: 0; left: -6px; z-index: 0;
+  width: 66%;
+  margin: 0;
+  padding: 12px 10px;
+  text-align: center;
+  font: 400 1.3rem/1.05 var(--marker);
+  color: var(--ink);
+  background: var(--noise) var(--kraft);
+  border-radius: 6px;
+  box-shadow: 0 1px 2px var(--shadow), 0 10px 16px -10px var(--shadow-deep);
+  transform: rotate(-5deg);
+  transform-origin: 50% calc(100% + 150px);
+}
+.placard::after {
+  content: ""; position: absolute; z-index: -1;
+  left: 50%; top: 100%; width: 10px; height: 150px; margin-left: -5px;
+  background: var(--wood);
+  border-radius: 0 0 4px 4px;
+}
+.disc {
+  position: relative;
+  display: grid; place-items: center;
+  aspect-ratio: 1;
+  padding: 9%;
+  background: var(--disc);
+  border-radius: 50%;
+  margin-left: 12%;
+}
+.arie-hero figcaption {
+  margin: 10px auto 0;
+  max-width: 26ch;
+  text-align: center;
+  font: 400 1.15rem/1.35 var(--hand);
+  color: var(--paint);
+}
+.hush {
+  display: block;
+  margin: 10px auto 0;
+  min-height: 36px;
+  padding: 6px 14px;
+  font: 700 0.9rem/1 var(--body);
+  color: var(--ink);
+  background: var(--paper);
+  border: 2px solid var(--ink-soft);
+  border-radius: 999px;
+  cursor: pointer;
+}
+.hush[aria-pressed="true"] { background: var(--canary); }
+@media (prefers-reduced-motion: reduce) { .hush { display: none; } }
+.curfew {
+  --r: 3deg;
+  --bg: var(--pink);
+  text-align: center;
+  padding: 18px 22px 20px;
+  max-width: 250px;
+}
+.curfew p { margin: 0; }
+.curfew .big { font: 400 1.75rem/1 var(--marker); }
+.curfew .small { font: 400 1.05rem/1.25 var(--hand); margin-top: 8px; }
+@media (min-width: 860px) {
+  .hero { grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr); align-items: start; padding-bottom: 110px; }
+  .side { padding-top: 10px; }
+  .arie-hero { width: min(100%, 320px); }
+  .curfew { justify-self: start; margin-left: -40px; }
+}
+
+/* ---------- Arie, reused from the animated prototype ---------- */
+.arie {
+  --yel: oklch(0.88 0.18 92); --yel-d: oklch(0.79 0.165 79);
+  --beak: oklch(0.73 0.17 58); --beak-d: oklch(0.68 0.17 52);
+  --eye: oklch(0.21 0.01 270); --perch: oklch(0.64 0.018 265);
+  --rim: oklch(0.92 0.015 260); --sh-a: oklch(0.6 0.17 260); --sh-b: oklch(0.5 0.17 262);
+  fill: var(--yel);
+  width: 100%;
+  overflow: visible;
+}
+.arie .tail, .arie .wing, .arie .feather path:first-child { fill: var(--yel-d); }
+.arie .quill { fill: none; stroke: var(--yel); stroke-width: 1.6; stroke-linecap: round; }
+.arie .perch { fill: var(--perch); }
+.arie .feet { fill: none; stroke: var(--beak-d); stroke-width: 4; stroke-linecap: round; }
+.arie .eye { fill: var(--eye); }
+.arie .eye-closed { fill: none; stroke: var(--eye); stroke-width: 3; stroke-linecap: round; }
+.arie .beak-up { fill: var(--beak); } .arie .beak-lo { fill: var(--beak-d); }
+.arie .rim { fill: var(--rim); } .arie .sh-a { fill: var(--sh-a); } .arie .sh-b { fill: var(--sh-b); }
+.arie .glint { fill: oklch(0.98 0.01 95); }
+.arie .fx { fill: currentColor; font: 700 22px var(--sans); }
+.arie .hum { fill: none; stroke: currentColor; stroke-width: 2.5; stroke-linecap: round; }
+
+/* Pivots are SVG user units on the view box, so Chrome and Safari agree whatever the viewBox offset.
+   Parts drawn around a translated parent (glint, notes, feathers) pivot at their local 0 0. */
+.arie * { transform-box: view-box; transform-origin: 0 0; }
+.arie .head { transform-origin: 156px 100px; }
+.arie .beak-up, .arie .beak-lo { transform-origin: 180px 85.5px; }
+.arie .eye { transform-origin: 170px 77.5px; }
+.arie .torso { transform-origin: 135px 171px; }
+.arie .wing { transform-origin: 144px 112px; }
+.arie .tail { transform-origin: 92px 150px; }
+.arie .shield { transform-origin: 143px 141px; }
+.arie .z { transform-origin: 191px 52px; }
+.arie .q { transform-origin: 198px 42px; }
+
+.arie .eye-closed, .arie .feather, .arie .glint, .arie .z, .arie .note, .arie .hum, .arie .q { opacity: 0; }
+
+/* Static poses. These are what reduced motion shows. */
+.m-doze .eye { opacity: 0; }
+.m-doze .eye-closed, .m-doze .z1 { opacity: 1; }
+.m-doze .head { transform: translateY(2px) rotate(6deg); }
+.m-ruffle .torso { transform: scale(1.08); }
+.m-ruffle .head { transform: translateY(-6px) rotate(-8deg); }
+.m-ruffle .wing { transform: rotate(13deg); }
+.m-ruffle .tail { transform: rotate(9deg); }
+.m-ruffle .f1 { opacity: 1; transform: translate(-16px, -4px) rotate(20deg); }
+.m-sing .head { transform: rotate(-14deg); }
+.m-sing .beak-up { transform: rotate(-8deg); }
+.m-sing .beak-lo { transform: rotate(26deg); }
+.m-sing .n1 { opacity: 1; }
+.m-sing .hum { opacity: .45; }
+.m-sing .torso { transform: scale(1.03); }
+.m-cock .head { transform: rotate(15deg); }
+.m-cock .q { opacity: 1; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .arie { --loop: cubic-bezier(.45, 0, .55, 1) infinite; }
+  .m-idle .torso { animation: breathe-s 4s var(--loop); }
+  .m-idle .eye { animation: blink 5.5s var(--loop); }
+  .m-doze .torso { animation: breathe 3.6s var(--loop); }
+  .m-doze .head { animation: doze-head 3.6s var(--loop); }
+  .m-doze .z { animation: z-drift 3.6s cubic-bezier(.16, 1, .3, 1) infinite; }
+  .m-doze .z2 { animation-delay: -1.2s; }
+  .m-doze .z3 { animation-delay: -2.4s; }
+  .m-doze .glint { animation: glint 7s var(--loop); }
+  .m-ruffle .torso { animation: ruffle 4.5s var(--loop); }
+  .m-ruffle .head { animation: ruffle-head 4.5s var(--loop); }
+  .m-ruffle .wing { animation: ruffle-wing 4.5s var(--loop); }
+  .m-ruffle .tail { animation: ruffle-tail 4.5s var(--loop); }
+  .m-ruffle .feather { animation: feather 4.5s linear infinite; }
+  .m-ruffle .f2 { animation-name: feather-2; }
+  .m-sing .head { animation: sing-head 3.6s var(--loop); }
+  .m-sing .beak-up { animation: beak-up .9s var(--loop); }
+  .m-sing .beak-lo { animation: beak-lo .9s var(--loop); }
+  .m-sing .torso { animation: sing-puff 1.8s var(--loop); }
+  .m-sing .note { animation: note 1.8s cubic-bezier(.16, 1, .3, 1) infinite; }
+  .m-sing .n2 { animation-delay: -.6s; }
+  .m-sing .n3 { animation-delay: -1.2s; }
+  .m-sing .hum { animation: hum 1.2s var(--loop); }
+  .m-sing .shield { animation: shield-shake 1.8s var(--loop); }
+  .m-cock .head { animation: cock 4.5s var(--loop); }
+  .m-cock .eye { animation: cock-blink 4.5s var(--loop); }
+  .m-cock .q { animation: q 4.5s var(--loop); }
+  .placard { animation: sway 5s cubic-bezier(.45, 0, .55, 1) infinite; }
+  .motion-paused .arie *, .motion-paused .placard { animation-play-state: paused; }
+}
+@keyframes sway { 0%, 100% { transform: rotate(-5deg); } 50% { transform: rotate(-2deg); } }
+@keyframes breathe-s { 50% { transform: scale(1.015, 1.02); } }
+@keyframes breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.035, 1.04); } }
+@keyframes blink { 0%, 90%, 96%, 100% { transform: scaleY(1); } 93% { transform: scaleY(.1); } }
+@keyframes doze-head { 0%, 100% { transform: translateY(2px) rotate(6deg); } 50% { transform: translateY(3px) rotate(8deg); } }
+@keyframes z-drift {
+  0% { opacity: 0; transform: translate(0, 0) scale(.6); }
+  20% { opacity: 1; }
+  100% { opacity: 0; transform: translate(10px, -22px) scale(1.1); }
+}
+@keyframes glint { 0%, 70%, 92%, 100% { opacity: 0; transform: scale(.3) rotate(0); } 81% { opacity: 1; transform: scale(1) rotate(45deg); } }
+@keyframes ruffle {
+  0%, 38%, 94%, 100% { transform: scale(1); }
+  45% { transform: scale(1.02, .97); }
+  51% { transform: scale(1.11, 1.1); }
+  54% { transform: scale(1.11, 1.1) rotate(-2deg); }
+  57% { transform: scale(1.11, 1.1) rotate(2deg); }
+  60% { transform: scale(1.11, 1.1) rotate(-1.5deg); }
+  63% { transform: scale(1.1) rotate(1deg); }
+  67%, 82% { transform: scale(1.08) rotate(0); }
+}
+@keyframes ruffle-head {
+  0%, 38%, 94%, 100% { transform: translate(0, 0) rotate(0); }
+  45% { transform: translate(0, 2px) rotate(2deg); }
+  51% { transform: translate(0, -7px) rotate(-3deg); }
+  54% { transform: translate(-2.5px, -7px) rotate(5deg); }
+  57% { transform: translate(2.5px, -7px) rotate(-5deg); }
+  60% { transform: translate(-2px, -7px) rotate(3deg); }
+  63% { transform: translate(1px, -7px) rotate(-2deg); }
+  67%, 82% { transform: translate(0, -6px) rotate(-8deg); }
+}
+@keyframes ruffle-wing {
+  0%, 44%, 94%, 100% { transform: rotate(0); }
+  51% { transform: rotate(18deg); }
+  54% { transform: rotate(9deg); }
+  57% { transform: rotate(18deg); }
+  60% { transform: rotate(10deg); }
+  63% { transform: rotate(15deg); }
+  67%, 82% { transform: rotate(7deg); }
+}
+@keyframes ruffle-tail {
+  0%, 46%, 80%, 100% { transform: rotate(0); }
+  51% { transform: rotate(16deg); }
+  55% { transform: rotate(-5deg); }
+  59% { transform: rotate(11deg); }
+  64% { transform: rotate(-2deg); }
+  69% { transform: rotate(4deg); }
+}
+@keyframes feather {
+  0%, 51% { opacity: 0; transform: translate(0, 0) rotate(-10deg) scale(.7); }
+  55% { opacity: 1; transform: translate(-8px, -12px) rotate(-35deg) scale(1); }
+  66% { transform: translate(-16px, -4px) rotate(20deg) scale(1); }
+  77% { opacity: 1; transform: translate(-22px, 7px) rotate(-25deg) scale(1); }
+  88%, 100% { opacity: 0; transform: translate(-27px, 18px) rotate(10deg) scale(1); }
+}
+@keyframes feather-2 {
+  0%, 53% { opacity: 0; transform: translate(0, 0) rotate(10deg) scale(.7); }
+  57% { opacity: 1; transform: translate(-10px, -6px) rotate(-30deg) scale(1); }
+  69% { transform: translate(-17px, 4px) rotate(-70deg) scale(1); }
+  80% { opacity: 1; transform: translate(-22px, 13px) rotate(-40deg) scale(1); }
+  90%, 100% { opacity: 0; transform: translate(-26px, 22px) rotate(-65deg) scale(1); }
+}
+@keyframes sing-head { 0%, 100% { transform: rotate(-12deg); } 50% { transform: rotate(-17deg); } }
+@keyframes beak-up { 0%, 100% { transform: rotate(-1deg); } 50% { transform: rotate(-9deg); } }
+@keyframes beak-lo { 0%, 100% { transform: rotate(4deg); } 50% { transform: rotate(30deg); } }
+@keyframes sing-puff { 0%, 100% { transform: scale(1.02); } 50% { transform: scale(1.045); } }
+@keyframes note {
+  0% { opacity: 0; transform: translate(0, 0) scale(.6); }
+  15% { opacity: 1; }
+  100% { opacity: 0; transform: translate(4px, -22px) rotate(14deg) scale(1); }
+}
+@keyframes hum { 0%, 100% { opacity: .3; transform: translateX(0); } 50% { opacity: .6; transform: translateX(2px); } }
+@keyframes shield-shake {
+  0%, 60%, 86%, 100% { transform: rotate(0); }
+  66% { transform: rotate(-2.5deg); } 72% { transform: rotate(2.5deg); } 79% { transform: rotate(-1deg); }
+}
+@keyframes cock { 0%, 85%, 100% { transform: rotate(0); } 14%, 70% { transform: rotate(15deg); } }
+@keyframes cock-blink { 0%, 38%, 43%, 100% { transform: scaleY(1); } 40.5% { transform: scaleY(.1); } }
+@keyframes q {
+  0%, 10% { opacity: 0; transform: translateY(5px); }
+  20%, 68% { opacity: 1; transform: translateY(0); }
+  80%, 100% { opacity: 0; transform: translateY(-3px); }
+}
+
+/* ---------- a run of the same small bill, pasted edge to edge ---------- */
+.run {
+  display: flex; gap: 10px;
+  width: max-content;
+  margin: 10px 0 0 -30px;
+  transform: rotate(-1.5deg);
+}
+.run span {
+  display: grid; place-items: center;
+  width: 150px; height: 180px;
+  padding: 14px 12px;
+  text-align: center;
+  font: 400 1.6rem/1.02 var(--marker);
+  color: var(--ink);
+  background: var(--noise) var(--bg, var(--canary));
+  border-radius: 6px;
+  box-shadow: 0 1px 2px var(--shadow), 0 12px 18px -12px var(--shadow-deep);
+}
+.run span:nth-child(3n+2) { --bg: var(--pink); }
+.run span:nth-child(3n) { --bg: var(--mint); }
+.run span:nth-child(even) { transform: rotate(1.5deg) translateY(4px); }
+@media (max-width: 640px) { .run span { width: 116px; height: 140px; font-size: 1.25rem; } }
+.nowrap { white-space: nowrap; }
+
+/* ---------- noise complaint ---------- */
+.complaint { display: grid; gap: 34px; grid-template-columns: minmax(0, 1fr); }
+.letter {
+  --r: 1deg;
+  max-width: 640px;
+  padding: clamp(28px, 5vw, 52px) clamp(22px, 5vw, 52px) clamp(28px, 5vw, 44px);
+  font: 400 1.05rem/1.6 var(--type);
+  background-image:
+    linear-gradient(transparent calc(33% - 1px), oklch(0.6 0.02 80 / 0.18) calc(33% - 1px) 33%, transparent 33% calc(66% - 1px), oklch(0.6 0.02 80 / 0.18) calc(66% - 1px) 66%, transparent 66%),
+    var(--noise);
+}
+.letter h2 {
+  margin: 0 0 18px;
+  font: 700 1.5rem/1.2 var(--type);
+  text-decoration: underline wavy;
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 7px;
+}
+.letter .meta { margin: 0 0 18px; }
+.letter p { margin: 0 0 14px; }
+.letter code { font-family: var(--type); background: var(--butter); padding: 0 4px; border-radius: 3px; }
+.sign { display: flex; align-items: center; gap: 12px; margin-top: 22px; }
+.sign span { font: 400 1.6rem/1 var(--hand); transform: rotate(-4deg); display: inline-block; }
+.sign svg { width: 54px; }
+.sign path { fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+.lost {
+  --r: -2.5deg;
+  --bg: var(--butter);
+  max-width: 330px;
+  padding: 22px 22px 26px;
+}
+.lost h3 { margin: 0 0 8px; font: 400 2.1rem/1 var(--marker); }
+.lost p { margin: 0 0 10px; }
+.lost .hand { font: 400 1.15rem/1.35 var(--hand); }
+@media (min-width: 900px) {
+  .complaint { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); align-items: center; }
+  .lost { margin-top: 90px; }
+}
+
+/* ---------- the demands ---------- */
+.demands-grid {
+  display: grid;
+  gap: 34px 30px;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+}
+@media (min-width: 720px) { .demands-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 1080px) {
+  .demands-grid { grid-template-columns: 1.1fr 1fr 0.95fr 1fr; }
+  .d-yellow { margin-top: 60px; }
+  .d-green { margin-top: 14px; }
+  .d-grey { margin-top: 84px; }
+}
+.verdict {
+  display: inline-flex; align-items: center; gap: 8px;
+  margin: 0 0 10px;
+  padding: 5px 14px 5px 5px;
+  font: 800 1rem/1 var(--body);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border-radius: 999px;
+}
+.verdict svg { width: 28px; height: 28px; flex: none; }
+.demand p { margin: 0; }
+.demand .slogan { margin: 2px 0 12px; }
+.mood {
+  width: min(100%, 190px);
+  margin: 4px 0 14px;
+  padding: 10px 12px 4px;
+  background: var(--sky);
+  border-radius: 22px;
+  box-shadow: inset 0 0 0 3px var(--paper);
+}
+.d-red { --r: -1.5deg; --bg: var(--pink); }
+.d-red .verdict { background: var(--red); color: var(--on-red); }
+.d-red .slogan { font: 400 clamp(2.3rem, 5vw, 3rem)/0.95 var(--marker); }
+.d-yellow {
+  --r: 2deg; --bg: var(--peach);
+  padding: 24px 22px 26px;
+  margin-bottom: 120px;
+}
+.d-yellow .stick {
+  position: absolute; left: 50%; top: 100%; width: 16px; height: 130px; margin-left: -8px; z-index: -1;
+  background: var(--wood);
+  border-radius: 0 0 5px 5px;
+}
+.d-yellow .slogan { font: 400 2rem/1.05 var(--marker); }
+.d-yellow .verdict { background: var(--yellow); color: var(--ink); }
+.d-green { --r: -0.8deg; --bg: var(--mint); padding: 22px 20px 26px; }
+.d-green .slogan { font: 700 1.4rem/1.2 var(--round); }
+.d-green .verdict { color: var(--on-green); background: var(--green); }
+.d-grey { --r: 1.2deg; --bg: var(--lilac); padding: 22px 20px 30px; text-align: center; }
+.d-grey .slogan { font: 400 2.6rem/0.95 var(--marker); }
+.d-grey .slogan small { display: block; font: 700 1.05rem/1.2 var(--body); letter-spacing: 0.04em; margin-top: 6px; }
+.d-grey .verdict { background: var(--grey); color: var(--ink); }
+.d-grey .mood { margin-inline: auto; }
+.d-grey .tabs-deco { display: flex; justify-content: space-between; margin: 16px -20px -30px; border-top: 2px dashed var(--ink-soft); }
+.d-grey .tabs-deco span { flex: 1; height: 26px; border-right: 2px dashed var(--ink-soft); }
+.d-grey .tabs-deco span:last-child { border-right: 0; }
+.d-grey .tabs-deco span:nth-child(3) { visibility: hidden; }
+
+/* ---------- he points, you decide ---------- */
+.points { display: grid; gap: 30px; grid-template-columns: minmax(0, 1fr); }
+.shot {
+  --r: -0.6deg;
+  margin: 0;
+  padding: clamp(14px, 2.4vw, 24px) clamp(14px, 2.4vw, 24px) 18px;
+}
+.shot img { width: 100%; aspect-ratio: 1400 / 914; border-radius: 8px; }
+.shot figcaption { margin-top: 12px; font: 400 1.1rem/1.4 var(--hand); max-width: 52ch; }
+.switches {
+  --r: 1.4deg; --bg: var(--canary);
+  padding: 24px 22px 28px;
+  max-width: 400px;
+}
+.switches p { margin: 0 0 12px; }
+.switches ul { list-style: none; margin: 0 0 14px; padding: 0; display: grid; gap: 10px; }
+.switches li { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 10px; align-items: baseline; }
+.btnlike {
+  font: 700 0.9rem/1 var(--round);
+  padding: 6px 11px;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  background: var(--paper);
+  white-space: nowrap;
+}
+.switches .last { font-weight: 800; margin: 0; }
+@media (min-width: 900px) {
+  .points { grid-template-columns: minmax(0, 1.75fr) minmax(0, 1fr); align-items: start; }
+  .points .painted { grid-column: 1 / -1; }
+  .switches { margin-top: 70px; margin-left: -50px; }
+}
+
+/* ---------- house rules ---------- */
+.rules { display: grid; gap: 30px; grid-template-columns: minmax(0, 1fr); }
+.notice {
+  --r: -0.5deg;
+  padding: 0 0 26px;
+  max-width: 700px;
+  overflow: hidden;
+}
+.notice h2 {
+  margin: 0 0 18px;
+  padding: 16px 24px 14px;
+  font: 700 clamp(1.6rem, 4vw, 2.2rem)/1.1 var(--round);
+  background: var(--sky);
+}
+.notice h2 small { display: block; font: 400 1.05rem/1.3 var(--hand); margin-top: 4px; }
+.notice ol { margin: 0; padding: 0 24px 0 56px; display: grid; gap: 14px; }
+.notice li::marker { font: 700 1.2rem var(--round); }
+.notice li b { font-family: var(--round); }
+.polaroid {
+  --r: 3deg;
+  margin: 0;
+  padding: 12px 12px 16px;
+  max-width: 380px;
+  justify-self: center;
+}
+.polaroid img { width: 100%; aspect-ratio: 1400 / 988; border-radius: 6px; }
+.polaroid figcaption { margin-top: 10px; font: 400 1.05rem/1.35 var(--hand); }
+@media (min-width: 900px) {
+  .rules { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); align-items: center; }
+  .polaroid { margin-left: -30px; }
+}
+
+/* ---------- install: take a tab ---------- */
+.install { display: grid; justify-items: center; }
+.wanted {
+  --r: -0.8deg;
+  width: min(100%, 760px);
+  padding: clamp(26px, 4vw, 40px) clamp(20px, 4vw, 40px) 0;
+}
+.wanted h2 { margin: 0; font: 400 clamp(2.8rem, 9vw, 4.8rem)/0.95 var(--marker); }
+.wanted h2 span { display: block; font: 400 0.4em/1.2 var(--hand); margin-top: 8px; }
+.wanted .intro { margin: 18px 0 22px; max-width: 46ch; }
+.tabs { margin: 0 calc(-1 * clamp(20px, 4vw, 40px)); display: grid; grid-template-columns: minmax(0, 1fr); }
+.tab {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "label label" "code btn" "code status";
+  gap: 6px 12px;
+  align-items: center;
+  padding: 16px clamp(20px, 4vw, 40px) 18px;
+  border-top: 2px dashed var(--ink-soft);
+  transform-origin: 0 0;
+}
+@media (max-width: 480px) {
+  .tab { grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "label label" "code code" "btn status"; }
+  .status { justify-self: start; }
+}
+.tab .label { grid-area: label; font: 400 1.15rem/1.2 var(--hand); }
+.tab code {
+  grid-area: code;
+  display: block;
+  padding: 10px 12px;
+  font-size: 0.95rem;
+  line-height: 1.45;
+  background: var(--butter);
+  border-radius: 8px;
+  overflow-wrap: anywhere;
+}
+.copy {
+  grid-area: btn;
+  min-width: 72px; min-height: 44px;
+  padding: 8px 16px;
+  font: 700 1.05rem/1 var(--round);
+  color: var(--ink);
+  background: var(--canary);
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  box-shadow: 0 3px 0 var(--ink);
+  cursor: pointer;
+}
+.copy:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--ink); }
+.status {
+  grid-area: status;
+  justify-self: center;
+  min-height: 1.3em;
+  font: 700 1rem/1.3 var(--hand);
+  opacity: 0;
+}
+.status.show { opacity: 1; }
+@media (prefers-reduced-motion: no-preference) {
+  .status { transition: opacity 0.2s; }
+  .tab { transition: transform 0.3s cubic-bezier(.3, 1.6, .5, 1); }
+  .tab.torn { transform: rotate(1.4deg) translateY(4px); }
+}
+.wanted .after { margin: 0; padding: 18px 0 30px; border-top: 2px dashed var(--ink-soft); }
+.wanted .after a { font-weight: 700; }
+
+/* ---------- footer: stickers on the drainpipe ---------- */
+footer { max-width: 1200px; margin: 0 auto; padding: 20px clamp(14px, 4vw, 40px) 60px; }
+footer ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 14px 16px; align-items: center; }
+footer li {
+  padding: 8px 16px;
+  font: 700 0.95rem/1.3 var(--body);
+  background: var(--paper);
+  border-radius: 999px;
+  box-shadow: 0 1px 2px var(--shadow), 0 8px 12px -8px var(--shadow-deep);
+}
+footer li:nth-child(1) { transform: rotate(-3deg); background: var(--canary); }
+footer li:nth-child(2) { transform: rotate(2deg); background: var(--mint); }
+footer li:nth-child(3) { transform: rotate(-1deg); background: var(--sky); }
+footer li:nth-child(4) { transform: rotate(1.5deg); background: var(--pink); }
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to the wall</a>
+
+<!-- One drawing of Arie; the script clones it into every [data-mood] slot. -->
+<template id="arie-tpl">
+  <svg class="arie" viewBox="24 14 216 182" aria-hidden="true" focusable="false">
+    <g class="perch"><rect x="50" y="175" width="155" height="8" rx="4"/></g>
+    <g class="feet"><path d="M125 167 123 178M145 167 143 178"/></g>
+    <g class="tail"><path d="M84 140 46 162Q41 166 45 171L50 176Q53 179 57 177L96 158Z"/></g>
+    <g class="torso">
+      <path d="M140 90C118 92 99 102 90 111 80 121 75 133 76 145 77 157 87 165 100 169 108 171 118 171 128 171H150C166 168 178 152 180 130 182 116 184 106 176 98Z"/>
+      <g class="wing"><path d="M108 110C92 116 82 127 82 138 82 147 90 151 102 151 124 151 142 141 150 127 155 117 150 108 140 106 128 104 116 106 108 110Z"/></g>
+    </g>
+    <g transform="translate(96 104)"><g class="feather f1"><path d="M0 13C-4 6-4-6 1-14 4-8 4 4 0 13Z"/><path class="quill" d="M0 16Q2 2 2-11"/></g></g>
+    <g transform="translate(80 128)"><g class="feather f2"><path d="M0 12C-4 6-4-5 1-12 4-6 4 4 0 12Z"/><path class="quill" d="M0 15Q2 2 1.5-10"/></g></g>
+    <g class="head">
+      <path class="beak-lo" d="M178 83.6 208 84 178 94.2Z"/>
+      <path class="beak-up" d="M178 69.6 212 84 178 85.6Z"/>
+      <circle cx="161" cy="84" r="29"/>
+      <g class="eye"><circle cx="170" cy="77.5" r="4.6"/></g>
+      <path class="eye-closed" d="M164.5 78Q170 83 175.5 78"/>
+    </g>
+    <g class="shield">
+      <g transform="translate(149 101) rotate(8)">
+        <path class="rim" d="M-38 2Q-38 0-36 0H36Q38 0 38 2V42C38 65 20 79 0 88-20 79-38 65-38 42Z"/>
+        <path class="sh-a" d="M-31.5 6.5H31.5V42C31.5 61 16 74 0 81-16 74-31.5 61-31.5 42Z"/>
+        <path class="sh-b" d="M0 6.5H31.5V42C31.5 61 16 74 0 81Z"/>
+      </g>
+      <g transform="translate(121 117)"><path class="glint" d="M0-8 1.8-1.8 8 0 1.8 1.8 0 8-1.8 1.8-8 0-1.8-1.8Z"/></g>
+    </g>
+    <g class="fx">
+      <text class="z z1" x="186" y="58" font-size="19">z</text>
+      <text class="z z2" x="186" y="58" font-size="19">z</text>
+      <text class="z z3" x="186" y="58" font-size="19">z</text>
+      <g transform="translate(215 57) scale(1.5)"><path class="note n1" d="M3 0A4.5 3.5-20 1 1 3-.5V-16Q10-13 10-6 8-10 4.6-11V0Z"/></g>
+      <g transform="translate(213 76) scale(1.3)"><path class="note n2" d="M2.6 0A4 3.2-20 1 1 2.6-.4V-14L14-17V-3A4 3.2-20 1 1 15.6-3.4V-12L4.2-9V0Z"/></g>
+      <g transform="translate(200 58) scale(1.4)"><path class="note n3" d="M3 0A4.5 3.5-20 1 1 3-.5V-16Q10-13 10-6 8-10 4.6-11V0Z"/></g>
+      <path class="hum" d="M221 102q6 6 0 12t0 12 0 12 0 12 0 12"/>
+      <text class="q" x="192" y="50">?</text>
+    </g>
+  </svg>
+</template>
+
+<header class="street">
+  <a class="bill namesign" href="#main">
+    <img src="logo.png" width="48" height="48" alt="">
+    <span>Kanarie</span>
+  </a>
+  <nav aria-label="On this wall">
+    <ul>
+      <li><a href="#colours">The four colours</a></li>
+      <li><a href="#install">Install</a></li>
+      <li><a href="https://github.com/Dunky13/kanarie">Source</a></li>
+    </ul>
+  </nav>
+  <svg class="lamp" viewBox="0 0 92 130" aria-hidden="true" focusable="false">
+    <path d="M70 0 V40 C70 52 60 56 46 56" fill="none" stroke="oklch(0.42 0.02 250)" stroke-width="6" stroke-linecap="round"/>
+    <path d="M24 56 H68 L60 72 H32 Z" fill="oklch(0.45 0.03 250)" stroke="oklch(0.45 0.03 250)" stroke-width="3" stroke-linejoin="round"/>
+    <ellipse class="bulb" cx="46" cy="74" rx="12" ry="4"/>
+  </svg>
+</header>
+
+<div class="wall">
+<main id="main">
+
+  <section class="patch hero" aria-labelledby="h1">
+    <div class="ghosts" aria-hidden="true">
+      <div class="ghost g1" lang="nl">ROMMELMARKT ZAT</div>
+      <div class="ghost g2" lang="nl">FIETS GEVON</div>
+    </div>
+    <p class="stencil no-paste" aria-hidden="true" lang="nl">VERBODEN AAN TE PLAKKEN</p>
+
+    <div class="bill poster tape settle" style="--i:0">
+      <p class="kicker">Public notice from Arie, canary</p>
+      <h1 id="h1">No <span class="hl">humming</span> on this Mac.</h1>
+      <p class="lede"><strong>Kanarie</strong> is a free, open-source menu bar app for macOS. It lists the software on your Mac, tells you which of it sends telemetry, and shows you how to switch that off.</p>
+      <p class="actions">
+        <a class="stamp" href="#install">Install Kanarie</a>
+        <a href="https://github.com/Dunky13/kanarie">Read the source on GitHub</a>
+      </p>
+    </div>
+
+    <div class="side">
+      <figure class="arie-hero settle" style="--i:2">
+        <div class="rally">
+          <p class="placard">Sing only when provoked</p>
+          <div class="disc" data-mood="idle" role="img" aria-label="Arie the canary on his perch with his blue shield, listening, beak shut."></div>
+        </div>
+        <figcaption>This is Arie. He does not sing. Only a hum in the background sets him off.</figcaption>
+        <button type="button" class="hush" aria-pressed="false">Hold still, Arie</button>
+      </figure>
+      <div class="bill curfew tape settle" style="--i:3">
+        <p class="big">No humming after 22:00</p>
+        <p class="small">Or before, frankly.</p>
+      </div>
+    </div>
+  </section>
+
+  <div class="run" aria-hidden="true"><span>Sing only when provoked</span><span>We want opt-outs</span><span>No humming after 22:00</span><span>Sing only when provoked</span><span>We want opt-outs</span><span>No humming after 22:00</span><span>Sing only when provoked</span><span>We want opt-outs</span><span>No humming after 22:00</span><span>Sing only when provoked</span><span>We want opt-outs</span></div>
+
+  <section class="patch complaint" aria-labelledby="complaint-h">
+    <article class="bill letter tape">
+      <h2 id="complaint-h">Noise complaint</h2>
+      <p class="meta">To: whatever drones in the background<br>From: Arie, canary, in your menu bar<br>About: the hum</p>
+      <p>I do not sing. Not for seed, not for company, not for anyone. But a hum in the background I cannot stand.</p>
+      <p>So I keep an ear on this Mac. I go through your apps, Homebrew, the commands in <code>~/.local/bin</code>, your global npm and pnpm packages and your editor extensions, and I give each one a colour.</p>
+      <p>I run in the background and start at login. When something new or updated may send telemetry, I send you a notification. Otherwise I keep my beak shut.</p>
+      <p>Kanarie itself sends no telemetry. Obviously.</p>
+      <div class="sign">
+        <span>Yours, crossly, Arie</span>
+        <svg viewBox="0 0 60 50" aria-hidden="true" focusable="false"><path d="M30 46 L30 22 M30 22 L14 6 M30 22 L30 3 M30 22 L46 6 M30 32 L20 44"/></svg>
+      </div>
+    </article>
+    <aside class="bill lost tape" aria-labelledby="lost-h">
+      <h3 id="lost-h">Lost: one opt-out</h3>
+      <p class="hand">Last seen in an issue tracker. Answers to the name of an environment variable.</p>
+      <p>Kanarie keeps those switches in one folder of findings, one per app, and checks them against your Mac.</p>
+    </aside>
+  </section>
+
+  <section class="patch demands" id="colours" aria-labelledby="demands-h">
+    <h2 class="painted" id="demands-h">His demands, colour-coded<small>Every item gets one of four colours. Arie has a mood for each.</small></h2>
+    <div class="demands-grid">
+
+      <article class="bill demand d-red tape" aria-labelledby="v-red">
+        <h3 class="verdict" id="v-red">
+          <svg viewBox="0 0 30 30" aria-hidden="true" focusable="false"><circle cx="15" cy="15" r="13" style="fill:var(--on-red)"/><path d="M10 10 L20 20 M20 10 L10 20" style="stroke:var(--red)" stroke-width="3.4" stroke-linecap="round"/></svg>
+          Red
+        </h3>
+        <p class="slogan">Stop that hum!</p>
+        <div class="mood" data-mood="sing" role="img" aria-label="Arie singing at it, beak wide open, notes flying"></div>
+        <p>It sends telemetry, and there is no known way to switch it off. Arie sings at it, loudly.</p>
+      </article>
+
+      <article class="bill demand d-yellow" aria-labelledby="v-yellow">
+        <span class="stick" aria-hidden="true"></span>
+        <h3 class="verdict" id="v-yellow">
+          <svg viewBox="0 0 30 30" aria-hidden="true" focusable="false"><path d="M15 3 L28 26 H2 Z" style="fill:var(--yellow);stroke:var(--ink)" stroke-width="2.4" stroke-linejoin="round"/><path d="M15 11 V18" style="stroke:var(--ink)" stroke-width="3" stroke-linecap="round"/><circle cx="15" cy="22.4" r="1.8" style="fill:var(--ink)"/></svg>
+          Yellow
+        </h3>
+        <p class="slogan">We want <span class="nowrap">opt-outs!</span></p>
+        <div class="mood" data-mood="ruffle" role="img" aria-label="Arie with his feathers ruffled, a loose feather drifting off"></div>
+        <p>It sends telemetry, and there is a switch. Arie ruffles his feathers and shows you where it is.</p>
+      </article>
+
+      <article class="bill demand d-green tape" aria-labelledby="v-green">
+        <h3 class="verdict" id="v-green">
+          <svg viewBox="0 0 30 30" aria-hidden="true" focusable="false"><circle cx="15" cy="15" r="13" style="fill:var(--on-green)"/><path d="M9 15.5 L13.5 20 L21.5 10.5" fill="none" style="stroke:var(--green)" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Green
+        </h3>
+        <p class="slogan">Thank you for keeping it down.</p>
+        <div class="mood" data-mood="doze" role="img" aria-label="Arie dozing, eyes shut"></div>
+        <p>No telemetry, or you switched it off on this Mac. Arie dozes.</p>
+      </article>
+
+      <article class="bill demand d-grey" aria-labelledby="v-grey">
+        <h3 class="verdict" id="v-grey">
+          <svg viewBox="0 0 30 30" aria-hidden="true" focusable="false"><circle cx="15" cy="15" r="13" style="fill:var(--paper);stroke:var(--ink)" stroke-width="2.2"/><text x="15" y="21.5" text-anchor="middle" font-size="18" font-weight="800" font-family="system-ui, sans-serif" style="fill:var(--ink)">?</text></svg>
+          Grey
+        </h3>
+        <p class="slogan">Missing<small>the facts</small></p>
+        <div class="mood" data-mood="cock" role="img" aria-label="Arie with his head cocked, a question mark above him"></div>
+        <p>Unknown. Arie cocks his head. Know the answer? Suggest a finding from the app.</p>
+        <div class="tabs-deco" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div>
+      </article>
+
+    </div>
+  </section>
+
+  <section class="patch points" aria-labelledby="points-h">
+    <h2 class="painted" id="points-h">He points. You decide.</h2>
+    <figure class="bill shot tape">
+      <img src="list.png" width="1400" height="914" loading="lazy" decoding="async" alt="The Kanarie window: a list of items that send telemetry, with Homebrew selected and the steps to switch its analytics off">
+      <figcaption>Every item shows what it collects, whether that is switched off on this Mac, and how to switch it off, with sources.</figcaption>
+    </figure>
+    <div class="bill switches tape">
+      <p>Arie never flips a switch himself. For a yellow item you get three buttons:</p>
+      <ul>
+        <li><span class="btnlike">Run</span><span>runs the command once.</span></li>
+        <li><span class="btnlike">Add</span><span>puts the variable in the profile your login shell reads.</span></li>
+        <li><span class="btnlike">Copy</span><span>and you paste it wherever you like.</span></li>
+      </ul>
+      <p>Run and Add ask first and show you the exact command or lines.</p>
+      <p class="last">Kanarie changes nothing on its own.</p>
+    </div>
+  </section>
+
+  <section class="patch rules" aria-labelledby="rules-h">
+    <div class="bill notice">
+      <h2 id="rules-h">House rules <small>for a bird with a grievance</small></h2>
+      <ol>
+        <li><b>No telemetry.</b> Kanarie goes online to fetch the findings once a day (you can switch that off), to check for updates after asking you once, and for AI lookups and finding submissions when you ask.</li>
+        <li><b>Open source, MIT licence.</b> Every line and every finding is <a href="https://github.com/Dunky13/kanarie">on GitHub</a>.</li>
+        <li><b>Findings by hand, with sources.</b> One folder per app. A wrong one? Suggest a correction from the app. It opens a prefilled GitHub issue in your browser.</li>
+        <li><b>Same rule for this page.</b> It loads nothing from anywhere else.</li>
+      </ol>
+    </div>
+    <figure class="bill polaroid tape">
+      <img src="submit.png" width="1400" height="988" loading="lazy" decoding="async" alt="The form to suggest a correction, filled in with the Homebrew finding">
+      <figcaption>The correction form. Kanarie checks your finding, then hands it to GitHub.</figcaption>
+    </figure>
+  </section>
+
+  <section class="patch install" id="install" aria-labelledby="install-h">
+    <div class="bill wanted tape">
+      <h2 id="install-h">Quiet wanted<span>Take a tab. Free, for macOS 15 or later.</span></h2>
+      <p class="intro">Install with Homebrew in two steps.</p>
+      <div class="tabs">
+        <div class="tab">
+          <span class="label">1. Tap</span>
+          <code id="cmd-tap">brew tap dunky13/kanarie https://github.com/Dunky13/kanarie</code>
+          <button type="button" class="copy" aria-label="Copy the tap command" data-copy="cmd-tap">Copy</button>
+          <span role="status" class="status"></span>
+        </div>
+        <div class="tab">
+          <span class="label">2. Install</span>
+          <code id="cmd-install">brew install --cask dunky13/kanarie/kanarie</code>
+          <button type="button" class="copy" aria-label="Copy the install command" data-copy="cmd-install">Copy</button>
+          <span role="status" class="status"></span>
+        </div>
+      </div>
+      <p class="after">No Homebrew? <a href="https://github.com/Dunky13/kanarie/releases/latest">Download the latest release</a>, unzip it and move Kanarie to Applications. Then look for the bird in your menu bar.</p>
+    </div>
+  </section>
+
+</main>
+</div>
+
+<footer>
+  <ul>
+    <li>Kanarie is Dutch for canary.</li>
+    <li>MIT licence</li>
+    <li><a href="https://github.com/Dunky13/kanarie">Source on GitHub</a></li>
+    <li>This page loads nothing from elsewhere.</li>
+  </ul>
+</footer>
+
+<script>
+const arie = document.getElementById('arie-tpl').content.firstElementChild;
+for (const slot of document.querySelectorAll('[data-mood]')) {
+  const svg = arie.cloneNode(true);
+  svg.classList.add('m-' + slot.dataset.mood);
+  slot.append(svg);
+}
+
+const hush = document.querySelector('.hush');
+hush.addEventListener('click', () => {
+  const still = hush.getAttribute('aria-pressed') !== 'true';
+  hush.setAttribute('aria-pressed', still);
+  document.documentElement.classList.toggle('motion-paused', still);
+});
+
+for (const btn of document.querySelectorAll('button.copy')) {
+  const status = btn.nextElementSibling;
+  const tab = btn.closest('.tab');
+  let timer;
+  btn.addEventListener('click', async () => {
+    const text = document.getElementById(btn.dataset.copy).textContent;
+    try {
+      await navigator.clipboard.writeText(text);
+      status.textContent = 'Copied';
+      tab.classList.add('torn');
+    } catch {
+      status.textContent = 'Copy failed';
+    }
+    status.classList.add('show');
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      status.classList.remove('show');
+      status.textContent = '';
+      tab.classList.remove('torn');
+    }, 2000);
+  });
+}
+</script>
+</body>
+</html>
