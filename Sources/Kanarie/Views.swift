@@ -224,8 +224,8 @@ struct MainView: View {
                 } actions: {
                     Button("Look Up \(lookupCandidates.count) Items with AI", systemImage: "sparkles") { (pending, confirmBatch) = (lookupCandidates, true) }
                         .disabled(lookupCandidates.isEmpty || model.batch != nil)
+                    // Always open: the sheet says which items go and why the others do not.
                     Button("Submit Findings…", systemImage: "square.and.pencil") { submitting = picked }
-                        .disabled(!picked.contains { bulkFinding(for: $0, model: model).rule != nil })
                         .help("Sends their AI lookups, as they are, in one GitHub issue")
                 }
             // A single selected item stays open when its new verdict moves it out of the filtered list.

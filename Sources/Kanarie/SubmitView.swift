@@ -16,9 +16,13 @@ struct SubmitView: View {
     /// The finding is too long for a link, and the person has been told that continuing replaces the clipboard.
     @State private var mayCopy = false
     @State private var failure: String?
+    /// The AI lookup as a bulk submission would send it, so a bulk submission does not send it again.
+    /// State, like the draft: the verdict may change behind the sheet, and the lookup sent is the one the draft started from.
+    @State private var lookup: Rule?
 
     init(model: AppModel, item: Item, verdict: Verdict) {
         (self.model, self.item) = (model, item)
+        _lookup = State(initialValue: verdict.source == .ai ? verdict.rule.flatMap { Submission.unedited($0, item: item) } : nil)
         let start = Submission.Draft(from: verdict.rule, item: item)
         (_draft, _initial, _source) = (State(initialValue: start), State(initialValue: start), State(initialValue: verdict.source))
     }
@@ -135,7 +139,8 @@ struct SubmitView: View {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(text, forType: .string)
             }
-            NSWorkspace.shared.open(issue.url)
+            guard NSWorkspace.shared.open(issue.url) else { return failure = "The browser could not be opened." }
+            if let lookup { model.markSubmitted([(item.id, lookup)]) }
             dismiss()
         } catch {
             failure = error.localizedDescription
@@ -157,10 +162,8 @@ func bulkFinding(for item: Item, model: AppModel) -> (rule: Rule?, why: String) 
     let draft = Submission.Draft(from: found, item: item)
     let problems = draft.problems(for: item)
     guard problems.isEmpty else { return (nil, "Not ready: \(problems.joined(separator: "; ")). Fix it with Submit a Finding…") }
-    // "Not edited" must hold: the form fills in what a lookup left out, such as steps for an opt-in without any.
-    var sent = found
-    sent.match = [item.id]
-    guard draft.rule(for: item) == sent else { return (nil, "The form would change this lookup. Check it with Submit a Finding…") }
+    guard let sent = Submission.unedited(found, item: item) else { return (nil, "The form would change this lookup: it has steps or checks its kind of telemetry does not use, or it has no steps. Check it with Submit a Finding…") }
+    guard !model.wasSubmitted(item.id, sent) else { return (nil, "Already sent from this Mac. To send it again, use Submit a Finding…") }
     return (sent, "")
 }
 
@@ -172,7 +175,8 @@ struct BulkSubmitView: View {
     /// Decided when the sheet opens, in state: the view is made again whenever a verdict changes behind it, and the
     /// source checks are matched to these by position.
     @State private var included: [(item: Item, rule: Rule)]
-    @State private var skipped: [(item: Item, why: String)]
+    /// The items left out, one group per reason in the order first met: with every item selected, most share a few reasons.
+    @State private var leftOut: [(why: String, names: [String])]
     @State private var checks: [Submission.SourceCheck]?
     @State private var task: Task<Void, Never>?
     @State private var mayCopy = false
@@ -192,7 +196,11 @@ struct BulkSubmitView: View {
             folders[folder] = item.name
             included.append((item, rule))
         }
-        (_included, _skipped) = (State(initialValue: included), State(initialValue: skipped))
+        var groups: [(why: String, names: [String])] = []
+        for (item, why) in skipped {
+            if let index = groups.firstIndex(where: { $0.why == why }) { groups[index].names.append(item.name) } else { groups.append((why, [item.name])) }
+        }
+        (_included, _leftOut) = (State(initialValue: included), State(initialValue: groups))
     }
 
     var body: some View {
@@ -212,12 +220,13 @@ struct BulkSubmitView: View {
             } header: {
                 Text("Sent as AI lookups, not edited (\(included.count))")
             }
-            if !skipped.isEmpty {
-                Section("Left out (\(skipped.count))") {
-                    ForEach(skipped, id: \.item.id) { entry in
+            if !leftOut.isEmpty {
+                Section("Left out (\(leftOut.map(\.names.count).reduce(0, +)))") {
+                    ForEach(leftOut, id: \.why) { why, names in
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(entry.item.name)
-                            Text(entry.why).font(.caption).foregroundStyle(.secondary)
+                            Text(names.count == 1 ? names[0] : "\(names.count) items: \(names.joined(separator: ", "))").lineLimit(3)
+                                .help(names.joined(separator: ", "))
+                            Text(why).font(.caption).foregroundStyle(.secondary)
                         }
                         .accessibilityElement(children: .combine)
                     }
@@ -298,7 +307,8 @@ struct BulkSubmitView: View {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(text, forType: .string)
             }
-            NSWorkspace.shared.open(issue.url)
+            guard NSWorkspace.shared.open(issue.url) else { return failure = "The browser could not be opened." }
+            model.markSubmitted(included.map { ($0.item.id, $0.rule) })
             dismiss()
         } catch {
             failure = error.localizedDescription
