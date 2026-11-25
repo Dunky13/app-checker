@@ -937,6 +937,67 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         #expect(bareBody.contains("Kanarie no longer finds it installed.") && !bareBody.contains("readings below"))
     }
 
+    /// A bulk submission: one issue, a section per finding, and the script places each.
+    @Test func oneIssueCarriesSeveralFindings() throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("issue-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        func parse(_ body: String) throws -> String {
+            let file = folder.appendingPathComponent("body.md")
+            try Data(body.replacingOccurrences(of: "\n", with: "\r\n").utf8).write(to: file)
+            let script = repoRoot.appendingPathComponent("scripts/accept-finding.py").path
+            return String(decoding: try Shell.run("/usr/bin/env", ["python3", script, "--parse", file.path], timeout: 30, acceptFailure: true), as: UTF8.self)
+        }
+        func entry(_ name: String) -> Submission.Entry {
+            let one = Item(id: "brew:\(name.lowercased().replacingOccurrences(of: " ", with: "-"))", name: name, version: "1", path: "/x")
+            let rule = draft { $0.name = name }.rule(for: one)
+            return Submission.Entry(item: one, rule: rule, origin: "AI lookup, not edited", readings: nil, sourceCheck: Submission.sourceCheck(rule, pages: [], cited: 0))
+        }
+        func body(_ issue: (url: URL, clipboard: String?)) throws -> String {
+            try issue.clipboard ?? #require(URLComponents(url: issue.url, resolvingAgainstBaseURL: false)?.queryItems?.last?.value)
+        }
+        let issue = try Submission.issue([entry("Example One"), entry("Example Two")], appVersion: "1")
+        let text = try body(issue)
+        #expect(URLComponents(url: issue.url, resolvingAgainstBaseURL: false)?.queryItems?.first?.value == "Findings: Example One, Example Two")
+        let placed = try parse(text)
+        #expect(placed.hasPrefix("example-one/0.json\n{\n  \"match\": [\n    \"brew:example-one\"") && placed.contains("}\nexample-two/0.json\n{\n  \"match\": [\n    \"brew:example-two\""))
+        // Refused: two findings for one file, numbers out of order, a section without a finding, and more than fit in one issue.
+        #expect(try parse(text.replacingOccurrences(of: "example-two", with: "example-one")) == "Refused: finding 2 goes to findings/example-one/0.json as an earlier one does.\n")
+        #expect(try parse(text.replacingOccurrences(of: "### Finding 2", with: "### Finding 3")) == "Refused: the findings are not numbered 1, 2, 3 and so on.\n")
+        #expect(try parse(text.replacingOccurrences(of: "### Finding 2\n", with: "### Finding 2\n\nNothing here.\n\n### Finding 3\n")) == "Refused: finding 2: there is no finding in the issue.\n")
+        let first = try #require(text.components(separatedBy: "### Finding 2").first?.components(separatedBy: "### Finding 1\n").last)
+        let eleven = (1...11).map { "### Finding \($0)\n\(first)" }.joined()
+        #expect(try parse(eleven) == "Refused: the issue holds more than 10 findings.\n")
+        // Refused: a heading that is not exactly one, which would put two findings in one section; and two findings without headings.
+        let twice = "Refused: finding 1: there is more than one finding where one is expected, perhaps under a heading that is not exactly \"### Finding <n>\".\n"
+        #expect(try parse(text.replacingOccurrences(of: "### Finding 2\n", with: "### Finding 2 \n")) == twice)
+        #expect(try parse(first + "\n" + first).hasPrefix("Refused: there is more than one finding where one is expected"))
+        // A sentence before the first heading is not read, a finding there is refused.
+        #expect(try parse(text.replacingOccurrences(of: "2 findings, each in a section of its own.", with: "Some words.")) == placed)
+        #expect(try parse(text.replacingOccurrences(of: "2 findings, each in a section of its own.", with: first)) == "Refused: there is a finding before the first heading.\n")
+        #expect(throws: Submission.TooMany.self) { try Submission.issue(Array(repeating: entry("Example One"), count: 11), appVersion: "1") }
+        // A long list of names is cut short in the title, which GitHub limits to 256 characters.
+        let many = try Submission.issue((1...10).map { entry("Example Tool With A Rather Long Name \($0)") }, appVersion: "1")
+        let title = try #require(URLComponents(url: many.url, resolvingAgainstBaseURL: false)?.queryItems?.first?.value)
+        #expect(title.count < 256 && title.hasSuffix(" more"))
+        // One finding keeps the form of a single issue, without a heading.
+        #expect(try !body(Submission.issue([entry("Example One")], appVersion: "1")).contains("### Finding"))
+    }
+
+    /// A bulk submission sends a lookup as the form would show it unedited, so the form must not change it.
+    @Test func anUneditedDraftKeepsTheLookup() {
+        var found = Rule(match: ["brew:x"], telemetry: .optOut, summary: "Usage events.")
+        (found.name, found.sources) = ("Example CLI", ["https://example.com/docs"])
+        found.optOut = OptOut(instructions: "Set the variable.", command: "echo 'export EXAMPLE_TELEMETRY=0' >> ~/.zshrc", url: "https://example.com/docs")
+        found.disabledWhen = [Check(env: "EXAMPLE_TELEMETRY", equals: "0")]
+        #expect(Submission.Draft(from: found, item: item).rule(for: item) == found)
+        for telemetry in [Telemetry.none, .forced] {
+            var other = Rule(match: ["brew:x"], telemetry: telemetry, summary: "Usage events.")
+            (other.name, other.sources) = ("Example CLI", ["https://example.com/docs"])
+            #expect(Submission.Draft(from: other, item: item).rule(for: item) == other)
+        }
+    }
+
     @Test func theIssueCarriesTheFindingAndSurvivesTheLink() throws {
         var found = draft { $0.summary = "A+B & C #1 100% `tick`" }.rule(for: item)
         let check = Submission.sourceCheck(found, pages: ["EXAMPLE_TELEMETRY"], cited: 2)

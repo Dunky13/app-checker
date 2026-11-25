@@ -189,37 +189,50 @@ public enum Submission {
         }
     }
 
+    /// One finding of an issue, with what was read and checked for it.
+    public struct Entry: Sendable {
+        public var item: Item, rule: Rule, origin: String, readings: [String]?, sourceCheck: SourceCheck, removed: Bool
+        public init(item: Item, rule: Rule, origin: String, readings: [String]?, sourceCheck: SourceCheck, removed: Bool = false) {
+            (self.item, self.rule, self.origin, self.readings, self.sourceCheck, self.removed) = (item, rule, origin, readings, sourceCheck, removed)
+        }
+    }
+
+    struct TooMany: LocalizedError {
+        var errorDescription: String? { "One issue holds from 1 to \(bulkLimit) findings." }
+    }
+
+    /// The most findings one issue holds. Each can fetch up to `pageLimit` pages, and the maintainer reads them all.
+    public static let bulkLimit = 10
+
+    /// The folder a new finding is proposed for, below findings/. A name without ASCII letters gives no folder name, so
+    /// the id without its prefix stands in; nil when neither has any.
+    public static func folder(for item: Item, rule: Rule) -> String? {
+        let slug = { (text: String) in text.lowercased().split { !($0.isASCII && ($0.isLetter || $0.isNumber)) }.joined(separator: "-") }
+        return [rule.name ?? item.name, String(item.id.drop { $0 != ":" })].map(slug).first { !$0.isEmpty }
+    }
+
     /// The prefilled GitHub issue. A body too long for a link comes back as `clipboard`, and the issue then asks to paste it.
     /// `readings` is nil when they must stay on the Mac: see `SubmitView`. `removed`: the item is no longer installed.
     public static func issue(item: Item, rule: Rule, origin: String, readings: [String]?, sourceCheck: SourceCheck, appVersion: String, removed: Bool = false) throws -> (url: URL, clipboard: String?) {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
-        let json = String(decoding: try encoder.encode(rule), as: UTF8.self)
-        // A name without ASCII letters gives no folder name, so the id without its prefix stands in.
-        let slug = { (text: String) in text.lowercased().split { !($0.isASCII && ($0.isLetter || $0.isNumber)) }.joined(separator: "-") }
-        let folder = [rule.name ?? item.name, String(item.id.drop { $0 != ":" })].map(slug).first { !$0.isEmpty }
-        let file = rule.since.map { "a correction of the finding for \(rule.match.map { "`\(plain($0))`" }.joined(separator: ", ")) that starts at version `\(plain($0))`" }
-            ?? folder.map { "`findings/\($0)/0.json`" } ?? "a new finding, in a folder the maintainer names"
-        let read = readings.map { $0.map { "- `\(plain($0, limit: 300))`" } }
-            ?? ["- Not included: the checks came from an AI lookup, so what they read stays on the submitter's Mac."]
-        let body = """
-        **Item:** `\(plain(item.id))` (`\(plain(item.name))`, \(item.version.isEmpty ? "version unknown" : "version `\(plain(item.version))`"))\(removed ? "\n**Not found on this Mac when sent:** Kanarie no longer finds it installed\(readings == nil ? "" : ", so the readings below are of this Mac without it")." : "")
-        **Origin:** \(origin)
-        **Proposed as:** \(file)
+        try issue([Entry(item: item, rule: rule, origin: origin, readings: readings, sourceCheck: sourceCheck, removed: removed)], appVersion: appVersion)
+    }
 
-        ````json
-        \(json)
-        ````
-
-        **Read on the submitter's Mac**
-        \(read.joined(separator: "\n"))
-
-        **Source check**
-        \(sourceCheck.lines.map { "- \($0)" }.joined(separator: "\n"))
-
-        Sent from Kanarie \(plain(appVersion)). The finding passed the app's format and safety checks. Whether it is true is for review.
-        """
-        let title = "Finding: \(plain(rule.name ?? item.name))"
+    /// One issue for several findings, each in a section headed "### Finding <n>", which is how scripts/accept-finding.py
+    /// tells them apart. One finding gets no heading.
+    public static func issue(_ entries: [Entry], appVersion: String) throws -> (url: URL, clipboard: String?) {
+        guard let first = entries.first, entries.count <= bulkLimit else { throw TooMany() }
+        let sections = try entries.map(section)
+        let several = entries.count > 1
+        let body = (several ? "\(entries.count) findings, each in a section of its own.\n\n" : "")
+            + (several ? sections.enumerated().map { "### Finding \($0.offset + 1)\n\n\($0.element)" } : sections).joined(separator: "\n\n")
+            + "\n\nSent from Kanarie \(plain(appVersion)). "
+            + (several ? "The findings passed the app's format and safety checks. Whether they are true is for review." : "The finding passed the app's format and safety checks. Whether it is true is for review.")
+        let names = entries.map { plain($0.rule.name ?? $0.item.name) }
+        // GitHub cuts a title at 256 characters: the names that fit, and how many more there are.
+        let fit = (1...names.count).last { names.prefix($0).joined(separator: ", ").count <= 180 } ?? 1
+        let title = several
+            ? "Findings: " + names.prefix(fit).joined(separator: ", ") + (fit < names.count ? " and \(names.count - fit) more" : "")
+            : "Finding: \(plain(first.rule.name ?? first.item.name))"
         func url(_ body: String) throws -> URL {
             guard var components = URLComponents(string: issues) else { throw URLError(.badURL) }
             components.queryItems = [URLQueryItem(name: "title", value: title), URLQueryItem(name: "body", value: body)]
@@ -231,7 +244,34 @@ public enum Submission {
         let link = try url(body)
         // GitHub answers a longer address with an error page.
         guard link.absoluteString.utf8.count > 7000 else { return (link, nil) }
-        return (try url("Paste the finding here: Kanarie put it on your clipboard."), body)
+        return (try url(several ? "Paste the findings here: Kanarie put them on your clipboard." : "Paste the finding here: Kanarie put it on your clipboard."), body)
+    }
+
+    /// The part of an issue about one finding: the item, where the finding goes, the finding, what was read and checked.
+    static func section(_ entry: Entry) throws -> String {
+        let (item, rule, readings) = (entry.item, entry.rule, entry.readings)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+        let json = String(decoding: try encoder.encode(rule), as: UTF8.self)
+        let file = rule.since.map { "a correction of the finding for \(rule.match.map { "`\(plain($0))`" }.joined(separator: ", ")) that starts at version `\(plain($0))`" }
+            ?? folder(for: item, rule: rule).map { "`findings/\($0)/0.json`" } ?? "a new finding, in a folder the maintainer names"
+        let read = readings.map { $0.map { "- `\(plain($0, limit: 300))`" } }
+            ?? ["- Not included: the checks came from an AI lookup, so what they read stays on the submitter's Mac."]
+        return """
+        **Item:** `\(plain(item.id))` (`\(plain(item.name))`, \(item.version.isEmpty ? "version unknown" : "version `\(plain(item.version))`"))\(entry.removed ? "\n**Not found on this Mac when sent:** Kanarie no longer finds it installed\(readings == nil ? "" : ", so the readings below are of this Mac without it")." : "")
+        **Origin:** \(entry.origin)
+        **Proposed as:** \(file)
+
+        ````json
+        \(json)
+        ````
+
+        **Read on the submitter's Mac**
+        \(read.joined(separator: "\n"))
+
+        **Source check**
+        \(entry.sourceCheck.lines.map { "- \($0)" }.joined(separator: "\n"))
+        """
     }
 
     /// Text from a file on disk or from an AI lookup, for a code span on one line of the issue: no line breaks, nothing

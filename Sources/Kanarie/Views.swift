@@ -129,6 +129,8 @@ struct MainView: View {
     @State private var kind: String?
     @State private var showSettings = false
     @State private var confirmBatch = false
+    /// The items of an open bulk submission, kept like `pending`.
+    @State private var submitting: [Item]?
     /// What the open confirmation is about. Kept, because the list can change while it is open.
     @State private var pending: [Item] = []
 
@@ -222,6 +224,9 @@ struct MainView: View {
                 } actions: {
                     Button("Look Up \(lookupCandidates.count) Items with AI", systemImage: "sparkles") { (pending, confirmBatch) = (lookupCandidates, true) }
                         .disabled(lookupCandidates.isEmpty || model.batch != nil)
+                    Button("Submit Findings…", systemImage: "square.and.pencil") { submitting = picked }
+                        .disabled(!picked.contains { bulkFinding(for: $0, model: model).rule != nil })
+                        .help("Sends their AI lookups, as they are, in one GitHub issue")
                 }
             // A single selected item stays open when its new verdict moves it out of the filtered list.
             } else if let item = picked.first ?? (selection.count == 1 ? model.items.first { selection.contains($0.id) } : nil), let verdict = model.verdicts[item.id] {
@@ -278,6 +283,7 @@ struct MainView: View {
             Text("A lookup sends each item's name, identifier and version to the AI backend chosen in Settings and uses your quota or credits. The items go out in groups of \(LLM.batchSize), one group at a time. Stopping ends the group that is running without an answer.")
         }
         .sheet(isPresented: $showSettings) { SettingsView() }
+        .sheet(isPresented: Binding { submitting != nil } set: { if !$0 { submitting = nil } }) { BulkSubmitView(model: model, items: submitting ?? []) }
     }
 }
 

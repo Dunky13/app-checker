@@ -142,3 +142,166 @@ struct SubmitView: View {
         }
     }
 }
+
+/// What a bulk submission sends for an item: its AI lookup as it is, or why the item is left out.
+@MainActor
+func bulkFinding(for item: Item, model: AppModel) -> (rule: Rule?, why: String) {
+    guard let verdict = model.verdicts[item.id] else { return (nil, "Not checked yet.") }
+    switch verdict.source {
+    case .rules: return (nil, "The Kanarie findings cover it. To change that, use Suggest a Correction…")
+    case .sdk, .none: return (nil, "No finding to send. Look it up with AI first, or write one with Submit a Finding…")
+    case .ai: break
+    }
+    // The form turns "unknown" into a telemetry class, which would be a claim the lookup did not make.
+    guard let found = verdict.rule, found.telemetry != .unknown else { return (nil, "The lookup could not tell. Use Submit a Finding… to write one.") }
+    let draft = Submission.Draft(from: found, item: item)
+    let problems = draft.problems(for: item)
+    guard problems.isEmpty else { return (nil, "Not ready: \(problems.joined(separator: "; ")). Fix it with Submit a Finding…") }
+    // "Not edited" must hold: the form fills in what a lookup left out, such as steps for an opt-in without any.
+    var sent = found
+    sent.match = [item.id]
+    guard draft.rule(for: item) == sent else { return (nil, "The form would change this lookup. Check it with Submit a Finding…") }
+    return (sent, "")
+}
+
+/// Proposes the AI lookups of several items in one GitHub issue. Nothing can be edited here: an item that needs
+/// changes goes through `SubmitView`. Like there, the last step opens a prefilled issue in the browser.
+struct BulkSubmitView: View {
+    var model: AppModel
+    @Environment(\.dismiss) private var dismiss
+    /// Decided when the sheet opens, in state: the view is made again whenever a verdict changes behind it, and the
+    /// source checks are matched to these by position.
+    @State private var included: [(item: Item, rule: Rule)]
+    @State private var skipped: [(item: Item, why: String)]
+    @State private var checks: [Submission.SourceCheck]?
+    @State private var task: Task<Void, Never>?
+    @State private var mayCopy = false
+    @State private var failure: String?
+
+    init(model: AppModel, items: [Item]) {
+        self.model = model
+        var included: [(item: Item, rule: Rule)] = [], skipped: [(item: Item, why: String)] = []
+        var folders: [String: String] = [:]
+        for item in items {
+            let (rule, why) = bulkFinding(for: item, model: model)
+            guard let rule else { skipped.append((item, why)); continue }
+            // The script refuses an issue whose findings would share a file, so the later one waits for its own issue.
+            guard let folder = Submission.folder(for: item, rule: rule) else { skipped.append((item, "No folder name can be made from its name. Use Submit a Finding…")); continue }
+            if let other = folders[folder] { skipped.append((item, "It would go to the same folder as \(other). Send it on its own.")); continue }
+            guard included.count < Submission.bulkLimit else { skipped.append((item, "One issue holds at most \(Submission.bulkLimit) findings. Send it in a next one.")); continue }
+            folders[folder] = item.name
+            included.append((item, rule))
+        }
+        (_included, _skipped) = (State(initialValue: included), State(initialValue: skipped))
+    }
+
+    var body: some View {
+        Form {
+            Section {
+                ForEach(Array(included.enumerated()), id: \.element.item.id) { index, entry in
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(entry.rule.name ?? entry.item.name)
+                        Text(entry.rule.summary).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                        if let missing = checks?[index].missing, !missing.isEmpty {
+                            Label("Not found on any cited page: \(missing.joined(separator: ", "))", systemImage: "exclamationmark.triangle")
+                                .font(.caption).foregroundStyle(.orange)
+                        }
+                    }
+                    .accessibilityElement(children: .combine)
+                }
+            } header: {
+                Text("Sent as AI lookups, not edited (\(included.count))")
+            }
+            if !skipped.isEmpty {
+                Section("Left out (\(skipped.count))") {
+                    ForEach(skipped, id: \.item.id) { entry in
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(entry.item.name)
+                            Text(entry.why).font(.caption).foregroundStyle(.secondary)
+                        }
+                        .accessibilityElement(children: .combine)
+                    }
+                }
+            }
+        }
+        .formStyle(.grouped)
+        .onExitCommand { dismiss() }
+        .onDisappear { task?.cancel() }
+        .sheetFooter {
+            VStack(alignment: .leading) {
+                let missing = checks?.contains { !$0.missing.isEmpty } == true
+                if included.isEmpty {
+                    Label("None of the selected items has a lookup that can be sent as it is.", systemImage: "exclamationmark.triangle")
+                        .fixedSize(horizontal: false, vertical: true)
+                } else if let failure {
+                    Label("The issue could not be prepared: \(failure)", systemImage: "exclamationmark.triangle").fixedSize(horizontal: false, vertical: true)
+                } else if mayCopy {
+                    Label("These findings are too long for a link. Continuing copies them to your clipboard, replacing what is there, so you can paste them into the issue.", systemImage: "doc.on.clipboard")
+                        .fixedSize(horizontal: false, vertical: true)
+                } else if missing {
+                    Label("A name that no cited page mentions may be misspelled or invented. Correct that item with Submit a Finding…, or continue and say so in the issue.", systemImage: "exclamationmark.triangle")
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    Text("Kanarie fetches the cited pages to look for the names, then opens one public GitHub issue with all of them in your browser. Nothing is sent until you submit it there.")
+                        .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                }
+                HStack {
+                    Spacer()
+                    if task != nil { ProgressView().controlSize(.small).accessibilityLabel("Fetching the cited pages") }
+                    Button("Cancel") { dismiss() }
+                    Button(mayCopy ? "Copy and Continue" : missing ? "Continue Anyway" : "Continue on GitHub…") {
+                        guard task == nil else { return }
+                        task = Task {
+                            await proceed()
+                            task = nil
+                        }
+                    }
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(included.isEmpty || task != nil)
+                }
+            }
+        }
+        .frame(width: 560, height: 640)
+    }
+
+    /// The source check of every finding at once, then, when all names were found or the person continues anyway, the issue.
+    private func proceed() async {
+        if checks == nil {
+            let rules = included.map(\.rule)
+            // Three findings at a time: each can fetch eight pages of up to 3 MB.
+            let pages = await withTaskGroup(of: (Int, (texts: [String], cited: Int)).self) { group in
+                var pages = [(texts: [String], cited: Int)](repeating: ([], 0), count: rules.count)
+                var next = rules.enumerated().makeIterator()
+                for _ in 0..<3 { if let (index, rule) = next.next() { group.addTask { (index, await Submission.pages(for: rule)) } } }
+                for await (index, result) in group {
+                    pages[index] = result
+                    if let (index, rule) = next.next() { group.addTask { (index, await Submission.pages(for: rule)) } }
+                }
+                return pages
+            }
+            guard !Task.isCancelled else { return }
+            let results = zip(rules, pages).map { Submission.sourceCheck($0, pages: $1.texts, cited: $1.cited) }
+            checks = results
+            guard results.allSatisfy(\.missing.isEmpty) else { return }
+        }
+        guard let checks else { return }
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "development build"
+        let entries = zip(included, checks).map { entry, check in
+            // As in SubmitView: what a lookup's own checks read stays on this Mac.
+            let readings = entry.rule.disabledWhen == nil && entry.rule.enabledWhen == nil ? Submission.readings(entry.rule, item: entry.item, probe: model.probe) : nil
+            return Submission.Entry(item: entry.item, rule: entry.rule, origin: "AI lookup, not edited", readings: readings, sourceCheck: check, removed: model.removed.contains(entry.item.id))
+        }
+        do {
+            let issue = try Submission.issue(entries, appVersion: version)
+            if let text = issue.clipboard {
+                guard mayCopy else { return mayCopy = true }
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(text, forType: .string)
+            }
+            NSWorkspace.shared.open(issue.url)
+            dismiss()
+        } catch {
+            failure = error.localizedDescription
+        }
+    }
+}
