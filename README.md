@@ -8,6 +8,19 @@ It is a macOS menu bar app that lists the software on your Mac and tells you whe
 
 Many tools collect usage data unless you opt out, and the opt-out is often an environment variable that is only mentioned in an issue tracker. Kanarie keeps those switches in one folder of findings, one per app, and checks them against your Mac.
 
+## Meet Arie
+
+Arie is Kanarie's canary, and he does not sing. Not for seed, not for company, not for anyone. Only when something starts droning in the background does he get so cross that he sings right back at it.
+
+Miners took canaries underground because a canary goes quiet when the air turns bad. Arie works the other way round. As long as nothing on your Mac phones home, he keeps his beak shut and dozes on his perch in the menu bar. Silence is good news.
+
+But Arie cannot stand a hum in the background. When an app starts sending telemetry, quietly droning data off your Mac, he puffs himself up and sings at it. That song is the notification you get.
+
+- **Green:** Arie dozes. There is nothing to hear, or you switched it off.
+- **Yellow:** Arie ruffles his feathers. Something hums, but there is a switch, and he shows you where it is.
+- **Red:** Arie sings at it, loudly. It hums, and it cannot be switched off.
+- **Grey:** Arie cocks his head. He cannot tell yet.
+
 ## Screenshots
 
 ![The Kanarie window: a list of items that send telemetry, with Homebrew selected and the steps to switch its analytics off](docs/screenshots/list.png)

@@ -72,6 +72,7 @@ struct MenuView: View {
                 Spacer()
                 if model.scanning { ProgressView().controlSize(.small) }
             }
+            if !model.items.isEmpty { Text(arie).font(.callout).foregroundStyle(.secondary) }
             ForEach([Status.bad, .warn, .ok, .unknown], id: \.self) { status in
                 HStack {
                     StatusIcon(status: status).accessibilityHidden(true)
@@ -91,11 +92,24 @@ struct MenuView: View {
             }
             Button("Rescan Now") { Task { await model.rescan(userInitiated: true) } }.disabled(model.scanning)
             Button("Check for Updates…") { updater.checkForUpdates() }
+            Button("About Kanarie") {
+                dismiss()
+                NSApp.activate()
+                NSApp.orderFrontStandardAboutPanel(options: [.credits: NSAttributedString(string: "Arie, the canary, does not sing. He stays quiet while nothing on your Mac phones home, and sings right back at whatever does.")])
+            }
             Button("Quit Kanarie") { NSApp.terminate(nil) }
         }
         .buttonStyle(.link)
         .padding()
         .frame(width: 300)
+    }
+
+    /// What Arie, the canary, is doing: the loudest status decides.
+    private var arie: String {
+        let items = { (n: Int) in n == 1 ? "1 item" : "\(n) items" }
+        if model.count(.bad) > 0 { return "Arie sings at \(items(model.count(.bad))) that cannot be switched off." }
+        if model.count(.warn) > 0 { return "Arie ruffles his feathers: \(items(model.count(.warn))) can be switched off." }
+        return "Arie dozes. Nothing hums."
     }
 }
 
