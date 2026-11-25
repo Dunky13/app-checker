@@ -2,8 +2,9 @@
 # Publishes a signed, notarized release and updates the Sparkle feed and the Homebrew cask.
 #   scripts/release.sh 0.2.0
 # Needs: a Developer ID Application certificate, the Sparkle EdDSA key in the login keychain
-# (or SPARKLE_KEY_FILE), the gh CLI, create-dmg (brew install create-dmg), a logged-in session
-# (create-dmg arranges the disk image window through Finder), and notarization credentials as either
+# (or SPARKLE_KEY_FILE), the gh CLI, create-dmg (brew install create-dmg), a logged-in session in which
+# this terminal may control Finder (create-dmg arranges the disk image window through Finder, and waits
+# for it without a time limit), and notarization credentials as either
 #   NOTARY_KEYCHAIN_PROFILE=<notarytool profile>
 # or NOTARY_KEY_FILE=<AuthKey.p8> NOTARY_KEY_ID=<id> NOTARY_ISSUER_ID=<issuer>
 set -euo pipefail
@@ -27,6 +28,8 @@ else
   echo "Set NOTARY_KEYCHAIN_PROFILE, or NOTARY_KEY_FILE, NOTARY_KEY_ID and NOTARY_ISSUER_ID." >&2; exit 1
 fi
 command -v create-dmg >/dev/null || { echo "Install create-dmg first: brew install create-dmg" >&2; exit 1; }
+# Asked now rather than after the first notarization: the first time, macOS asks whether this terminal may control Finder.
+osascript -e 'tell application "Finder" to get name' >/dev/null || { echo "Let this terminal control Finder (System Settings, Privacy & Security, Automation), in a logged-in session." >&2; exit 1; }
 [[ -z "$(git status --porcelain)" ]] || { echo "Commit or stash your changes first: a release is built from a clean commit." >&2; exit 1; }
 # The tag must point at exactly the commit that is built, and the feed is served from main.
 COMMIT="$(git rev-parse HEAD)"
@@ -39,6 +42,7 @@ notarize() {
   local file="$1" name; name="$(basename "$1")"
   xcrun notarytool submit "$file" "${AUTH[@]}" --no-wait --output-format json > "build/notary/$name.submit.json"
   local id; id="$(plutil -extract id raw "build/notary/$name.submit.json")"
+  # The hash of the file as submitted: stapling or zipping again afterwards changes the file, not its signature.
   echo "commit=$COMMIT sha256=$(shasum -a 256 "$file" | cut -d' ' -f1) submission=$id" | tee "build/notary/$name.receipt.txt"
   xcrun notarytool wait "$id" "${AUTH[@]}" --timeout 30m --output-format json > "build/notary/$name.result.json" || true
   xcrun notarytool log "$id" "${AUTH[@]}" "build/notary/$name.log.json" || true
@@ -66,8 +70,10 @@ ditto -c -k --sequesterRsrc --keepParent "$APP" "$OUT/$ZIP"
 ditto "$APP" build/dmg/source/Kanarie.app
 create-dmg --volname "Kanarie" --window-size 540 360 --icon-size 128 \
   --icon Kanarie.app 140 170 --hide-extension Kanarie.app --app-drop-link 400 170 \
-  --codesign "${CODESIGN_IDENTITY:-Developer ID Application}" --no-internet-enable \
-  "$DMG" build/dmg/source
+  --no-internet-enable "$DMG" build/dmg/source
+# Signed here rather than by create-dmg, which leaves the timestamp to codesign's default.
+codesign --sign "${CODESIGN_IDENTITY:-Developer ID Application}" --timestamp "$DMG"
+codesign --verify --strict "$DMG"
 notarize "$DMG"
 xcrun stapler staple "$DMG"
 xcrun stapler validate "$DMG"
