@@ -397,7 +397,14 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         #expect(finding.problems(curated: true) == ["not a plain https link in Privacy policy: http://example.com/privacy",
             "not a plain https link in Documentation: http://example.com/off", "not a plain https link in Sources: http://example.com/"])
         finding.optOut?.url = nil
-        #expect(finding.problems(curated: true).contains("Documentation has no link"))
+        finding.policyURL = nil
+        finding.sources = []
+        finding.optOut?.command = "echo  padded"
+        // Missing links once each, and the command before any link problem.
+        #expect(finding.problems(curated: true) == ["Sources has no link", "Documentation has no link",
+            "the command is not plain ASCII, is longer than 300 characters, or is padded with spaces"])
+        finding.optOut?.url = ""
+        #expect(finding.problems(curated: true).filter { $0.contains("Documentation") } == ["Documentation has no link"])
     }
 }
 
@@ -1096,7 +1103,10 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         draft.summary = "The docs say nothing about telemetry."
         #expect(draft.rule(for: item).telemetry == .unknown)
         #expect(draft.rule(for: item).problems(curated: false).isEmpty)
-        #expect(!draft.problems(for: item).isEmpty)
+        #expect(draft.problems(for: item).first == "choose what Telemetry is: a finding cannot say Could not tell")
+        // Steps the lookup gave stay, though the form does not show them for this class.
+        found.optOut = OptOut(instructions: "Set the variable.", command: "echo 'export EXAMPLE_TELEMETRY=0' >> ~/.zshrc", url: nil)
+        #expect(Submission.Draft(from: found, item: item).rule(for: item).optOut == found.optOut)
     }
 
     @Test func theIssueCarriesTheFindingAndSurvivesTheLink() throws {

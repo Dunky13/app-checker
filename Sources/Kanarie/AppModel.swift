@@ -385,11 +385,14 @@ final class AppModel {
             var rest = items[...]
             // An item a lookup of its own judges while the batch waits is not looked up a second time.
             let judged = Set(items.map(\.id).filter { saved.aiRules[$0] != nil })
+            // Edits saved before the batch began were warned about in its dialog; one saved while it runs was not.
+            let edited = Set(items.map(\.id).filter(isEdited))
             while !rest.isEmpty, !Task.isCancelled {
                 // The list was made when the batch began. By now a rescan may have updated an item, the findings may
                 // cover it, or a lookup of its own may be running. An item removed meanwhile stays listed, and is looked up.
                 let group = rest.prefix(LLM.batchSize).compactMap { old in self.items.first { $0.id == old.id } }.filter { item in
                     verdicts[item.id]?.source != .rules && !analysing.contains(item.id) && (saved.aiRules[item.id] == nil || judged.contains(item.id))
+                        && (!isEdited(item.id) || edited.contains(item.id))
                 }
                 rest = rest.dropFirst(LLM.batchSize)
                 if group.isEmpty { continue }

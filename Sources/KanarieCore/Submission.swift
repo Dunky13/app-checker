@@ -41,6 +41,8 @@ public enum Submission {
             // A correction also says which of the item's findings it corrects.
             (rule.name, rule.policyURL, rule.since) = (optional(name), optional(policyURL), base?.since)
             rule.sources = sources.split(whereSeparator: \.isNewline).map { text(String($0)) }.filter { !$0.isEmpty }
+            // Still "could not tell": keep the lookup's steps, which the form does not show for this class.
+            if telemetry == .unknown, base?.telemetry == .unknown { rule.optOut = base?.optOut }
             guard [.optOut, .optIn].contains(telemetry) else { return rule }
             rule.optOut = OptOut(instructions: text(instructions), command: optional(command), url: optional(optOutURL))
             var off = kept.off
@@ -64,7 +66,10 @@ public enum Submission {
         public func problems(for item: Item) -> [String] {
             // Only where the field is in use: with another telemetry class or with kept checks it is not shown.
             let name = telemetry == .optOut && kept.off.isEmpty && kept.on.isEmpty ? variable.trimmingCharacters(in: .whitespacesAndNewlines) : ""
-            return rule(for: item).problems(curated: true) + (name.isEmpty || Check.isName(name) ? [] : ["the variable is a name only, such as EXAMPLE_TELEMETRY; its value goes in the other field"])
+            // Before the finding's own problems, which end with the links: the form shows only the first few.
+            // Named as the form shows it: the finding's own message names the JSON value.
+            let own = rule(for: item).problems(curated: true).map { $0 == Rule.unknownProblem ? "choose what Telemetry is: a finding cannot say Could not tell" : $0 }
+            return (name.isEmpty || Check.isName(name) ? [] : ["the variable is a name only, such as EXAMPLE_TELEMETRY; its value goes in the other field"]) + own
         }
     }
 
