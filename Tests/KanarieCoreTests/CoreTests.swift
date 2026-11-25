@@ -355,6 +355,27 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         #expect(rule(.optOut).problems(curated: false) == ["the steps to switch it off are missing"])
         #expect(rule(.optIn).problems(curated: false) == ["the steps to switch it off are missing"])
     }
+
+    @Test func namesTheFieldOfALinkThatIsNotPlainHTTPS() {
+        var finding = rule(.optOut)
+        finding.optOut = OptOut(instructions: "i", url: "https://example.com/off")
+        finding.policyURL = "https://example.com/privacy"
+        finding.sources = ["https://example.com/a", "http://example.com/"]
+        #expect(finding.problems(curated: true) == ["not a plain https link in Sources: http://example.com/"])
+        finding.optOut?.url = "http://example.com/off"
+        finding.policyURL = "http://example.com/privacy"
+        #expect(finding.problems(curated: true) == ["not a plain https link in Privacy policy: http://example.com/privacy",
+            "not a plain https link in Documentation: http://example.com/off", "not a plain https link in Sources: http://example.com/"])
+        finding.optOut?.url = nil
+        finding.policyURL = nil
+        finding.sources = []
+        finding.optOut?.command = "echo  padded"
+        // Missing links once each, and the command before any link problem.
+        #expect(finding.problems(curated: true) == ["Sources has no link", "Documentation has no link",
+            "the command is not plain ASCII, is longer than 300 characters, or is padded with spaces"])
+        finding.optOut?.url = ""
+        #expect(finding.problems(curated: true).filter { $0.contains("Documentation") } == ["Documentation has no link"])
+    }
 }
 
 @Suite struct Scanning {

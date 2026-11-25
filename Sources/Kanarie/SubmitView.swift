@@ -47,14 +47,15 @@ struct SubmitView: View {
                     Text("On, can be switched off").tag(Telemetry.optOut)
                     Text("On, cannot be switched off").tag(Telemetry.forced)
                 }
-                TextField("What is collected", text: $draft.summary, prompt: Text("What is sent, and who receives it"), axis: .vertical).lineLimit(2...4)
+                TextField("What is collected", text: $draft.summary, prompt: Text("What is sent, and who receives it"), axis: .vertical).lineLimit(2...)
+                // Rule.problems names Privacy policy, Documentation and Sources by these labels: rename both together.
                 TextField("Privacy policy", text: $draft.policyURL, prompt: Text("https://"))
             }
             if [.optOut, .optIn].contains(draft.telemetry) {
                 Section("How to switch it off") {
-                    TextField("Steps", text: $draft.instructions, axis: .vertical).lineLimit(1...4)
+                    TextField("Steps", text: $draft.instructions, axis: .vertical).lineLimit(1...)
                     TextField("Command", text: $draft.command, prompt: Text("echo 'export NAME=0' >> ~/.zshrc"))
-                    TextField("Documentation", text: $draft.optOutURL, prompt: Text("https://"))
+                    TextField("Documentation", text: $draft.optOutURL, prompt: Text("https://"))  // label named in Rule.problems
                     if !draft.checks.isEmpty {
                         LabeledContent("Checked on a Mac") { VStack(alignment: .trailing) { ForEach(draft.checks, id: \.self) { Text($0) } } }
                         Button("Replace These Checks") { draft.replaceChecks = true }
@@ -66,7 +67,7 @@ struct SubmitView: View {
                 }
             }
             Section {
-                TextField("Sources", text: $draft.sources, prompt: Text("One link per line"), axis: .vertical).lineLimit(2...5)
+                TextField("Sources", text: $draft.sources, prompt: Text("One link per line"), axis: .vertical).lineLimit(2...)  // label named in Rule.problems
             } footer: {
                 Text("Pages that say so: the vendor's documentation, its source code or an issue.").frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -84,7 +85,9 @@ struct SubmitView: View {
             VStack(alignment: .leading) {
                 // Below the form, where it stays in view whatever the form is scrolled to.
                 if !problems.isEmpty {
-                    Label("Not ready yet: \(problems.joined(separator: "; ")).", systemImage: "exclamationmark.triangle")
+                    // The first few only: many bad links would otherwise grow the footer over the form and its buttons.
+                    let more = problems.count > 3 ? "; and \(problems.count - 3) more" : ""
+                    Label("Not ready yet: \(problems.prefix(3).joined(separator: "; "))\(more).", systemImage: "exclamationmark.triangle")
                         .fixedSize(horizontal: false, vertical: true)
                 } else if let failure {
                     Label("The issue could not be prepared: \(failure)", systemImage: "exclamationmark.triangle").fixedSize(horizontal: false, vertical: true)
@@ -209,7 +212,7 @@ struct BulkSubmitView: View {
                 ForEach(Array(included.enumerated()), id: \.element.item.id) { index, entry in
                     VStack(alignment: .leading, spacing: 2) {
                         Text(entry.rule.name ?? entry.item.name)
-                        Text(entry.rule.summary).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                        Text(entry.rule.summary).font(.caption).foregroundStyle(.secondary).lineLimit(2).help(entry.rule.summary)
                         if let missing = checks?[index].missing, !missing.isEmpty {
                             Label("Not found on any cited page: \(missing.joined(separator: ", "))", systemImage: "exclamationmark.triangle")
                                 .font(.caption).foregroundStyle(.orange)
