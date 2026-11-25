@@ -31,7 +31,7 @@ Every item shows what it collects, whether that is switched off on this Mac, and
 
 ![The form to suggest a correction, filled in with the Homebrew finding](docs/screenshots/submit.png)
 
-A finding can be proposed or corrected from the app. Kanarie checks it and then opens a prefilled GitHub issue in your browser.
+A finding can be proposed or corrected from the app. Kanarie checks it and then opens a prefilled GitHub issue in your browser. When a finding for the item is already waiting for review, the app links to that issue instead (**Open Finding #…**), so you can add to it rather than open another.
 
 ## What it checks
 
@@ -97,7 +97,7 @@ Several items go out in groups of five per request, which costs less than one re
 - **Claude Code CLI** (default): runs your local `claude` command with web search, using your own Claude login.
 - **OpenAI-compatible API**: any chat completions endpoint, for example [OpenRouter](https://openrouter.ai). The API key is stored in your keychain. On OpenRouter the web search plugin is switched on; other endpoints answer from what the model already knows.
 
-A lookup sends the item's name, identifier and version to that backend. Answers can be wrong, so check the listed sources before relying on one. Items judged by a lookup carry a sparkles mark in the list. Each row also shows where its verdict comes from: a cloud for the Kanarie findings, a computer for a hint from a search of its files on this Mac. In the detail pane a computer marks a state read on this Mac, from a setting or the file search; a state read with checks an AI lookup suggested keeps its sparkles.
+A lookup sends the item's name, identifier and version to that backend. Answers can be wrong, so check the listed sources before relying on one. Items judged by a lookup carry a sparkles mark in the list. Each row also shows where its verdict comes from: a cloud for the Kanarie findings, a computer for a hint from a search of its files on this Mac. In the detail pane a computer marks a state read on this Mac, from a setting or the file search; a state read with checks an AI lookup suggested keeps its sparkles. A cited link that only lacks https (`http://`) is written as https when the answer arrives, so the lookup can be submitted as it is; its log keeps the answer as it came. To correct a lookup yourself, use **Edit or Submit…** on the item and **Save on This Mac**: your version replaces the lookup on this Mac, is marked as edited by you, and stays until you look the item up again. **Continue on GitHub…** in the same form proposes it as a finding instead.
 
 The search field looks in names and identifiers. The filter menu next to it narrows the list by status (red, yellow, green, grey), by where the verdict comes from (Kanarie findings, AI lookup, analytics code found, nothing known, or everything that is not from an AI lookup) and by kind. Filters and search work together, and both bulk lookups follow them.
 
@@ -109,7 +109,7 @@ The Claude Code CLI is started without your Claude settings, and with its own me
 
 Kanarie has no telemetry. It talks to the network in four cases:
 
-- At launch and then once a day it downloads the findings from this repository (can be switched off in Settings). It fetches every file that changed, not only those for apps you have, so the requests say nothing about your Mac. Files are only used if they match the list the maintainer signed.
+- At launch and then once a day it downloads the findings from this repository (can be switched off in Settings). It fetches every file that changed, not only those for apps you have, so the requests say nothing about your Mac. Files are only used if they match the list the maintainer signed. With the same setting, it reads the list of open finding issues (when you look at an item or submit several, at most every ten minutes, or a minute after the network was not there), to link to a finding that is waiting for review. That list is the same for everyone too.
 - Sparkle checks this repository for updates, after asking you once. The anonymous system profile is disabled.
 - AI lookups, when you ask for them.
 - Submitting a finding, when you choose to: the app fetches the pages the finding cites, then opens GitHub in your browser.
@@ -173,7 +173,7 @@ File paths must start with `~/` or a Homebrew prefix. Checks cannot run commands
 
 A `command` is one line, and it should make the change permanent: `echo 'export NAME=1' >> ~/.zshrc`, not `export NAME=1`.
 
-Found a wrong or missing finding? Use **Submit a Finding…** (or **Suggest a Correction…**) on the item in the app (removed items stay in the list for this), or select several items (or all of them) and use **Submit Findings…** to send the AI lookups not sent before in one issue, or open a pull request with a source. `swift test` validates every file.
+Found a wrong or missing finding? Use **Submit a Finding…** (**Suggest a Correction…** for a finding, **Edit or Submit…** for an AI lookup) on the item in the app (removed items stay in the list for this), or select several items (or all of them) and use **Submit Findings…** to send the AI lookups not sent before in one issue, or open a pull request with a source. `swift test` validates every file.
 
 ### Submitting from the app
 

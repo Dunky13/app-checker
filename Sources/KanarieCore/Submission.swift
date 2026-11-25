@@ -19,7 +19,8 @@ public enum Submission {
         public init(from rule: Rule?, item: Item) {
             (base, name) = (rule, rule?.name ?? item.name)
             guard let rule else { return }
-            telemetry = rule.telemetry == .unknown ? .optOut : rule.telemetry
+            // An AI lookup that could not tell stays so: any class here would be a claim the lookup did not make.
+            telemetry = rule.telemetry
             (summary, policyURL, sources) = (rule.summary, rule.policyURL ?? "", (rule.sources ?? []).joined(separator: "\n"))
             (instructions, command, optOutURL) = (rule.optOut?.instructions ?? "", rule.optOut?.command ?? "", rule.optOut?.url ?? "")
         }
@@ -40,6 +41,8 @@ public enum Submission {
             // A correction also says which of the item's findings it corrects.
             (rule.name, rule.policyURL, rule.since) = (optional(name), optional(policyURL), base?.since)
             rule.sources = sources.split(whereSeparator: \.isNewline).map { text(String($0)) }.filter { !$0.isEmpty }
+            // Still "could not tell": keep the lookup's steps, which the form does not show for this class.
+            if telemetry == .unknown, base?.telemetry == .unknown { rule.optOut = base?.optOut }
             guard [.optOut, .optIn].contains(telemetry) else { return rule }
             rule.optOut = OptOut(instructions: text(instructions), command: optional(command), url: optional(optOutURL))
             var off = kept.off
@@ -48,12 +51,25 @@ public enum Submission {
             return rule
         }
 
+        /// The draft with each link that `Rule.plainLink` can fix fixed. Every other field stays as typed.
+        public var withPlainLinks: Draft {
+            let fix = { (field: String) in
+                field.split(separator: "\n", omittingEmptySubsequences: false)
+                    .map { Rule.plainLink($0.trimmingCharacters(in: .whitespaces)) ?? String($0) }.joined(separator: "\n")
+            }
+            var draft = self
+            (draft.policyURL, draft.optOutURL, draft.sources) = (fix(policyURL), fix(optOutURL), fix(sources))
+            return draft
+        }
+
         /// What keeps this draft from being a usable finding: the checks every curated finding passes, on the submitter's Mac already.
         public func problems(for item: Item) -> [String] {
             // Only where the field is in use: with another telemetry class or with kept checks it is not shown.
             let name = telemetry == .optOut && kept.off.isEmpty && kept.on.isEmpty ? variable.trimmingCharacters(in: .whitespacesAndNewlines) : ""
             // Before the finding's own problems, which end with the links: the form shows only the first few.
-            return (name.isEmpty || Check.isName(name) ? [] : ["the variable is a name only, such as EXAMPLE_TELEMETRY; its value goes in the other field"]) + rule(for: item).problems(curated: true)
+            // Named as the form shows it: the finding's own message names the JSON value.
+            let own = rule(for: item).problems(curated: true).map { $0 == Rule.unknownProblem ? "choose what Telemetry is: a finding cannot say Could not tell" : $0 }
+            return (name.isEmpty || Check.isName(name) ? [] : ["the variable is a name only, such as EXAMPLE_TELEMETRY; its value goes in the other field"]) + own
         }
     }
 
@@ -290,6 +306,36 @@ public enum Submission {
         \(entry.sourceCheck.lines.map { "- \($0)" }.joined(separator: "\n"))
         """
     }
+
+    /// The open issues of this repository, as GitHub lists them.
+    public static let openIssues = URL(string: "https://api.github.com/repos/Dunky13/kanarie/issues?state=open&per_page=100")!
+
+    /// Each item with a finding issue open, and the oldest such issue. An issue counts by its title, as the app writes it,
+    /// and names its items on `**Item:**` lines; pull requests, which GitHub lists among the issues, do not count.
+    /// Only the number is taken from an issue: the link the app opens is made from it, never read from the issue.
+    /// An issue naming more items than the app puts in one (1, or `bulkLimit` for "Findings: ") is not one it wrote, and counts for none.
+    public static func openFindings(_ data: Data) throws -> [String: Int] {
+        struct Present: Decodable {}
+        struct Issue: Decodable { var number: Int, title: String, body: String?, pull_request: Present? }
+        var found: [String: Int] = [:]
+        for issue in try JSONDecoder().decode([Issue].self, from: data) where issue.pull_request == nil {
+            let limit = issue.title.hasPrefix("Finding: ") ? 1 : issue.title.hasPrefix("Findings: ") ? bulkLimit : 0
+            let items = (issue.body ?? "").split(whereSeparator: \.isNewline).compactMap {
+                $0.prefixMatch(of: #/\*\*Item:\*\* `([^`]+)`/#).map { String($0.1) }
+            }
+            guard items.count <= limit else { continue }
+            for item in items { found[item] = min(found[item] ?? .max, issue.number) }
+        }
+        return found
+    }
+
+    /// The oldest open finding for any of these ids. An id is looked up as the app writes it into an issue, cut and cleaned.
+    public static func openFinding(_ ids: [String], in found: [String: Int]) -> Int? {
+        ids.compactMap { found[plain($0)] }.min()
+    }
+
+    /// The page of an issue in this repository.
+    public static func issue(_ number: Int) -> URL { URL(string: "https://github.com/Dunky13/kanarie/issues/\(number)")! }
 
     /// Text from a file on disk or from an AI lookup, for a code span on one line of the issue: no line breaks, nothing
     /// invisible (a line break becomes a space), and no backtick that would end the span. Inside the span Markdown does nothing: no links, mentions or headings.

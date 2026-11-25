@@ -135,7 +135,7 @@ public struct Rule: Codable, Sendable, Hashable {
         // Yellow promises a way out, so an opt-out verdict without one is not usable.
         if [.optOut, .optIn].contains(telemetry), (optOut?.instructions ?? "").isEmpty { found.append("the steps to switch it off are missing") }
         guard curated else { return found }
-        if telemetry == .unknown { found.append("unknown telemetry does not belong in the curated rules") }
+        if telemetry == .unknown { found.append(Self.unknownProblem) }
         if summary.isEmpty { found.append("the summary of what is collected is missing") }
         if (sources ?? []).isEmpty { found.append("Sources has no link") }
         if [.optOut, .optIn].contains(telemetry), (optOut?.url ?? "").isEmpty { found.append("Documentation has no link") }
@@ -151,12 +151,8 @@ public struct Rule: Codable, Sendable, Hashable {
         let links = [("Privacy policy", policyURL), ("Documentation", optOut?.url)].compactMap { field, link in link.map { (field, $0) } }
             + (sources ?? []).map { ("Sources", $0) }
         // An empty link is reported as missing above, not again here.
-        for (field, link) in links where !link.isEmpty {
-            let host = link.dropFirst("https://".count).prefix { !"/?#".contains($0) }
-            if safeURL(link) == nil || !link.hasPrefix("https://") || !link.allSatisfy(\.isASCII) || host.isEmpty
-                || !host.allSatisfy({ $0.isLetter || $0.isNumber || ".-:".contains($0) }) {
-                found.append("not a plain https link in \(field): \(link.prefix(200))")
-            }
+        for (field, link) in links where !link.isEmpty && !Self.isPlainLink(link) {
+            found.append("not a plain https link in \(field): \(link.prefix(200))")
         }
         return found
     }
@@ -190,6 +186,32 @@ public struct Rule: Codable, Sendable, Hashable {
                 ? (.ok, "Telemetry is off unless you agreed to it. Kanarie cannot read that choice on this Mac.", false)
                 : (.ok, "Telemetry stays off unless you enable it.", true)
         }
+    }
+
+    static let unknownProblem = "unknown telemetry does not belong in the curated rules"
+
+    static func isPlainLink(_ link: String) -> Bool {
+        let host = link.dropFirst("https://".count).prefix { !"/?#".contains($0) }
+        return safeURL(link) != nil && link.hasPrefix("https://") && link.allSatisfy(\.isASCII) && !host.isEmpty
+            && host.allSatisfy({ $0.isLetter || $0.isNumber || ".-:".contains($0) })
+    }
+
+    /// The link with its scheme written as plain https, when that alone makes it plain: "http://" and "HTTPS://" are the
+    /// common slips. The host is never changed, since its rule keeps look-alike links out, and a link with a port is
+    /// left alone: http on port 80 is not https on port 80.
+    public static func plainLink(_ link: String) -> String? {
+        guard let colon = link.firstIndex(of: ":"), ["http", "https"].contains(link[..<colon].lowercased()) else { return nil }
+        let fixed = "https" + link[colon...]
+        return fixed != link && isPlainLink(fixed) && URL(string: fixed)?.port == nil ? fixed : nil
+    }
+
+    /// This rule with every link that `plainLink` can fix fixed, and nothing else changed.
+    public func withPlainLinks() -> Rule {
+        let fix = { (link: String) in Self.plainLink(link.trimmingCharacters(in: .whitespaces)) ?? link }
+        var rule = self
+        (rule.policyURL, rule.sources) = (policyURL.map(fix), sources?.map(fix))
+        rule.optOut?.url = optOut?.url.map(fix)
+        return rule
     }
 
     static let blockedNote = "macOS did not let Kanarie read this app's setting. To allow it, open System Settings > Privacy & Security > Files & Folders, then rescan."
