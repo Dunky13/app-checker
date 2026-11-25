@@ -169,7 +169,7 @@ A finding sent from the app arrives as an issue. `scripts/accept-finding.py <iss
 
 ## Since 0.1.5, not released yet
 
-- **Where each part comes from.** The list and the detail pane mark provenance with an icon: a cloud for the Kanarie findings on GitHub, a computer for what Kanarie read on this Mac (a setting the finding's checks look at, or the offline file search), and sparkles for an AI lookup as before. `Verdict.readsThisMac` decides the computer icon on the state line.
+- **Where each part comes from.** The list and the detail pane mark provenance with an icon: a cloud for the Kanarie findings on GitHub, a computer for what Kanarie read on this Mac (a setting the finding's checks look at, or the offline file search), and sparkles for an AI lookup as before. `Verdict.readsThisMac` decides the computer icon on the state line. It mirrors what `evaluate` reads (opt-in reads only `enabledWhen`) and is false when macOS refused the read. An AI lookup keeps its sparkles on the state line, since the AI chose the checks. The list icon says where the finding came from, the detail state line where its state came from: a green "switched off on this Mac" row shows a cloud in the list and a computer in the detail.
   - Evidence: a test copy (own home folder) showed the cloud on 11 findings rows and the computer on 12 file-search rows, the computer on gh's state line and the cloud on its summary and source note. 60 tests pass. Not seen: an AI-lookup item, since the test copy had none; its sparkles code is unchanged. `docs/screenshots/list.png` predates the icons.
 
 ## In 0.1.5

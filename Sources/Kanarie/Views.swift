@@ -317,7 +317,12 @@ struct MainView: View {
                     Picker("Verdict from", selection: $source) {
                         Text("Any source (\(listed(filter, .any, kind).count))").tag(SourceFilter.any)
                         ForEach([Verdict.Source.rules, .ai, .sdk, .none].map(SourceFilter.only) + [.notAI], id: \.self) { entry in
-                            Text("\(entry.label ?? "") (\(listed(filter, entry, kind).count))").tag(entry)
+                            let title = "\(entry.label ?? "") (\(listed(filter, entry, kind).count))"
+                            if case .only(let source) = entry, let symbol = source.symbol {
+                                Label(title, systemImage: symbol).tag(entry)
+                            } else {
+                                Text(title).tag(entry)
+                            }
                         }
                     }
                     Picker("Kind", selection: $kind) {
@@ -369,7 +374,9 @@ struct DetailView: View {
         switch verdict.source {
         case .rules: "From the Kanarie findings, kept on GitHub."
         case .ai: "From an AI lookup. Not verified: check its sources before relying on it."
-        case .sdk: "The hint comes from an offline search of the installed files on this Mac for analytics service names."
+        case .sdk: model.removed.contains(item.id)
+            ? "The hint came from an offline search of its files on this Mac, while it was installed, for analytics service names."
+            : "The hint comes from an offline search of the installed files on this Mac for analytics service names."
         case .none: "Not in the Kanarie findings."
         }
     }
@@ -390,13 +397,18 @@ struct DetailView: View {
                         .foregroundStyle(.secondary)
                 }
                 // Each part says where it comes from: this Mac, the Kanarie findings or an AI lookup.
-                let checked = verdict.readsThisMac ? "Checked on this Mac" : verdict.source.help
-                if let symbol = verdict.readsThisMac ? "desktopcomputer" : verdict.source.symbol {
+                // An AI lookup keeps its sparkles even when read here: the AI chose what to read.
+                let checked = switch (verdict.readsThisMac, verdict.source) {
+                case (true, .ai): "Checked on this Mac with checks an AI lookup suggested, not verified"
+                case (true, _): "Checked on this Mac"
+                case (false, _): verdict.source.help
+                }
+                if let symbol = verdict.readsThisMac && verdict.source != .ai ? "desktopcomputer" : verdict.source.symbol {
                     Label(verdict.state, systemImage: symbol).font(.headline).help(checked).accessibilityLabel("\(checked): \(verdict.state)")
                 } else {
                     Text(verdict.state).font(.headline)
                 }
-                if let summary = verdict.rule?.summary, let symbol = verdict.source.symbol {
+                if let summary = verdict.rule?.summary, !summary.isEmpty, let symbol = verdict.source.symbol {
                     Label(summary, systemImage: symbol).help(verdict.source.help).accessibilityLabel("\(verdict.source.help): \(summary)")
                 }
 

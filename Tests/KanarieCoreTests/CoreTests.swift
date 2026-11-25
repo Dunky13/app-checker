@@ -116,7 +116,14 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         let read = { (rules: [Rule], sdks: [String]) in Verdict(item: item, rules: rules, aiRules: [:], sdks: sdks, probe: probe()).readsThisMac }
         #expect(read([rule(.optOut, disabledWhen: [Check(env: "OFF")])], []))
         #expect(read([], ["Sentry"]))
+        #expect(read([rule(.optOut, enabledWhen: [Check(env: "ON")])], []) && read([rule(.optIn, enabledWhen: [Check(env: "ON")])], []))
         #expect(!read([rule(.optOut)], []) && !read([rule(.forced)], ["Sentry"]) && !read([], []))
+        // An opt-in finding reads only what switches it on, and a read macOS refused is not a reading.
+        #expect(!read([rule(.optIn, disabledWhen: [Check(env: "OFF")])], []))
+        let blocked = Verdict(item: item, rules: [rule(.optOut, disabledWhen: [Check(json: "p.json", key: "a", equals: "1")])], aiRules: [:], sdks: [], probe: probe(blocked: ["p.json"]))
+        #expect(!blocked.readsThisMac)
+        let ai = Verdict(item: item, rules: [], aiRules: ["brew:x": rule(.optOut, disabledWhen: [Check(env: "OFF")])], sdks: [], probe: probe())
+        #expect(ai.readsThisMac && ai.source == .ai)
     }
 
     @Test func anExtensionIsGreenOnlyWhenEveryEditorThatHasItIsOff() {

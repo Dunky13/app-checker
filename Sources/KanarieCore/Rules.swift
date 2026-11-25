@@ -184,6 +184,15 @@ public struct Rule: Codable, Sendable, Hashable {
         }
     }
 
+    /// Whether `evaluate` reads any check for this kind of telemetry: opt-in looks only at what switches it on.
+    var readsChecks: Bool {
+        switch telemetry {
+        case .optOut: !((disabledWhen ?? []) + (enabledWhen ?? [])).isEmpty
+        case .optIn: !(enabledWhen ?? []).isEmpty
+        case .none, .forced, .unknown: false
+        }
+    }
+
     static let blockedNote = "macOS did not let Kanarie read this app's setting. To allow it, open System Settings > Privacy & Security > Files & Folders, then rescan."
 }
 
@@ -280,8 +289,9 @@ public struct Verdict: Sendable, Equatable {
     public var source: Source
 
     /// Whether the state was read from this Mac: a setting the finding's checks look at, or the installed files.
+    /// Not when macOS refused the read: then the state is the finding's default.
     public var readsThisMac: Bool {
-        source == .sdk || rule.map { [.optOut, .optIn].contains($0.telemetry) && !(($0.disabledWhen ?? []) + ($0.enabledWhen ?? [])).isEmpty } == true
+        source == .sdk || (rule?.readsChecks == true && !state.contains(Rule.blockedNote))
     }
 
     /// Curated rules win over AI lookups. Without either the item is unknown; SDK scan hits only add a hint.
