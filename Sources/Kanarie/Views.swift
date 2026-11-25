@@ -292,6 +292,10 @@ struct DetailView: View {
     var item: Item
     var verdict: Verdict
     @State private var copied = false
+    /// The run or the profile change waiting for confirmation, what it did, and whether it is running.
+    @State private var confirming: OptOutStep?
+    @State private var outcome: Result<String, Error>?
+    @State private var working = false
     @State private var submitting = false
     @State private var log: OpenedLog?
 
@@ -330,10 +334,17 @@ struct DetailView: View {
                                 HStack {
                                     Text(command).font(.body.monospaced()).textSelection(.enabled)
                                     Spacer()
-                                    Button(copied ? "Copied" : "Copy", systemImage: copied ? "checkmark" : "doc.on.doc") {
-                                        NSPasteboard.general.clearContents()
-                                        NSPasteboard.general.setString(command, forType: .string)
-                                        copied = true
+                                    if working { ProgressView().controlSize(.small).accessibilityLabel("Working") }
+                                    switch OptOutStep(command: command) {
+                                    case let step?:
+                                        Button(step.button, systemImage: step.icon) { confirming = step }.disabled(working)
+                                    case nil:
+                                        // A shell this does not know, or a command that cannot be done safely: copy it, as before.
+                                        Button(copied ? "Copied" : "Copy", systemImage: copied ? "checkmark" : "doc.on.doc") {
+                                            NSPasteboard.general.clearContents()
+                                            NSPasteboard.general.setString(command, forType: .string)
+                                            copied = true
+                                        }
                                     }
                                 }
                                 .padding(8)
@@ -341,6 +352,11 @@ struct DetailView: View {
                                 if verdict.source == .ai {
                                     Label("This command was suggested by an AI lookup. Read it and check the linked source before you run it.", systemImage: "exclamationmark.triangle")
                                         .font(.callout).foregroundStyle(.secondary)
+                                }
+                                switch outcome {
+                                case .success(let text)?: Label(text, systemImage: "checkmark.circle").font(.callout).foregroundStyle(.secondary)
+                                case .failure(let error)?: Label(error.localizedDescription, systemImage: "exclamationmark.triangle").font(.callout).foregroundStyle(.red)
+                                case nil: EmptyView()
                                 }
                             }
                             if let url = safeURL(optOut.url) { Link("Opt-out documentation", destination: url) }
@@ -396,7 +412,19 @@ struct DetailView: View {
             .padding()
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .onChange(of: item.id) { copied = false }
+        .onChange(of: item.id) { (copied, outcome) = (false, nil) }
+        .alert(confirming?.title ?? "", isPresented: Binding { confirming != nil } set: { if !$0 { confirming = nil } }, presenting: confirming) { step in
+            Button(step.button) {
+                working = true
+                Task {
+                    do { outcome = .success(try await step.perform(model)) } catch { outcome = .failure(error) }
+                    working = false
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: { step in
+            Text(step.message + (verdict.source == .ai ? "\n\nAn AI lookup suggested this. Check the linked source first." : ""))
+        }
         .sheet(isPresented: $submitting) { SubmitView(model: model, item: item, verdict: verdict) }
         .sheet(item: $log) { LookupLogView(log: $0) }
     }
@@ -563,6 +591,59 @@ extension View {
     func sheetFooter(@ViewBuilder _ content: () -> some View) -> some View {
         safeAreaInset(edge: .bottom, spacing: 0) {
             content().padding(.horizontal, 20).padding(.vertical, 12).frame(maxWidth: .infinity, alignment: .leading).background(.bar)
+        }
+    }
+}
+
+/// Running an opt-out command, or adding the variable it sets to the shell profile. Always confirmed first.
+struct OptOutStep: Identifiable {
+    enum Kind { case run(String), add(line: String, file: String) }
+    var kind: Kind
+    var id: String { title + message }
+
+    /// nil when only copying is offered: a shell this does not know, or a command that cannot be done safely.
+    init?(command: String) {
+        switch ShellProfile.action(for: command) {
+        case .run: kind = .run(command)
+        case let .add(name, value):
+            guard let addition = ShellProfile.addition(name: name, value: value, shell: ShellProfile.loginShell) else { return nil }
+            kind = .add(line: addition.line, file: addition.file)
+        case .copyOnly: return nil
+        }
+    }
+
+    var button: String {
+        switch kind {
+        case .run: "Run"
+        case .add(_, let file): "Add to ~/\(file)"
+        }
+    }
+
+    var icon: String {
+        switch kind {
+        case .run: "play"
+        case .add: "text.badge.plus"
+        }
+    }
+
+    var title: String {
+        switch kind {
+        case .run: "Run this command?"
+        case .add(_, let file): "Add this line to ~/\(file)?"
+        }
+    }
+
+    var message: String {
+        switch kind {
+        case .run(let command): "\(command)\n\nIt runs once with your shell's settings, as if you typed it in Terminal."
+        case .add(let line, _): "\(line)\n\nNew terminal windows will have it set. Apps opened from the Dock or Finder do not read this file."
+        }
+    }
+
+    @MainActor func perform(_ model: AppModel) async throws -> String {
+        switch kind {
+        case .run(let command): try await model.runOptOut(command)
+        case let .add(line, file): try await model.addToProfile(line, file: file)
         }
     }
 }

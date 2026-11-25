@@ -35,7 +35,7 @@ Not covered: apps kept anywhere else, iPhone and iPad apps running on a Mac, and
 | Icon | Meaning |
 | --- | --- |
 | Green check | No telemetry, or telemetry is switched off on this Mac |
-| Yellow warning | Telemetry is on, or on by default where the setting cannot be read, and there is a way to switch it off. The item shows how, with a link, and a copy button when the switch is a command. |
+| Yellow warning | Telemetry is on, or on by default where the setting cannot be read, and there is a way to switch it off. The item shows how, with a link, and a button for the command: **Run** it, **Add** the variable it sets to your shell profile, or **Copy** it. |
 | Red cross | Telemetry is on and no opt-out is known |
 | Grey question mark | Unknown |
 | Grey crossed-out circle | No longer installed. Listed last, so a finding can still be submitted for it; its verdict is in the detail pane. |
@@ -46,7 +46,7 @@ A verdict comes from, in this order:
 2. **An AI lookup**, only when you ask for one. The result is marked as unverified and lists its sources.
 3. **An offline hint.** For other apps, Homebrew items and commands, the app searches the program file for the names of well-known analytics services. A match stays grey: it is a lead worth looking up, not proof. npm packages and extensions are not searched.
 
-Kanarie never changes a setting for you. A yellow item stays yellow until the app can see the switch: variables are read from your login shell, so a variable must be in your shell profile, and some switches (a setting inside an app, or a tool's own `telemetry disable` command) cannot be read at all. The item says which case applies.
+Kanarie changes nothing on its own. When the switch is a command, you can have it run once (**Run**), or, when the command only sets a variable, have the variable added to the profile your login shell reads (**Add to ~/.zshrc**: `~/.zshrc` for zsh, `~/.bash_profile` for bash, `~/.profile` for sh, `~/.config/fish/config.fish` for fish, each in its own syntax). Both ask first and show the exact command or line. For another shell, a command that cannot be written safely (quoting, other redirections, variables such as `PATH` or `DYLD_*`), or an `echo` command, **Copy** is offered. A yellow item stays yellow until the app can see the switch: variables are read from your login shell, so a variable must be in your shell profile, and some switches (a setting inside an app, or a tool's own `telemetry disable` command) cannot be read at all. The item says which case applies.
 
 ## Install
 
@@ -154,7 +154,7 @@ Each file is one finding. It matches one or more item IDs:
 - `{ "json": "~/path/settings.json", "key": "a.b", "equals": "false" }`: a value in a JSON or JSONC file. Booleans read as `true` and `false`.
 - `{ "file": "~/path/config", "contains": "text" }`: text in a file. Lines commented out with `#`, `//` or `;` are ignored.
 
-File paths must start with `~/` or a Homebrew prefix. Rules cannot run commands, by design. In an extension rule, a path below `~/Library/Application Support/Code/` is read from each editor that has the extension.
+File paths must start with `~/` or a Homebrew prefix. Checks cannot run commands, by design: a finding's `command` only runs when you choose **Run** and confirm it. In an extension rule, a path below `~/Library/Application Support/Code/` is read from each editor that has the extension.
 
 A `command` is one line, and it should make the change permanent: `echo 'export NAME=1' >> ~/.zshrc`, not `export NAME=1`.
 

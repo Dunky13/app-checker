@@ -219,6 +219,22 @@ final class AppModel {
 
     nonisolated static func sdkKey(_ item: Item) -> String { "\(item.id)@\(item.version)" }
 
+    /// Runs an opt-out command the person confirmed, then reads the settings and the shell again. Returns what to say.
+    func runOptOut(_ command: String) async throws -> String {
+        let env = env
+        let output = try await Task.detached { try ShellProfile.run(command, env: env) }.value
+        await rescan(userInitiated: true)
+        return output.isEmpty ? "Done." : "Done: \(output.suffix(300))"
+    }
+
+    /// Adds a line the person confirmed to their shell profile, then reads the shell again so the verdict follows.
+    func addToProfile(_ line: String, file: String) async throws -> String {
+        let url = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(file)
+        let added = try await Task.detached { try ShellProfile.append(line, to: url) }.value
+        await rescan(userInitiated: true)
+        return added ? "Added to ~/\(file). New terminal windows have it." : "~/\(file) has this line already."
+    }
+
     /// This Mac's settings as the checks read them, for a finding that is not in use yet.
     var probe: Probe { Probe.live(env: env) }
 

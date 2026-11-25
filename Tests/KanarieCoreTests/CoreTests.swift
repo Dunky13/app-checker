@@ -1136,3 +1136,52 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
 private extension Result {
     var error: Failure? { if case .failure(let error) = self { error } else { nil } }
 }
+
+@Suite struct OptOutActions {
+    @Test func aCommandIsRunAddedOrOnlyCopied() {
+        #expect(ShellProfile.action(for: "brew analytics off") == .run)
+        #expect(ShellProfile.action(for: "export HEADROOM_BEACON=off") == .add(name: "HEADROOM_BEACON", value: "off"))
+        #expect(ShellProfile.action(for: "echo 'export CHECKPOINT_DISABLE=1' >> ~/.zshrc") == .add(name: "CHECKPOINT_DISABLE", value: "1"))
+        #expect(ShellProfile.action(for: "echo \"export X_OFF=true\" >> ~/.bashrc") == .add(name: "X_OFF", value: "true"))
+        // What cannot be written safely is only copied: quoting, substitution, other redirections, and variables that change what runs.
+        for command in ["export X=\"a b\"", "export X=$(id)", "echo 'export X=1; rm -rf ~' >> ~/.zshrc", "echo hi > ~/.zshrc", "export PATH=.",
+                        "echo 'export DYLD_INSERT_LIBRARIES=x.dylib' >> ~/.zshrc", "export NODE_OPTIONS=x", "echo 'export X=1' >> /etc/profile"] {
+            #expect(ShellProfile.action(for: command) == .copyOnly, "\(command)")
+        }
+    }
+
+    @Test func eachShellGetsItsOwnProfileAndSyntax() {
+        #expect(ShellProfile.addition(name: "X", value: "1", shell: "/bin/zsh")! == (".zshrc", "export X=1"))
+        #expect(ShellProfile.addition(name: "X", value: "1", shell: "/opt/homebrew/bin/bash")! == (".bash_profile", "export X=1"))
+        #expect(ShellProfile.addition(name: "X", value: "1", shell: "/bin/sh")! == (".profile", "export X=1"))
+        #expect(ShellProfile.addition(name: "X", value: "1", shell: "/opt/homebrew/bin/fish")! == (".config/fish/config.fish", "set -gx X 1"))
+        #expect(ShellProfile.addition(name: "X", value: "1", shell: "/opt/homebrew/bin/nu") == nil)
+        #expect(ShellProfile.addition(name: "X", value: "1", shell: "") == nil)
+    }
+
+    @Test func aLineIsAppendedOnce() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("profile-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let file = dir.appendingPathComponent(".config/fish/config.fish")
+        #expect(try ShellProfile.append("set -gx X 1", to: file))
+        #expect(try !ShellProfile.append("set -gx X 1", to: file))
+        let rc = dir.appendingPathComponent(".zshrc")
+        try Data("alias ll='ls -l'".utf8).write(to: rc)
+        #expect(try ShellProfile.append("export X=1", to: rc))
+        #expect(try String(contentsOf: rc, encoding: .utf8) == "alias ll='ls -l'\n# Added by Kanarie to switch off telemetry\nexport X=1\n")
+        // A profile linked from a dotfiles folder stays a link, and the line lands in the file it points to.
+        let linked = dir.appendingPathComponent(".profile")
+        try FileManager.default.createSymbolicLink(at: linked, withDestinationURL: rc)
+        #expect(try ShellProfile.append("export Y=1", to: linked))
+        #expect(try FileManager.default.destinationOfSymbolicLink(atPath: linked.path) == rc.path)
+        #expect(try String(contentsOf: rc, encoding: .utf8).hasSuffix("export Y=1\n"))
+    }
+
+    @Test func aRunReportsItsOutputOrWhyItFailed() throws {
+        let env = ["PATH": "/usr/bin:/bin"]
+        #expect(try ShellProfile.run("echo done", env: env) == "done")
+        #expect(throws: Shell.Failure.self) { try ShellProfile.run("echo nope >&2; false", env: env) }
+        do { _ = try ShellProfile.run("echo nope >&2; false", env: env) } catch { #expect(error.localizedDescription == "It ended with status 1: nope") }
+        #expect(throws: Shell.Failure.self) { try ShellProfile.run("exit 0", env: env) }
+    }
+}
