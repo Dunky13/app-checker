@@ -86,6 +86,9 @@ final class AppModel {
             // Its log would show a lookup that looks fine next to an item nothing is known about.
             Self.lookupLogs.removeVerdictLog(for: id)
         }
+        // Lookups saved before http links were fixed on arrival, and what was sent of them, so "already sent" still matches.
+        saved.aiRules = saved.aiRules.mapValues { $0.withPlainLinks() }
+        saved.submitted = saved.submitted?.mapValues { $0.withPlainLinks() }
         Probe.blockedFiles = Set(saved.blocked ?? [])
         (serial, rules) = Self.loadFindings()
         saved.serial = max(saved.serial ?? 0, serial)
@@ -309,7 +312,8 @@ final class AppModel {
         }
         for (item, result) in zip(items, results) {
             var failed = false
-            do { saved.aiRules[item.id] = try result.rule.get() } catch {
+            // An http link that only needs its scheme is written as https, so the lookup can be submitted as it is. Its log keeps the answer as it came.
+            do { saved.aiRules[item.id] = try result.rule.get().withPlainLinks() } catch {
                 failed = true
                 errors[item.id] = error.localizedDescription
             }

@@ -167,8 +167,8 @@ A finding sent from the app arrives as an issue. `scripts/accept-finding.py <iss
   - Not checked: bash, sh and fish profiles in the app (tests only), a verdict turning green after Add (the test copy's login shell reads the real profile), and a command that asks for input or a password (it gets no input and fails or times out).
   - Limits: apps opened from the Dock or Finder do not read shell profiles, the alert says so. A tool that is not on the login shell's `PATH` fails to run with the shell's message.
 
-- **Switch Links to https.** When only the scheme keeps a link from being plain (`http://`, or upper case), the submit form offers a button that rewrites it in Privacy policy, Documentation and Sources, and the bulk sheet offers one that brings every such lookup in with its links fixed. The host is never changed and a link with a port is left alone. Such an issue says "AI lookup, links switched to https" as its origin, and its "Fetched X of Y cited pages" line shows a page that has no https.
-  - Evidence: a test copy (own home folder, seeded with three test lookups) showed the button fix Bitwarden's two http links and enable Continue, and in bulk move Bitwarden in with "Links switched to https" while AnyDesk, with an ftp link, stayed out. 62 tests pass. Continue was not pressed.
+- **http links fixed.** When only the scheme keeps a link from being plain (`http://`, or upper case), an AI lookup's links are written as https when the answer arrives and in lookups saved before (with the record of what was sent, so "already sent" still matches). The lookup log keeps the answer as it came. So such lookups go in a bulk submission as they are. A link typed into the submit form gets a **Switch Links to https** button, shown only when it changes the finding sent. The host is never changed and a link with a port is left alone; the issue's "Fetched X of Y cited pages" line shows a page that has no https.
+  - Evidence: see the PR. 62 tests pass.
 
 ## In 0.1.5
 

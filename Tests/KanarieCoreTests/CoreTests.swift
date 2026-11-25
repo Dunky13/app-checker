@@ -378,6 +378,8 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         (rest.policyURL, rest.sources) = (found.policyURL, found.sources)
         #expect(rest == found)   // nothing but the links changed
         #expect(Submission.unedited(fixed, item: item) == fixed)
+        found.sources = [" http://example.com/c "]
+        #expect(found.withPlainLinks().sources == ["https://example.com/c"])
         // The form fixes each line in place and leaves a link it cannot fix as typed.
         var draft = Submission.Draft(from: found, item: item)
         draft.sources = "http://a.example/\nftp://b.example/\n"

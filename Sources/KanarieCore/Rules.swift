@@ -200,7 +200,7 @@ public struct Rule: Codable, Sendable, Hashable {
 
     /// This rule with every link that `plainLink` can fix fixed, and nothing else changed.
     public func withPlainLinks() -> Rule {
-        let fix = { (link: String) in Self.plainLink(link) ?? link }
+        let fix = { (link: String) in Self.plainLink(link.trimmingCharacters(in: .whitespaces)) ?? link }
         var rule = self
         (rule.policyURL, rule.sources) = (policyURL.map(fix), sources?.map(fix))
         rule.optOut?.url = optOut?.url.map(fix)
