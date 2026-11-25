@@ -34,6 +34,11 @@ final class AppModel {
     private(set) var verdicts: [String: Verdict] = [:]
     private(set) var analysing: Set<String> = []
     private(set) var errors: [String: String] = [:]
+    /// Items with a finding issue open on GitHub, and its number, so the app links to it instead of starting another.
+    private(set) var openFindings: [String: Int] = [:]
+    private var openFindingsChecked: Date?
+    private var openFindingsRead: Task<Void, Never>?
+    private(set) var readingOpenFindings = false
     private(set) var scanning = false
     private(set) var batch: Task<Void, Never>?
     /// True when the login shell could not be asked for its variables, so variable-based settings may wrongly read as "on".
@@ -307,6 +312,46 @@ final class AppModel {
         } catch {
             NSLog("Kanarie: findings not updated, keeping the current ones: \(error.localizedDescription)")
         }
+    }
+
+    /// Reads which items have a finding waiting for review, at most every ten minutes (a minute after the network was not there). The list is the same for
+    /// everyone, so the request says nothing about this Mac. Off with the findings download. Every caller waits for
+    /// the read under way, so a sheet opened during one sees its result.
+    func checkOpenFindings() async {
+        guard UserDefaults.standard.bool(forKey: "refreshRules") else {
+            (openFindings, openFindingsChecked, readingOpenFindings) = ([:], nil, false)
+            return
+        }
+        if openFindingsChecked.map({ -$0.timeIntervalSinceNow > 600 }) ?? true {
+            let started = Date.now
+            openFindingsChecked = started
+            readingOpenFindings = true
+            openFindingsRead = Task {
+                // A read the setting switched off, or a newer read replaced, while it ran changes nothing.
+                var current: Bool { openFindingsChecked == started && UserDefaults.standard.bool(forKey: "refreshRules") }
+                do {
+                    // shortcut: only the 100 newest open issues are read; follow GitHub's Link header if more are ever open.
+                    let found = try Submission.openFindings(try await URLSession(configuration: .ephemeral).data(from: Submission.openIssues, limit: 5_000_000))
+                    guard current else { return }
+                    openFindings = found
+                } catch {
+                    NSLog("Kanarie: open findings not read: \(error.localizedDescription)")
+                    guard current else { return }
+                    // Again in a minute when the network was not there, which it may not be yet after waking; a refusal
+                    // or a list over the limit would fail again, so those wait the ten minutes.
+                    let offline: [URLError.Code] = [.notConnectedToInternet, .networkConnectionLost, .timedOut, .cannotFindHost, .cannotConnectToHost]
+                    if let error = error as? URLError, offline.contains(error.code) { openFindingsChecked = .now - 540 }
+                }
+                readingOpenFindings = false
+            }
+        }
+        await openFindingsRead?.value
+    }
+
+    /// The finding waiting for review for an item: by its own id, or by any id its finding covers, so a correction
+    /// sent from the cask also shows on the app.
+    func openFinding(for item: Item) -> Int? {
+        Submission.openFinding([item.id] + (verdicts[item.id]?.rule?.match ?? []), in: openFindings)
     }
 
     // MARK: AI lookup

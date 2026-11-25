@@ -307,6 +307,36 @@ public enum Submission {
         """
     }
 
+    /// The open issues of this repository, as GitHub lists them.
+    public static let openIssues = URL(string: "https://api.github.com/repos/Dunky13/kanarie/issues?state=open&per_page=100")!
+
+    /// Each item with a finding issue open, and the oldest such issue. An issue counts by its title, as the app writes it,
+    /// and names its items on `**Item:**` lines; pull requests, which GitHub lists among the issues, do not count.
+    /// Only the number is taken from an issue: the link the app opens is made from it, never read from the issue.
+    /// An issue naming more items than the app puts in one (1, or `bulkLimit` for "Findings: ") is not one it wrote, and counts for none.
+    public static func openFindings(_ data: Data) throws -> [String: Int] {
+        struct Present: Decodable {}
+        struct Issue: Decodable { var number: Int, title: String, body: String?, pull_request: Present? }
+        var found: [String: Int] = [:]
+        for issue in try JSONDecoder().decode([Issue].self, from: data) where issue.pull_request == nil {
+            let limit = issue.title.hasPrefix("Finding: ") ? 1 : issue.title.hasPrefix("Findings: ") ? bulkLimit : 0
+            let items = (issue.body ?? "").split(whereSeparator: \.isNewline).compactMap {
+                $0.prefixMatch(of: #/\*\*Item:\*\* `([^`]+)`/#).map { String($0.1) }
+            }
+            guard items.count <= limit else { continue }
+            for item in items { found[item] = min(found[item] ?? .max, issue.number) }
+        }
+        return found
+    }
+
+    /// The oldest open finding for any of these ids. An id is looked up as the app writes it into an issue, cut and cleaned.
+    public static func openFinding(_ ids: [String], in found: [String: Int]) -> Int? {
+        ids.compactMap { found[plain($0)] }.min()
+    }
+
+    /// The page of an issue in this repository.
+    public static func issue(_ number: Int) -> URL { URL(string: "https://github.com/Dunky13/kanarie/issues/\(number)")! }
+
     /// Text from a file on disk or from an AI lookup, for a code span on one line of the issue: no line breaks, nothing
     /// invisible (a line break becomes a space), and no backtick that would end the span. Inside the span Markdown does nothing: no links, mentions or headings.
     static func plain(_ text: String, limit: Int = 100) -> String {
