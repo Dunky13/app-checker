@@ -848,7 +848,7 @@ footer li:nth-child(4) { transform: rotate(1.5deg); background: var(--pink); }
 </template>
 
 <header class="street">
-  <a class="bill namesign" href="#main">
+  <a class="bill namesign" href="./">
     <img src="logo.png" width="48" height="48" alt="">
     <span>Kanarie</span>
   </a>
@@ -977,14 +977,14 @@ footer li:nth-child(4) { transform: rotate(1.5deg); background: var(--pink); }
     <h2 class="painted" id="points-h">He points. You decide.</h2>
     <figure class="bill shot tape">
       <img src="list.png" width="1400" height="914" loading="lazy" decoding="async" alt="The Kanarie window: a list of items that send telemetry, with Homebrew selected and the steps to switch its analytics off">
-      <figcaption>Every item shows what it collects, whether that is switched off on this Mac, and how to switch it off, with sources.</figcaption>
+      <figcaption>An item with a finding shows what it collects, whether that is switched off on this Mac, and how to switch it off, with sources.</figcaption>
     </figure>
     <div class="bill switches tape">
-      <p>Arie never flips a switch himself. For a yellow item you get three buttons:</p>
+      <p>Arie never flips a switch himself. When the switch is a command, you get one button, whichever fits:</p>
       <ul>
         <li><span class="btnlike">Run</span><span>runs the command once.</span></li>
-        <li><span class="btnlike">Add</span><span>puts the variable in the profile your login shell reads.</span></li>
-        <li><span class="btnlike">Copy</span><span>and you paste it wherever you like.</span></li>
+        <li><span class="btnlike">Add to ~/.zshrc</span><span>puts the variable in the profile your login shell reads.</span></li>
+        <li><span class="btnlike">Copy</span><span>for anything else: you paste it wherever you like.</span></li>
       </ul>
       <p>Run and Add ask first and show you the exact command or lines.</p>
       <p class="last">Kanarie changes nothing on its own.</p>
@@ -995,7 +995,7 @@ footer li:nth-child(4) { transform: rotate(1.5deg); background: var(--pink); }
     <div class="bill notice">
       <h2 id="rules-h">House rules <small>for a bird with a grievance</small></h2>
       <ol>
-        <li><b>No telemetry.</b> Kanarie goes online to fetch the findings once a day (you can switch that off), to check for updates after asking you once, and for AI lookups and finding submissions when you ask.</li>
+        <li><b>No telemetry.</b> Kanarie goes online to fetch the findings at launch and once a day (you can switch that off), to check for updates after asking you once, and for AI lookups and finding submissions when you ask.</li>
         <li><b>Open source, MIT licence.</b> Every line and every finding is <a href="https://github.com/Dunky13/kanarie">on GitHub</a>.</li>
         <li><b>Findings by hand, with sources.</b> One folder per app. A wrong one? Suggest a correction from the app. It opens a prefilled GitHub issue in your browser.</li>
         <li><b>Same rule for this page.</b> It loads nothing from anywhere else.</li>
