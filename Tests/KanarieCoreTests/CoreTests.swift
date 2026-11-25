@@ -355,6 +355,16 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         #expect(rule(.optOut).problems(curated: false) == ["the steps to switch it off are missing"])
         #expect(rule(.optIn).problems(curated: false) == ["the steps to switch it off are missing"])
     }
+
+    @Test func namesTheFieldOfALinkThatIsNotPlainHTTPS() {
+        var finding = rule(.optOut)
+        finding.optOut = OptOut(instructions: "i", url: "https://example.com/off")
+        finding.policyURL = "https://example.com/privacy"
+        finding.sources = ["https://example.com/a", "http://example.com/"]
+        #expect(finding.problems(curated: true) == ["not a plain https link in Sources: http://example.com/"])
+        finding.optOut?.url = "http://example.com/off"
+        #expect(finding.problems(curated: true).first == "not a plain https link in Documentation: http://example.com/off")
+    }
 }
 
 @Suite struct Scanning {

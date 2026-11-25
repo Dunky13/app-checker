@@ -47,12 +47,12 @@ struct SubmitView: View {
                     Text("On, can be switched off").tag(Telemetry.optOut)
                     Text("On, cannot be switched off").tag(Telemetry.forced)
                 }
-                TextField("What is collected", text: $draft.summary, prompt: Text("What is sent, and who receives it"), axis: .vertical).lineLimit(2...4)
+                TextField("What is collected", text: $draft.summary, prompt: Text("What is sent, and who receives it"), axis: .vertical).lineLimit(2...)
                 TextField("Privacy policy", text: $draft.policyURL, prompt: Text("https://"))
             }
             if [.optOut, .optIn].contains(draft.telemetry) {
                 Section("How to switch it off") {
-                    TextField("Steps", text: $draft.instructions, axis: .vertical).lineLimit(1...4)
+                    TextField("Steps", text: $draft.instructions, axis: .vertical).lineLimit(1...)
                     TextField("Command", text: $draft.command, prompt: Text("echo 'export NAME=0' >> ~/.zshrc"))
                     TextField("Documentation", text: $draft.optOutURL, prompt: Text("https://"))
                     if !draft.checks.isEmpty {
@@ -66,7 +66,7 @@ struct SubmitView: View {
                 }
             }
             Section {
-                TextField("Sources", text: $draft.sources, prompt: Text("One link per line"), axis: .vertical).lineLimit(2...5)
+                TextField("Sources", text: $draft.sources, prompt: Text("One link per line"), axis: .vertical).lineLimit(2...)
             } footer: {
                 Text("Pages that say so: the vendor's documentation, its source code or an issue.").frame(maxWidth: .infinity, alignment: .leading)
             }

@@ -141,11 +141,14 @@ public struct Rule: Codable, Sendable, Hashable {
         if [.optOut, .optIn].contains(telemetry), safeURL(optOut?.url) == nil { found.append("the documentation link for switching it off is missing or not an http(s) link") }
         // A curated link is read once, by whoever reviews the finding. After that it is a label to click.
         // So its host is written in plain letters, digits, dots and hyphens: no user name before it, no escape, no look-alike letter.
-        for link in [policyURL, optOut?.url].compactMap(\.self) + (sources ?? []) {
+        // Named as the submit form labels the field, so a person knows where to look.
+        let links = [("Privacy policy", policyURL), ("Documentation", optOut?.url)].compactMap { field, link in link.map { (field, $0) } }
+            + (sources ?? []).map { ("Sources", $0) }
+        for (field, link) in links {
             let host = link.dropFirst("https://".count).prefix { !"/?#".contains($0) }
             if safeURL(link) == nil || !link.hasPrefix("https://") || !link.allSatisfy(\.isASCII) || host.isEmpty
                 || !host.allSatisfy({ $0.isLetter || $0.isNumber || ".-:".contains($0) }) {
-                found.append("not a plain https link: \(link.prefix(200))")
+                found.append("not a plain https link in \(field): \(link.prefix(200))")
             }
         }
         // The same goes for the command: plain ASCII, so its end cannot sit behind a screen of blanks or stacked marks.
