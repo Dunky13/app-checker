@@ -167,6 +167,11 @@ A finding sent from the app arrives as an issue. `scripts/accept-finding.py <iss
   - Not checked: bash, sh and fish profiles in the app (tests only), a verdict turning green after Add (the test copy's login shell reads the real profile), and a command that asks for input or a password (it gets no input and fails or times out).
   - Limits: apps opened from the Dock or Finder do not read shell profiles, the alert says so. A tool that is not on the login shell's `PATH` fails to run with the shell's message.
 
+## Since 0.1.5, not released yet
+
+- **Where each part comes from.** The list and the detail pane mark provenance with an icon: a cloud for the Kanarie findings on GitHub, a computer for what Kanarie read on this Mac (a setting the finding's checks look at, or the offline file search), and sparkles for an AI lookup as before. `Verdict.readsThisMac` decides the computer icon on the state line.
+  - Evidence: a test copy (own home folder) showed the cloud on 11 findings rows and the computer on 12 file-search rows, the computer on gh's state line and the cloud on its summary and source note. 60 tests pass. Not seen: an AI-lookup item, since the test copy had none; its sparkles code is unchanged. `docs/screenshots/list.png` predates the icons.
+
 ## In 0.1.5
 
 - **Arie, the canary.** The README introduces Arie (a "Meet Arie" section): a canary who does not sing, except at something droning in the background, so quiet means nothing phones home. The owner asked not to name what inspired him. In the app: the menu shows one line in his voice under the title, from the loudest status ("Arie sings at 2 items with no known opt-out.", "Arie ruffles his feathers: 3 items can be switched off.", "Arie cocks his head: he cannot tell for 4 items.", "Arie dozes. Nothing hums." only when everything is green), a new-telemetry notification is titled "Arie sings at <name>" when one of them is red and "Arie ruffles his feathers at <name>" otherwise, with "It may send telemetry." before the verdict, and **About Kanarie** in the menu opens the standard About panel with a two-sentence credit. Verdicts, opt-out steps and accessibility labels stay factual.

@@ -43,6 +43,25 @@ extension Verdict.Source {
         case .none: "Nothing known"
         }
     }
+
+    /// Where the finding came from: a cloud for the Kanarie findings on GitHub, a computer for this Mac's own files.
+    var symbol: String? {
+        switch self {
+        case .rules: "cloud"
+        case .ai: "sparkles"
+        case .sdk: "desktopcomputer"
+        case .none: nil
+        }
+    }
+
+    var help: String {
+        switch self {
+        case .rules: "From the Kanarie findings on GitHub"
+        case .ai: "From an AI lookup, not verified"
+        case .sdk: "Found in its files on this Mac"
+        case .none: "Nothing known"
+        }
+    }
 }
 
 struct StatusIcon: View {
@@ -233,8 +252,8 @@ struct MainView: View {
                             .font(.caption).foregroundStyle(.secondary)
                     }
                     Spacer()
-                    if model.verdicts[item.id]?.source == .ai {
-                        Image(systemName: "sparkles").foregroundStyle(.secondary).help("From an AI lookup, not verified").accessibilityLabel("From an AI lookup, not verified")
+                    if let source = model.verdicts[item.id]?.source, let symbol = source.symbol {
+                        Image(systemName: symbol).foregroundStyle(.secondary).help(source.help).accessibilityLabel(source.help)
                     }
                     if model.analysing.contains(item.id) {
                         ProgressView().controlSize(.small).accessibilityLabel("Looking up")
@@ -348,9 +367,9 @@ struct DetailView: View {
 
     private var sourceNote: String {
         switch verdict.source {
-        case .rules: "From the Kanarie findings."
+        case .rules: "From the Kanarie findings, kept on GitHub."
         case .ai: "From an AI lookup. Not verified: check its sources before relying on it."
-        case .sdk: "The hint comes from an offline search of the installed files for analytics service names."
+        case .sdk: "The hint comes from an offline search of the installed files on this Mac for analytics service names."
         case .none: "Not in the Kanarie findings."
         }
     }
@@ -370,8 +389,16 @@ struct DetailView: View {
                     Label(item.version.isEmpty ? "No longer installed." : "No longer installed. Last seen: version \(item.version).", systemImage: "circle.slash")
                         .foregroundStyle(.secondary)
                 }
-                Text(verdict.state).font(.headline)
-                if let summary = verdict.rule?.summary { Text(summary) }
+                // Each part says where it comes from: this Mac, the Kanarie findings or an AI lookup.
+                let checked = verdict.readsThisMac ? "Checked on this Mac" : verdict.source.help
+                if let symbol = verdict.readsThisMac ? "desktopcomputer" : verdict.source.symbol {
+                    Label(verdict.state, systemImage: symbol).font(.headline).help(checked).accessibilityLabel("\(checked): \(verdict.state)")
+                } else {
+                    Text(verdict.state).font(.headline)
+                }
+                if let summary = verdict.rule?.summary, let symbol = verdict.source.symbol {
+                    Label(summary, systemImage: symbol).help(verdict.source.help).accessibilityLabel("\(verdict.source.help): \(summary)")
+                }
 
                 if let optOut = verdict.rule?.optOut {
                     GroupBox {
@@ -427,7 +454,11 @@ struct DetailView: View {
                 }
 
                 Divider()
-                Text(sourceNote).font(.callout).foregroundStyle(.secondary)
+                if let symbol = verdict.source.symbol {
+                    Label(sourceNote, systemImage: symbol).font(.callout).foregroundStyle(.secondary)
+                } else {
+                    Text(sourceNote).font(.callout).foregroundStyle(.secondary)
+                }
                 if verdict.source != .rules {
                     HStack {
                         Button(verdict.source == .ai ? "Look Up Again with AI" : "Look Up with AI", systemImage: "sparkles") {

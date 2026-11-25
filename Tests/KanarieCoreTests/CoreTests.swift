@@ -111,6 +111,14 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         #expect(Verdict(item: item, rules: [], aiRules: [:], sdks: [], probe: probe()).status == .unknown)
     }
 
+    @Test func saysWhetherTheStateWasReadFromThisMac() {
+        let item = Item(id: "brew:x", name: "x", version: "1", path: "/x")
+        let read = { (rules: [Rule], sdks: [String]) in Verdict(item: item, rules: rules, aiRules: [:], sdks: sdks, probe: probe()).readsThisMac }
+        #expect(read([rule(.optOut, disabledWhen: [Check(env: "OFF")])], []))
+        #expect(read([], ["Sentry"]))
+        #expect(!read([rule(.optOut)], []) && !read([rule(.forced)], ["Sentry"]) && !read([], []))
+    }
+
     @Test func anExtensionIsGreenOnlyWhenEveryEditorThatHasItIsOff() {
         let check = Check(json: "~/Library/Application Support/Code/User/settings.json", key: "telemetry.telemetryLevel", equals: "off")
         let rules = [rule(.optOut, disabledWhen: [check])]

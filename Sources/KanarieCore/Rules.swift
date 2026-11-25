@@ -279,6 +279,11 @@ public struct Verdict: Sendable, Equatable {
     public var rule: Rule?
     public var source: Source
 
+    /// Whether the state was read from this Mac: a setting the finding's checks look at, or the installed files.
+    public var readsThisMac: Bool {
+        source == .sdk || rule.map { [.optOut, .optIn].contains($0.telemetry) && !(($0.disabledWhen ?? []) + ($0.enabledWhen ?? [])).isEmpty } == true
+    }
+
     /// Curated rules win over AI lookups. Without either the item is unknown; SDK scan hits only add a hint.
     public init(item: Item, rules: [Rule], aiRules: [String: Rule], sdks: [String], probe: Probe) {
         func judge(_ rule: Rule) -> (Status, String) {
