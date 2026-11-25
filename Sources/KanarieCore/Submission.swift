@@ -48,6 +48,17 @@ public enum Submission {
             return rule
         }
 
+        /// The draft with each link that `Rule.plainLink` can fix fixed. Every other field stays as typed.
+        public var withPlainLinks: Draft {
+            let fix = { (field: String) in
+                field.split(separator: "\n", omittingEmptySubsequences: false)
+                    .map { Rule.plainLink($0.trimmingCharacters(in: .whitespaces)) ?? String($0) }.joined(separator: "\n")
+            }
+            var draft = self
+            (draft.policyURL, draft.optOutURL, draft.sources) = (fix(policyURL), fix(optOutURL), fix(sources))
+            return draft
+        }
+
         /// What keeps this draft from being a usable finding: the checks every curated finding passes, on the submitter's Mac already.
         public func problems(for item: Item) -> [String] {
             // Only where the field is in use: with another telemetry class or with kept checks it is not shown.

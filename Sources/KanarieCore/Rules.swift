@@ -144,12 +144,8 @@ public struct Rule: Codable, Sendable, Hashable {
         // Named as the submit form labels the field, so a person knows where to look.
         let links = [("Privacy policy", policyURL), ("Documentation", optOut?.url)].compactMap { field, link in link.map { (field, $0) } }
             + (sources ?? []).map { ("Sources", $0) }
-        for (field, link) in links {
-            let host = link.dropFirst("https://".count).prefix { !"/?#".contains($0) }
-            if safeURL(link) == nil || !link.hasPrefix("https://") || !link.allSatisfy(\.isASCII) || host.isEmpty
-                || !host.allSatisfy({ $0.isLetter || $0.isNumber || ".-:".contains($0) }) {
-                found.append("not a plain https link in \(field): \(link.prefix(200))")
-            }
+        for (field, link) in links where !Self.isPlainLink(link) {
+            found.append("not a plain https link in \(field): \(link.prefix(200))")
         }
         // The same goes for the command: plain ASCII, so its end cannot sit behind a screen of blanks or stacked marks.
         if let command = optOut?.command,
@@ -185,6 +181,30 @@ public struct Rule: Codable, Sendable, Hashable {
                 ? "Telemetry is off unless you agreed to it. Kanarie cannot read that choice on this Mac."
                 : "Telemetry stays off unless you enable it.")
         }
+    }
+
+    static func isPlainLink(_ link: String) -> Bool {
+        let host = link.dropFirst("https://".count).prefix { !"/?#".contains($0) }
+        return safeURL(link) != nil && link.hasPrefix("https://") && link.allSatisfy(\.isASCII) && !host.isEmpty
+            && host.allSatisfy({ $0.isLetter || $0.isNumber || ".-:".contains($0) })
+    }
+
+    /// The link with its scheme written as plain https, when that alone makes it plain: "http://" and "HTTPS://" are the
+    /// common slips. The host is never changed, since its rule keeps look-alike links out, and a link with a port is
+    /// left alone: http on port 80 is not https on port 80.
+    public static func plainLink(_ link: String) -> String? {
+        guard let colon = link.firstIndex(of: ":"), ["http", "https"].contains(link[..<colon].lowercased()) else { return nil }
+        let fixed = "https" + link[colon...]
+        return fixed != link && isPlainLink(fixed) && URL(string: fixed)?.port == nil ? fixed : nil
+    }
+
+    /// This rule with every link that `plainLink` can fix fixed, and nothing else changed.
+    public func withPlainLinks() -> Rule {
+        let fix = { (link: String) in Self.plainLink(link) ?? link }
+        var rule = self
+        (rule.policyURL, rule.sources) = (policyURL.map(fix), sources?.map(fix))
+        rule.optOut?.url = optOut?.url.map(fix)
+        return rule
     }
 
     static let blockedNote = "macOS did not let Kanarie read this app's setting. To allow it, open System Settings > Privacy & Security > Files & Folders, then rescan."

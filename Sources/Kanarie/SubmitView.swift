@@ -30,7 +30,7 @@ struct SubmitView: View {
     private var origin: String {
         switch source {
         case .rules: "Correction of the current finding"
-        case .ai: draft == initial ? "AI lookup, not edited" : "AI lookup, edited by hand"
+        case .ai: draft == initial ? "AI lookup, not edited" : draft == initial.withPlainLinks ? "AI lookup, links switched to https" : "AI lookup, edited by hand"
         case .sdk, .none: "Written by hand"
         }
     }
@@ -102,6 +102,10 @@ struct SubmitView: View {
                         .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
                 HStack {
+                    if draft.withPlainLinks != draft {
+                        Button("Switch Links to https", systemImage: "wand.and.stars") { draft = draft.withPlainLinks }
+                            .help("Writes http links as https. The cited pages are fetched over https before the issue opens.")
+                    }
                     Spacer()
                     if task != nil { ProgressView().controlSize(.small).accessibilityLabel("Fetching the cited pages") }
                     Button("Cancel") { dismiss() }
@@ -151,23 +155,36 @@ struct SubmitView: View {
     }
 }
 
-/// What a bulk submission sends for an item: its AI lookup as it is, or why the item is left out.
+/// Why an item is left out when only links that `Rule.plainLink` fixes keep it from being sent.
+let linksToFix = "Only its http links keep it out. Switch Links to https sends it with https links."
+
+/// What a bulk submission sends for an item: its AI lookup as it is, or with its links fixed when `fixLinks` and that
+/// is all it needs, or why the item is left out.
 @MainActor
-func bulkFinding(for item: Item, model: AppModel) -> (rule: Rule?, why: String) {
-    guard let verdict = model.verdicts[item.id] else { return (nil, "Not checked yet.") }
+func bulkFinding(for item: Item, model: AppModel, fixLinks: Bool = false) -> (rule: Rule?, why: String, linksFixed: Bool) {
+    guard let verdict = model.verdicts[item.id] else { return (nil, "Not checked yet.", false) }
     switch verdict.source {
-    case .rules: return (nil, "The Kanarie findings cover it. To change that, use Suggest a Correction…")
-    case .sdk, .none: return (nil, "No finding to send. Look it up with AI first, or write one with Submit a Finding…")
+    case .rules: return (nil, "The Kanarie findings cover it. To change that, use Suggest a Correction…", false)
+    case .sdk, .none: return (nil, "No finding to send. Look it up with AI first, or write one with Submit a Finding…", false)
     case .ai: break
     }
     // The form turns "unknown" into a telemetry class, which would be a claim the lookup did not make.
-    guard let found = verdict.rule, found.telemetry != .unknown else { return (nil, "The lookup could not tell. Use Submit a Finding… to write one.") }
-    let draft = Submission.Draft(from: found, item: item)
-    let problems = draft.problems(for: item)
-    guard problems.isEmpty else { return (nil, "Not ready: \(problems.joined(separator: "; ")). Fix it with Submit a Finding…") }
-    guard let sent = Submission.unedited(found, item: item) else { return (nil, "The form would change this lookup: it has steps or checks its kind of telemetry does not use, or it has no steps. Check it with Submit a Finding…") }
-    guard !model.wasSubmitted(item.id, sent) else { return (nil, "Already sent from this Mac. To send it again, use Submit a Finding…") }
-    return (sent, "")
+    guard let found = verdict.rule, found.telemetry != .unknown else { return (nil, "The lookup could not tell. Use Submit a Finding… to write one.", false) }
+    let already = (nil as Rule?, "Already sent from this Mac. To send it again, use Submit a Finding…", false)
+    let problems = Submission.Draft(from: found, item: item).problems(for: item)
+    if !problems.isEmpty {
+        // Fixed only when that leaves nothing else to fix and changes nothing but the links.
+        let fixed = Submission.unedited(found.withPlainLinks(), item: item)
+        guard let fixed, Submission.Draft(from: fixed, item: item).problems(for: item).isEmpty else {
+            return (nil, "Not ready: \(problems.joined(separator: "; ")). Fix it with Submit a Finding…", false)
+        }
+        // The single form records the lookup as it came, the bulk sheet the one it sent: either counts as sent.
+        guard !model.wasSubmitted(item.id, fixed), Submission.unedited(found, item: item).map({ model.wasSubmitted(item.id, $0) }) != true else { return already }
+        return fixLinks ? (fixed, "", true) : (nil, linksToFix, false)
+    }
+    guard let sent = Submission.unedited(found, item: item) else { return (nil, "The form would change this lookup: it has steps or checks its kind of telemetry does not use, or it has no steps. Check it with Submit a Finding…", false) }
+    guard !model.wasSubmitted(item.id, sent) else { return already }
+    return (sent, "", false)
 }
 
 /// Proposes the AI lookups of several items in one GitHub issue. Nothing can be edited here: an item that needs
@@ -177,7 +194,7 @@ struct BulkSubmitView: View {
     @Environment(\.dismiss) private var dismiss
     /// Decided when the sheet opens, in state: the view is made again whenever a verdict changes behind it, and the
     /// source checks are matched to these by position.
-    @State private var included: [(item: Item, rule: Rule)]
+    @State private var included: [(item: Item, rule: Rule, linksFixed: Bool)]
     /// The items left out, one group per reason in the order first met: with every item selected, most share a few reasons.
     @State private var leftOut: [(why: String, names: [String])]
     @State private var checks: [Submission.SourceCheck]?
@@ -185,25 +202,35 @@ struct BulkSubmitView: View {
     @State private var mayCopy = false
     @State private var failure: String?
 
+    private let items: [Item]
+
     init(model: AppModel, items: [Item]) {
-        self.model = model
-        var included: [(item: Item, rule: Rule)] = [], skipped: [(item: Item, why: String)] = []
+        (self.model, self.items) = (model, items)
+        let (included, groups) = Self.plan(items, model: model, fixLinks: false)
+        (_included, _leftOut) = (State(initialValue: included), State(initialValue: groups))
+    }
+
+    /// Which items go in the issue and why the others stay out. Planned again as a whole when links are fixed,
+    /// so the limit and the shared folders hold for the items that join.
+    @MainActor
+    private static func plan(_ items: [Item], model: AppModel, fixLinks: Bool) -> ([(item: Item, rule: Rule, linksFixed: Bool)], [(why: String, names: [String])]) {
+        var included: [(item: Item, rule: Rule, linksFixed: Bool)] = [], skipped: [(item: Item, why: String)] = []
         var folders: [String: String] = [:]
         for item in items {
-            let (rule, why) = bulkFinding(for: item, model: model)
+            let (rule, why, linksFixed) = bulkFinding(for: item, model: model, fixLinks: fixLinks)
             guard let rule else { skipped.append((item, why)); continue }
             // The script refuses an issue whose findings would share a file, so the later one waits for its own issue.
             guard let folder = Submission.folder(for: item, rule: rule) else { skipped.append((item, "No folder name can be made from its name. Use Submit a Finding…")); continue }
             if let other = folders[folder] { skipped.append((item, "It would go to the same folder as \(other). Send it on its own.")); continue }
             guard included.count < Submission.bulkLimit else { skipped.append((item, "One issue holds at most \(Submission.bulkLimit) findings. Send it in a next one.")); continue }
             folders[folder] = item.name
-            included.append((item, rule))
+            included.append((item, rule, linksFixed))
         }
         var groups: [(why: String, names: [String])] = []
         for (item, why) in skipped {
             if let index = groups.firstIndex(where: { $0.why == why }) { groups[index].names.append(item.name) } else { groups.append((why, [item.name])) }
         }
-        (_included, _leftOut) = (State(initialValue: included), State(initialValue: groups))
+        return (included, groups)
     }
 
     var body: some View {
@@ -213,6 +240,9 @@ struct BulkSubmitView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(entry.rule.name ?? entry.item.name)
                         Text(entry.rule.summary).font(.caption).foregroundStyle(.secondary).lineLimit(2).help(entry.rule.summary)
+                        if entry.linksFixed {
+                            Label("Links switched to https", systemImage: "wand.and.stars").font(.caption).foregroundStyle(.secondary)
+                        }
                         if let missing = checks?[index].missing, !missing.isEmpty {
                             Label("Not found on any cited page: \(missing.joined(separator: ", "))", systemImage: "exclamationmark.triangle")
                                 .font(.caption).foregroundStyle(.orange)
@@ -221,7 +251,7 @@ struct BulkSubmitView: View {
                     .accessibilityElement(children: .combine)
                 }
             } header: {
-                Text("Sent as AI lookups, not edited (\(included.count))")
+                Text(included.contains(where: \.linksFixed) ? "Sent as AI lookups (\(included.count))" : "Sent as AI lookups, not edited (\(included.count))")
             }
             if !leftOut.isEmpty {
                 Section("Left out (\(leftOut.map(\.names.count).reduce(0, +)))") {
@@ -232,6 +262,15 @@ struct BulkSubmitView: View {
                             Text(why).font(.caption).foregroundStyle(.secondary)
                         }
                         .accessibilityElement(children: .combine)
+                        if why == linksToFix {
+                            Button("Switch Links to https", systemImage: "wand.and.stars") {
+                                (included, leftOut) = Self.plan(items, model: model, fixLinks: true)
+                                // The source checks and the clipboard notice were for the items as they were.
+                                (checks, mayCopy, failure) = (nil, false, nil)
+                            }
+                            .disabled(task != nil)
+                            .help("Writes their http links as https. The cited pages are fetched over https before the issue opens.")
+                        }
                     }
                 }
             }
@@ -301,7 +340,7 @@ struct BulkSubmitView: View {
         let entries = zip(included, checks).map { entry, check in
             // As in SubmitView: what a lookup's own checks read stays on this Mac.
             let readings = entry.rule.disabledWhen == nil && entry.rule.enabledWhen == nil ? Submission.readings(entry.rule, item: entry.item, probe: model.probe) : nil
-            return Submission.Entry(item: entry.item, rule: entry.rule, origin: "AI lookup, not edited", readings: readings, sourceCheck: check, removed: model.removed.contains(entry.item.id))
+            return Submission.Entry(item: entry.item, rule: entry.rule, origin: entry.linksFixed ? "AI lookup, links switched to https" : "AI lookup, not edited", readings: readings, sourceCheck: check, removed: model.removed.contains(entry.item.id))
         }
         do {
             let issue = try Submission.issue(entries, appVersion: version)
