@@ -4,7 +4,8 @@
     scripts/accept-finding.py <issue number>...
 
 Writes each finding below findings/, runs the tests and shows the change. After your yes it signs the index
-and opens a pull request that closes the issues when it is merged. Review the change it shows, not the issue:
+and opens a pull request that closes the issues when it is merged. For one issue whose draft pull request the
+workflow opened already, it writes that branch again from main, signed, and marks the pull request ready. Review the change it shows, not the issue:
 an issue can hide text, and the script and the tests check the form of a finding, not whether it is true.
 Needs gh, a clean checkout, a terminal and the signing key (see scripts/sign-findings.sh).
 """
@@ -172,6 +173,24 @@ def targets(body, findings):
     return placed
 
 
+def write(number, login, placed):
+    """Writes the findings of one issue to their files: [(the pull request's line for it, its folder)]."""
+    described = []
+    for path, finding in placed:
+        file = ROOT / "findings" / path
+        # The login is in a code span, so the pull request does not notify the submitter.
+        described.append((f"- Closes #{number}: {'corrects' if file.exists() else 'adds'} `findings/{path}`, sent in by `{login}`.", file.parent.name))
+        file.parent.mkdir(exist_ok=True)
+        file.write_text(finding, encoding="utf-8")
+    return described
+
+
+def titled(folders):
+    """A title GitHub takes, which is also the commit's subject: the folders that fit, and how many more."""
+    fit = max([count for count in range(1, len(folders) + 1) if len(", ".join(folders[:count])) <= 100] or [1])
+    return "Findings: " + ", ".join(folders[:fit]) + (f" and {len(folders) - fit} more" if fit < len(folders) else "")
+
+
 def run(*command, **options):
     return subprocess.run(command, cwd=ROOT, check=True, text=True, **options)
 
@@ -204,8 +223,11 @@ def accept(issues):
     issues = [str(int(number)) for number in issues]
     branch = "findings-" + "-".join(issues)
     run("git", "fetch", "-q", "origin", "main")
-    if (run("git", "for-each-ref", f"refs/heads/{branch}", capture_output=True).stdout
-            or run("git", "ls-remote", "--heads", "origin", branch, capture_output=True).stdout):
+    remote = run("git", "ls-remote", "--heads", "origin", branch, capture_output=True).stdout.split()
+    # The workflow's draft for this one issue: written again here from main, so the yes is about what is shown.
+    draft = remote and len(issues) == 1 and json.loads(
+        run("gh", "pr", "list", "--head", branch, "--state", "open", "--json", "number", capture_output=True).stdout)
+    if run("git", "for-each-ref", f"refs/heads/{branch}", capture_output=True).stdout or (remote and not draft):
         sys.exit(f"The branch {branch} is there already, from an earlier run. Finish its pull request, or delete the branch "
                  "here and on GitHub and run this again.")
     run("git", "switch", "-q", "--no-track", "-c", branch, "origin/main")
@@ -225,19 +247,14 @@ def accept(issues):
                 placed = targets(issue["body"], findings())
             except ValueError as error:
                 sys.exit(f"#{number}: {error}.")
-            for path, finding in placed:
+            for path, _ in placed:
                 if path in written:
                     sys.exit(f"#{number}: another issue of this run already wrote findings/{path}. Take them one at a time.")
                 written.add(path)
-                file = ROOT / "findings" / path
-                # The login is in a code span, so the pull request does not notify the submitter.
-                lines.append(f"- Closes #{number}: {'corrects' if file.exists() else 'adds'} `findings/{path}`, sent in by `{issue['author']['login']}`.")
-                folders.append(file.parent.name)
-                file.parent.mkdir(exist_ok=True)
-                file.write_text(finding, encoding="utf-8")
-        # A title GitHub takes, which is also the commit's subject: the folders that fit, and how many more.
-        fit = max([count for count in range(1, len(folders) + 1) if len(", ".join(folders[:count])) <= 100] or [1])
-        title = "Findings: " + ", ".join(folders[:fit]) + (f" and {len(folders) - fit} more" if fit < len(folders) else "")
+            for line, folder in write(number, issue["author"]["login"], placed):
+                lines.append(line)
+                folders.append(folder)
+        title = titled(folders)
         # First the tests, with their own switch for an index that is not signed yet: what they reject is never signed.
         run("swift", "test", "--parallel", "--num-workers", "2", capture_output=True, env={**os.environ, "GITHUB_EVENT_NAME": "pull_request"})
         run("git", "add", "findings")
@@ -247,7 +264,7 @@ def accept(issues):
         # A "y" typed while the tests ran was not an answer to this question.
         termios.tcflush(sys.stdin, termios.TCIFLUSH)
         try:
-            answer = input("Sign the index with this change and open the pull request? [y/N] ")
+            answer = input(f"Sign the index with this change and {'mark the pull request ready' if draft else 'open the pull request'}? [y/N] ")
         except EOFError:
             answer = ""
         if answer.strip().lower() != "y":
@@ -271,7 +288,8 @@ def accept(issues):
         run("git", "branch", "-q", "-D", branch)
         raise
     try:
-        run("git", "push", "-q", "-u", "origin", branch)
+        # Over the workflow's draft only as it was when this run looked: an edited issue may have changed it since.
+        run("git", "push", "-q", *([f"--force-with-lease={branch}:{remote[0]}"] if draft else []), "-u", "origin", branch)
     except subprocess.CalledProcessError:
         print(f"The signed commit is on the branch {branch}, on this Mac only. Push it and open the pull request by hand, "
               "or delete the branch before you run this again.", file=sys.stderr)
@@ -280,10 +298,68 @@ def accept(issues):
         run("git", "checkout", "-q", "-")
     try:
         body = "\n".join(lines) + "\n\nThe findings passed the tests, and the maintainer read this change before signing the index."
-        run("gh", "pr", "create", "--base", "main", "--head", branch, "--title", title, "--body", body)
+        if draft:
+            number = str(draft[0]["number"])
+            run("gh", "pr", "edit", number, "--title", title, "--body-file", "-", input=body)
+            run("gh", "pr", "ready", number)
+        else:
+            run("gh", "pr", "create", "--base", "main", "--head", branch, "--title", title, "--body", body)
     except subprocess.CalledProcessError:
-        print(f"The branch {branch} is pushed, with the signed index. Open its pull request by hand.", file=sys.stderr)
+        print(f"The branch {branch} is pushed, with the signed index. {'Mark its pull request ready' if draft else 'Open its pull request'} by hand.", file=sys.stderr)
         raise
+
+
+def drafted(event):
+    """For the workflow, on a finding issue: its findings on the branch findings-<number>, in a draft pull request
+    that closes it. Nothing is signed. When an edit changes the findings, the branch is written again from main,
+    which also drops a signature made for the earlier text."""
+    issue = json.loads(Path(event).read_text(encoding="utf-8"))["issue"]
+    number = str(int(issue["number"]))
+    branch = f"findings-{number}"
+    if issue["state"] != "open":
+        return
+    pull = json.loads(run("gh", "pr", "list", "--head", branch, "--state", "open", "--json", "number,isDraft", capture_output=True).stdout)
+
+    def unready():
+        if pull and not pull[0]["isDraft"]:
+            run("gh", "pr", "ready", str(pull[0]["number"]), "--undo")
+
+    try:
+        placed = targets(issue["body"] or "", findings())
+    except ValueError as error:
+        # In a code block, so nothing from the issue shows as a link or notifies anyone.
+        run("gh", "issue", "comment", number, "--body-file", "-",
+            input=f"This issue could not be turned into a pull request:\n\n    {error}.\n\nEdit the issue to try again.")
+        # A pull request signed for the earlier text no longer matches the issue.
+        unready()
+        return
+    run("git", "fetch", "-q", "origin", "main")
+    if pull and run("git", "ls-remote", "--heads", "origin", branch, capture_output=True).stdout:
+        # What the branch changes below findings/, the index aside. The same findings need no new commit.
+        ref = f"refs/remotes/origin/{branch}"
+        run("git", "fetch", "-q", "origin", f"+refs/heads/{branch}:{ref}")
+        base = run("git", "merge-base", "origin/main", ref, capture_output=True).stdout.strip()
+        changed = [line.split("\t") for line in run("git", "diff", "--name-status", "--no-renames", base, ref, "--", "findings",
+                                                    ":!findings/index.json", ":!findings/index.json.sig", capture_output=True).stdout.splitlines()]
+        if all(status in "AM" for status, _ in changed) and dict(placed) == {
+                name.removeprefix("findings/"): run("git", "show", f"{ref}:{name}", capture_output=True).stdout for _, name in changed}:
+            return
+    run("git", "switch", "-q", "--no-track", "-C", branch, "origin/main")
+    described = write(number, issue["user"]["login"], placed)
+    title = titled([folder for _, folder in described])
+    run("git", "add", "findings")
+    run("git", "commit", "-q", "-s", "-m", title + "\n\n" + "\n".join(line for line, _ in described))
+    run("git", "push", "-q", "--force", "origin", branch)
+    body = ("\n".join(line for line, _ in described) + "\n\nWritten from the issue by a workflow. The findings passed the parser's checks; "
+            "the tests and the review are still to come. The index is not signed, so the app would not take this change: "
+            f"do not merge it as it is. To accept it, run `scripts/accept-finding.py {number}`. It writes the branch again from main, "
+            "shows the change, signs the index after your yes and marks this pull request ready. If the issue is edited "
+            "after that, this branch is written again unsigned and the pull request goes back to draft.")
+    if not pull:
+        run("gh", "pr", "create", "--draft", "--base", "main", "--head", branch, "--title", title, "--body-file", "-", input=body)
+        return
+    run("gh", "pr", "edit", str(pull[0]["number"]), "--title", title, "--body-file", "-", input=body)
+    unready()
 
 
 if __name__ == "__main__":
@@ -298,6 +374,8 @@ if __name__ == "__main__":
             except ValueError as error:
                 print(f"Refused: {error}.")
                 sys.exit(1)
+        elif len(arguments) == 2 and arguments[0] == "--draft":
+            drafted(arguments[1])
         elif arguments and all(argument.isascii() and argument.isdigit() for argument in arguments):
             accept(arguments)
         else:
