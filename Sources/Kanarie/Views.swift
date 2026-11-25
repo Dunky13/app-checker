@@ -52,7 +52,7 @@ struct StatusIcon: View {
         // Every status takes the room of the widest symbol, so the texts next to the icons line up.
         Image(systemName: Status.warn.symbol).hidden()
             .overlay { Image(systemName: status.symbol).foregroundStyle(status.color) }
-            .accessibilityElement().accessibilityLabel(status.label)
+            .accessibilityElement().accessibilityLabel(status.label).accessibilityAddTraits(.isImage)
     }
 }
 
@@ -72,7 +72,7 @@ struct MenuView: View {
             }
             ForEach([Status.bad, .warn, .ok, .unknown], id: \.self) { status in
                 HStack {
-                    StatusIcon(status: status)
+                    StatusIcon(status: status).accessibilityHidden(true)
                     Text(status.label)
                     Spacer()
                     Text("\(model.count(status))").monospacedDigit().foregroundStyle(.secondary)
@@ -130,14 +130,18 @@ struct MainView: View {
     /// What the open confirmation is about. Kept, because the list can change while it is open.
     @State private var pending: [Item] = []
 
+    /// What a choice of filters lets through, together with the search. The filter menu counts with it.
+    private func listed(_ status: Status?, _ source: SourceFilter, _ kind: String?) -> [Item] {
+        model.items.filter { item in
+            (status == nil || model.verdicts[item.id]?.status == status)
+                && source.allows(model.verdicts[item.id]?.source)
+                && (kind == nil || item.kind == kind)
+                && (search.isEmpty || item.name.localizedCaseInsensitiveContains(search) || item.id.localizedCaseInsensitiveContains(search))
+        }
+    }
+
     private var shown: [Item] {
-        model.items
-            .filter { item in
-                (filter == nil || model.verdicts[item.id]?.status == filter)
-                    && source.allows(model.verdicts[item.id]?.source)
-                    && (kind == nil || item.kind == kind)
-                    && (search.isEmpty || item.name.localizedCaseInsensitiveContains(search) || item.id.localizedCaseInsensitiveContains(search))
-            }
+        listed(filter, source, kind)
             .sorted { a, b in
                 let (ra, rb) = (model.verdicts[a.id]?.status.rank ?? 0, model.verdicts[b.id]?.status.rank ?? 0)
                 return ra != rb ? ra < rb : a.name.localizedCaseInsensitiveCompare(b.name) == .orderedAscending
@@ -193,8 +197,12 @@ struct MainView: View {
             .overlay {
                 if model.items.isEmpty, model.scanning {
                     ProgressView("Scanning installed software…")
+                } else if model.items.isEmpty {
+                    ContentUnavailableView("No software found", systemImage: "bird")
                 } else if shown.isEmpty, search.isEmpty {
                     ContentUnavailableView("No items match the filter", systemImage: "line.3.horizontal.decrease.circle")
+                } else if shown.isEmpty, filter != nil || source != .any || kind != nil {
+                    ContentUnavailableView("No results for “\(search)” with this filter", systemImage: "magnifyingglass")
                 } else if shown.isEmpty {
                     ContentUnavailableView.search(text: search)
                 }
@@ -223,21 +231,22 @@ struct MainView: View {
                 // A Menu with an explicit title: a bare toolbar Picker collapses to an unlabeled chevron.
                 Menu {
                     Picker("Status", selection: $filter) {
-                        Text("Any status").tag(Status?.none)
+                        // Each count is what choosing the entry would list, with the other filters and the search as they are.
+                        Text("Any status (\(listed(nil, source, kind).count))").tag(Status?.none)
                         ForEach([Status.bad, .warn, .ok, .unknown], id: \.self) { status in
-                            Label("\(status.label) (\(model.count(status)))", systemImage: status.symbol).tag(Status?.some(status))
+                            Label("\(status.label) (\(listed(status, source, kind).count))", systemImage: status.symbol).tag(Status?.some(status))
                         }
                     }
                     Picker("Verdict from", selection: $source) {
-                        Text("Any source").tag(SourceFilter.any)
+                        Text("Any source (\(listed(filter, .any, kind).count))").tag(SourceFilter.any)
                         ForEach([Verdict.Source.rules, .ai, .sdk, .none].map(SourceFilter.only) + [.notAI], id: \.self) { entry in
-                            Text("\(entry.label ?? "") (\(model.items.count { entry.allows(model.verdicts[$0.id]?.source) }))").tag(entry)
+                            Text("\(entry.label ?? "") (\(listed(filter, entry, kind).count))").tag(entry)
                         }
                     }
                     Picker("Kind", selection: $kind) {
-                        Text("Any kind").tag(String?.none)
+                        Text("Any kind (\(listed(filter, source, nil).count))").tag(String?.none)
                         ForEach(kindNames.sorted { $0.value < $1.value }, id: \.key) { kind in
-                            Text("\(kind.value) (\(model.items.count { $0.kind == kind.key }))").tag(String?.some(kind.key))
+                            Text("\(kind.value) (\(listed(filter, source, kind.key).count))").tag(String?.some(kind.key))
                         }
                     }
                 } label: {
@@ -287,7 +296,8 @@ struct DetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 HStack(alignment: .firstTextBaseline) {
-                    StatusIcon(status: verdict.status).font(.title)
+                    // The status is written out next to it.
+                    StatusIcon(status: verdict.status).font(.title).accessibilityHidden(true)
                     VStack(alignment: .leading) {
                         Text(verdict.rule?.name ?? item.name).font(.title2).bold()
                         Text(verdict.status.label).foregroundStyle(.secondary)
@@ -412,6 +422,7 @@ struct LookupLogView: View {
                 Button("Done") { dismiss() }.keyboardShortcut(.defaultAction)
             }
         }
+        .onExitCommand { dismiss() }
         .frame(width: 640, height: 600)
     }
 }

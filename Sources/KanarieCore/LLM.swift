@@ -200,10 +200,10 @@ public enum LLM {
     /// Reads a model reply for the items with these ids, in the order they were asked: a rule for each, or why there is none.
     /// One item may be answered with a bare object instead of an array.
     public static func parseRules(from text: String, ids: [String]) -> [Result<Rule, any Error>] {
-        let objects = answers(in: text)
-        let entry = { (object: [String: Any]) in object["entry"] as? Int ?? (object["entry"] as? String).flatMap(Int.init) }
+        let found = Result { try answers(in: text) }
         return ids.enumerated().map { index, id in
             Result {
+                let objects = try found.get()
                 guard !objects.isEmpty else { throw Failure(errorDescription: "The model did not answer with JSON.") }
                 // One item asked and one answered needs no number.
                 let mine = ids.count == 1 && objects.count == 1 ? objects : objects.filter { entry($0) == index + 1 }
@@ -228,19 +228,23 @@ public enum LLM {
     }
 
     /// The objects of the answer in a reply. Models put words around it: a citation like [1], an example in a fence of
-    /// its own, an object quoted from a page. So fenced parts are tried first, then every bracket in turn. JSON that
-    /// holds a verdict with an entry number wins; a verdict without one counts only when there is nothing better.
-    static func answers(in text: String) -> [[String: Any]] {
-        // shortcut: gives up after two million scanned characters, which only a reply full of unclosed brackets
-        // reaches; find the brackets in one pass with a stack if replies ever get that large.
+    /// its own, an object quoted from a page, an object around the list. So fenced parts are tried first, then every
+    /// bracket in turn. JSON that holds a verdict with an entry number wins; a verdict without one counts only when
+    /// there is nothing better. Of several numbered lists the one that answers the most entries counts: a quote from a
+    /// page answers one entry. Two that rank the same and differ cannot be told apart, so the reply is refused.
+    static func answers(in text: String) throws -> [[String: Any]] {
+        // shortcut: gives up after two million scanned scalars. Every unclosed bracket costs a scan to the end of the
+        // reply, so about twenty of them in a reply of 100 KB reach it (a fenced answer is found first); find the
+        // brackets in one pass with a stack if real replies ever do.
         var budget = 2_000_000
         // From an opening bracket to the one that closes it, minding strings.
         func span(_ text: Substring) -> Substring? {
             var depth = 0, inString = false, escaped = false
-            for index in text.indices {
+            // By scalar: a quote followed by a combining mark is one character, and would not end the string.
+            for index in text.unicodeScalars.indices {
                 budget -= 1
                 if budget < 0 { return nil }
-                let character = text[index]
+                let character = text.unicodeScalars[index]
                 if inString {
                     if escaped { escaped = false } else if character == "\\" { escaped = true } else if character == "\"" { inString = false }
                 } else if character == "\"" {
@@ -254,21 +258,35 @@ public enum LLM {
             }
             return nil
         }
-        var unnumbered: [[String: Any]]?
+        // Rank: how many entries a list answers, 0 without numbers. Unsure: another list of that rank said something else.
+        var best: (objects: [[String: Any]], rank: Int, unsure: Bool)?
         for candidate in blocks(of: text).filter(\.isCode).map(\.text) + [text] {
             var rest = candidate[...]
-            while budget > 0, let open = rest.firstIndex(where: { $0 == "[" || $0 == "{" }) {
-                rest = rest[rest.index(after: open)...]
+            while budget > 0, let open = rest.unicodeScalars.firstIndex(where: { $0 == "[" || $0 == "{" }) {
+                rest = rest[rest.unicodeScalars.index(after: open)...]
                 guard let found = span(candidate[open...]), let json = try? JSONSerialization.jsonObject(with: Data(found.utf8)) else { continue }
-                // What lies inside a JSON value is part of it, not an answer of its own.
-                rest = candidate[found.endIndex...]
-                let objects = json as? [[String: Any]] ?? (json as? [String: Any]).map { [$0] } ?? []
+                // A list may hold a stray note next to its objects.
+                let objects = (json as? [Any])?.compactMap { $0 as? [String: Any] } ?? (json as? [String: Any]).map { [$0] } ?? []
+                // Without a verdict it may be an object around the answer, so the search goes on inside it.
                 guard objects.contains(where: { $0["telemetry"] != nil }) else { continue }
-                if objects.contains(where: { $0["entry"] != nil }) { return objects }
-                unnumbered = unnumbered ?? objects
+                // What lies inside an answer is part of it, not an answer of its own.
+                rest = candidate[found.endIndex...]
+                let rank = Set(objects.compactMap(entry)).count
+                if let current = best, rank <= current.rank {
+                    // The whole text holds the fenced lists once more, and a model may repeat its answer: the same is no doubt.
+                    if rank == current.rank, !NSArray(array: objects).isEqual(to: current.objects) { best?.unsure = true }
+                } else {
+                    best = (objects, rank, false)
+                }
             }
         }
-        return unnumbered ?? []
+        if best?.unsure == true { throw Failure(errorDescription: "The model's reply holds two different answers, and which one it meant cannot be told.") }
+        return best?.objects ?? []
+    }
+
+    /// The number an answer gives for its entry. A page's object with some other "entry" has none.
+    private static func entry(_ object: [String: Any]) -> Int? {
+        object["entry"] as? Int ?? (object["entry"] as? String).flatMap(Int.init)
     }
 
     /// For one item, as the tests use it.
@@ -305,7 +323,7 @@ public enum LLM {
         switch backend {
         case let .claudeCLI(path, model):
             let stop = Shell.Stop()
-            let run = Task.detached {
+            let run = { @Sendable () throws -> Data in
                 // Empty working directory, no settings, CLAUDE.md, skills, hooks or MCP servers, web tools only:
                 // the model reads untrusted web pages, so it gets nothing personal and nothing it could act with.
                 let cwd = FileManager.default.temporaryDirectory.appendingPathComponent("kanarie-\(UUID().uuidString)")
@@ -322,7 +340,12 @@ public enum LLM {
             }
             let data: Data
             // Stopping a batch ends the CLI, so it does not go on using quota for an answer nobody waits for.
-            do { data = try await withTaskCancellationHandler { try await run.value } onCancel: { stop.now() } } catch let failure as Shell.Failure {
+            // On a thread of its own: the CLI runs for minutes, and a pooled thread held that long is missing for everything else.
+            do {
+                data = try await withTaskCancellationHandler {
+                    try await withCheckedThrowingContinuation { continuation in Thread.detachNewThread { continuation.resume(with: Result(catching: run)) } }
+                } onCancel: { stop.now() }
+            } catch let failure as Shell.Failure {
                 // A lookup that ran out of time or was stopped still shows how far it got.
                 log += transcript(ofStream: failure.output).turns
                 throw failure
