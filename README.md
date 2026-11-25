@@ -1,8 +1,9 @@
-<img src="Resources/logo.png" width="128" alt="Kanarie logo: a yellow canary on a perch, carrying a blue medieval shield">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/readme/banner-dark.svg">
+  <img src="docs/readme/banner-light.svg" width="100%" alt="Arie, a yellow canary with a blue shield, on a perch against a brick wall, next to a taped note: No humming on this Mac. House rule 1. Signed, Arie.">
+</picture>
 
 # Kanarie
-
-**No humming on this Mac.**
 
 A free, open-source menu bar app for macOS. It lists the software on your Mac, tells you which of it sends telemetry, and shows you how to switch that off.
 
@@ -33,10 +34,10 @@ Every item gets one of four colours. Arie has a mood for each.
 
 | Colour | Arie says | What it means |
 | --- | --- | --- |
-| **Red** (cross) | *Stop that hum!* | It sends telemetry, and there is no known way to switch it off. Arie sings at it, loudly. |
-| **Yellow** (warning) | *We want opt-outs!* | It sends telemetry, and there is a switch. Arie ruffles his feathers and shows you where it is. |
-| **Green** (check) | *Thank you for keeping it down.* | No telemetry, or you switched it off on this Mac. Arie dozes. |
-| **Grey** (question mark) | *Missing: the facts.* | Unknown. Arie cocks his head. Know the answer? Suggest a finding from the app. |
+| <img src="docs/readme/red.svg" width="18" alt="" align="top"> **Red** | *Stop that hum!* | It sends telemetry, and there is no known way to switch it off. Arie sings at it, loudly. |
+| <img src="docs/readme/yellow.svg" width="18" alt="" align="top"> **Yellow** | *We want opt-outs!* | It sends telemetry, and there is a switch. Arie ruffles his feathers and shows you where it is. |
+| <img src="docs/readme/green.svg" width="18" alt="" align="top"> **Green** | *Thank you for keeping it down.* | No telemetry, or you switched it off on this Mac. Arie dozes. |
+| <img src="docs/readme/grey.svg" width="18" alt="" align="top"> **Grey** | *Missing: the facts.* | Unknown. Arie cocks his head. Know the answer? Suggest a finding from the app. |
 
 The exact rules, and the crossed-out circle for apps you removed, are under [What the colours mean](#what-the-colours-mean).
 
@@ -50,7 +51,8 @@ An item with a finding shows what it collects, whether that is switched off on t
 - **Add to ~/.zshrc** puts the variable in the profile your login shell reads.
 - **Copy** is for anything else: you paste it wherever you like.
 
-**Run** and **Add** ask first and show you the exact command or lines. The details are under [What the colours mean](#what-the-colours-mean).
+> [!NOTE]
+> **Run** and **Add** ask first and show you the exact command or lines. The details are under [What the colours mean](#what-the-colours-mean).
 
 ![The form to suggest a correction, filled in with the Homebrew finding](docs/screenshots/submit.png)
 
@@ -72,11 +74,11 @@ Not covered: apps kept anywhere else, iPhone and iPad apps running on a Mac, and
 
 | Icon | Meaning |
 | --- | --- |
-| Green check | No telemetry, or telemetry is switched off on this Mac |
-| Yellow warning | Telemetry is on, or on by default where the setting cannot be read, and there is a way to switch it off. The item shows how, with a link, and a button for the command: **Run** it, **Add** the variable it sets to your shell profile, or **Copy** it. |
-| Red cross | Telemetry is on and no opt-out is known |
-| Grey question mark | Unknown |
-| Grey crossed-out circle | No longer installed. Listed last, so a finding can still be submitted for it; its verdict is in the detail pane. |
+| <img src="docs/readme/green.svg" width="18" alt="" align="top"> Green check | No telemetry, or telemetry is switched off on this Mac |
+| <img src="docs/readme/yellow.svg" width="18" alt="" align="top"> Yellow warning | Telemetry is on, or on by default where the setting cannot be read, and there is a way to switch it off. The item shows how, with a link, and a button for the command: **Run** it, **Add** the variable it sets to your shell profile, or **Copy** it. |
+| <img src="docs/readme/red.svg" width="18" alt="" align="top"> Red cross | Telemetry is on and no opt-out is known |
+| <img src="docs/readme/grey.svg" width="18" alt="" align="top"> Grey question mark | Unknown |
+| <img src="docs/readme/removed.svg" width="18" alt="" align="top"> Grey crossed-out circle | No longer installed. Listed last, so a finding can still be submitted for it; its verdict is in the detail pane. |
 
 A verdict comes from, in this order:
 
