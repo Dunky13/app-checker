@@ -1,8 +1,9 @@
 {
   "version": 1,
-  "serial": 1795553017,
+  "serial": 1795563173,
   "files": {
     "aider/0.json": "1e3d819714573c1d0782f7e8d8fb9d815f8e8a160dbe7e001e4f8dcadf7e4284",
+    "alfred-5/0.json": "41b2df3d631ad9d43a3d7707e98842b8a023d97e98c35676836a8b58e977923b",
     "angular-cli/0.json": "9e36d1085e11124a24f9d70f985c42868faba34c9137c486269f15c8bdc91148",
     "astro/0.json": "9c76e34df99ae3c9a68c80daa0836dfa5d8eb8f92e70c35a69da79d68e36c5f7",
     "aws-sam-cli/0.json": "b5ddadeb9ee6c6eee654d222b80a77fe8b2591e6c67147e63c176c9c4ae76625",
