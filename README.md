@@ -1,37 +1,62 @@
-<img src="Resources/logo.png" width="128" alt="Kanarie logo: a yellow canary on a perch, carrying a blue medieval shield">
-
 # Kanarie
 
-Kanarie is Dutch for canary, as in the canary in a coal mine: it lets you know which apps have set up telemetry on your system.
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/readme/banner-dark.svg">
+  <img src="docs/readme/banner-light.svg" width="100%" alt="Arie, a yellow canary with a blue shield, on a perch against a brick wall, next to a taped note: No humming on this Mac. House rule 1. Signed, Arie.">
+</picture>
 
-It is a macOS menu bar app that lists the software on your Mac and tells you whether it sends telemetry, whether you have switched that off, and how to switch it off.
+A free, open-source menu bar app for macOS. It lists the software on your Mac, tells you which of it sends telemetry, and shows you how to switch that off.
 
-Homepage: https://dunky13.github.io/kanarie/
+[Homepage](https://dunky13.github.io/kanarie/) · [Install](#install) · [Findings](#findings)
 
-Many tools collect usage data unless you opt out, and the opt-out is often an environment variable that is only mentioned in an issue tracker. Kanarie keeps those switches in one folder of findings, one per app, and checks them against your Mac.
+Kanarie is Dutch for canary, as in the canary in a coal mine. Its canary is Arie, and he has a complaint.
 
-## Meet Arie
+> **Noise complaint**<br>
+> **To:** whatever drones in the background<br>
+> **From:** Arie, canary, in your menu bar<br>
+> **About:** the hum
+>
+> I do not sing. Not for seed, not for company, not for anyone. But a hum in the background I cannot stand.
+>
+> So I keep an ear on this Mac. I go through your apps, Homebrew, the commands in `~/.local/bin`, your global npm and pnpm packages and your editor extensions, and I give each one a colour.
+>
+> I run in the background and start at login. When something new or updated may send telemetry, I send you a notification. Otherwise I keep my beak shut.
+>
+> Kanarie itself sends no telemetry. Obviously.
+>
+> Yours, crossly, Arie
 
-Arie is Kanarie's canary, and he does not sing. Not for seed, not for company, not for anyone. Only when something starts droning in the background does he get so cross that he sings right back at it.
+**Lost: one opt-out.** Last seen in an issue tracker. Answers to the name of an environment variable. Many tools collect usage data unless you opt out, and the switch is easy to miss. Kanarie keeps those switches in one folder of findings, one per app, and checks them against your Mac.
 
-Miners once took canaries underground to warn them of bad air. Arie keeps watch over your Mac instead, from his perch in the menu bar. While he has nothing to complain about, he keeps his beak shut and dozes.
+## His demands, colour-coded
 
-But Arie cannot stand a hum in the background. When something new or updated on your Mac may send telemetry, quietly droning data off your Mac, he lets you know: he sings at it, or at least ruffles his feathers. That is the notification you get.
+Every item gets one of four colours. Arie has a mood for each.
 
-- **Green:** Arie dozes. There is nothing to hear, or you switched it off.
-- **Yellow:** Arie ruffles his feathers. Something hums, but there is a switch, and he shows you where it is.
-- **Red:** Arie sings at it, loudly. It hums, and there is no known way to switch it off.
-- **Grey:** Arie cocks his head. He cannot tell.
+| Colour | Arie says | What it means |
+| --- | --- | --- |
+| <img src="docs/readme/red.svg" width="18" alt="cross" align="top"> **Red** | *Stop that hum!* | It sends telemetry, and there is no known way to switch it off. Arie sings at it, loudly. |
+| <img src="docs/readme/yellow.svg" width="18" alt="warning" align="top"> **Yellow** | *We want opt-outs!* | It sends telemetry, and there is a switch. Arie ruffles his feathers and shows you where it is. |
+| <img src="docs/readme/green.svg" width="18" alt="check" align="top"> **Green** | *Thank you for keeping it down.* | No telemetry, or you switched it off on this Mac. Arie dozes. |
+| <img src="docs/readme/grey.svg" width="18" alt="question mark" align="top"> **Grey** | *Missing: the facts.* | Unknown. Arie cocks his head. Know the answer? Suggest a finding from the app. |
 
-## Screenshots
+The exact rules, and the crossed-out circle for apps you removed, are under [What the colours mean](#what-the-colours-mean).
+
+## He points. You decide.
 
 ![The Kanarie window: a list of items that send telemetry, with Homebrew selected and the steps to switch its analytics off](docs/screenshots/list.png)
 
-Every item shows what it collects, whether that is switched off on this Mac, and how to switch it off, with sources.
+An item with a finding shows what it collects, whether that is switched off on this Mac, and how to switch it off, with sources. Arie never flips a switch himself. When the switch is a command, you get one button, whichever fits:
+
+- **Run** runs the command once.
+- **Add to** your shell profile (`~/.zshrc` for zsh) puts the variable in the profile your login shell reads.
+- **Copy** is for anything else: you paste it wherever you like.
+
+> [!NOTE]
+> **Run** and **Add** ask first and show you the exact command or lines. The details are under [What the colours mean](#what-the-colours-mean).
 
 ![The form to suggest a correction, filled in with the Homebrew finding](docs/screenshots/submit.png)
 
-A finding can be proposed or corrected from the app. Kanarie checks it and then opens a prefilled GitHub issue in your browser. When a finding for the item is already waiting for review, the app links to that issue instead (**Open Finding #…**), so you can add to it rather than open another.
+A wrong or missing finding? Propose or correct it from the app. Kanarie checks it, then hands it to GitHub as a prefilled issue in your browser. When a finding for the item is already waiting for review, the app links to that issue instead (**Open Finding #…**), so you can add to it rather than open another.
 
 ## What it checks
 
@@ -49,11 +74,11 @@ Not covered: apps kept anywhere else, iPhone and iPad apps running on a Mac, and
 
 | Icon | Meaning |
 | --- | --- |
-| Green check | No telemetry, or telemetry is switched off on this Mac |
-| Yellow warning | Telemetry is on, or on by default where the setting cannot be read, and there is a way to switch it off. The item shows how, with a link, and a button for the command: **Run** it, **Add** the variable it sets to your shell profile, or **Copy** it. |
-| Red cross | Telemetry is on and no opt-out is known |
-| Grey question mark | Unknown |
-| Grey crossed-out circle | No longer installed. Listed last, so a finding can still be submitted for it; its verdict is in the detail pane. |
+| <img src="docs/readme/green.svg" width="18" alt="" align="top"> Green check | No telemetry, or telemetry is switched off on this Mac |
+| <img src="docs/readme/yellow.svg" width="18" alt="" align="top"> Yellow warning | Telemetry is on, or on by default where the setting cannot be read, and there is a way to switch it off. The item shows how, with a link, and a button for the command: **Run** it, **Add** the variable it sets to your shell profile, or **Copy** it. |
+| <img src="docs/readme/red.svg" width="18" alt="" align="top"> Red cross | Telemetry is on and no opt-out is known |
+| <img src="docs/readme/grey.svg" width="18" alt="" align="top"> Grey question mark | Unknown |
+| <img src="docs/readme/removed.svg" width="18" alt="" align="top"> Grey crossed-out circle | No longer installed. Listed last, so a finding can still be submitted for it; its verdict is in the detail pane. |
 
 A verdict comes from, in this order:
 
@@ -61,11 +86,11 @@ A verdict comes from, in this order:
 2. **An AI lookup**, only when you ask for one. The result is marked as unverified and lists its sources.
 3. **An offline hint.** For other apps, Homebrew items and commands, the app searches the program file for the names of well-known analytics services. A match stays grey: it is a lead worth looking up, not proof. npm packages and extensions are not searched.
 
-Kanarie changes nothing on its own. When the switch is a command, you can have it run once (**Run**), or, when the command only sets a variable, have the variable added to the profile your login shell reads (**Add to ~/.zshrc**: `.zshrc` for zsh, also below `ZDOTDIR`; for bash the first of `~/.bash_profile`, `~/.bash_login` and `~/.profile` that exists; `~/.profile` for sh; `config.fish` for fish, also below `XDG_CONFIG_HOME`; each in its own syntax). Both ask first and show the exact command or lines. **Copy** is offered instead for another shell, a command that is not plain short ASCII, and a variable that cannot be added safely: quoting, other redirections or files, a value other than a switch (`0`, `1`, `true`, `false`, `yes`, `no`, `on`, `off`, `disabled`), or a variable that changes what runs, where traffic goes or what is trusted (`PATH`, `DYLD_*`, `*_PROXY`, `*TLS*`, `*VERIFY*` and the like). A yellow item stays yellow until the app can see the switch: variables are read from your login shell, so a variable must be in your shell profile, and some switches (a setting inside an app, or a tool's own `telemetry disable` command) cannot be read at all. The item says which case applies.
+Kanarie changes nothing on its own. When the switch is a command, you can have it run once (**Run**), or, when the command only sets a variable, have the variable added to the profile your login shell reads (**Add to** followed by the file: `.zshrc` for zsh, also below `ZDOTDIR`; for bash the first of `~/.bash_profile`, `~/.bash_login` and `~/.profile` that exists; `~/.profile` for sh; `config.fish` for fish, also below `XDG_CONFIG_HOME`; each in its own syntax). Both ask first and show the exact command or lines. **Copy** is offered instead for another shell, a command that is not plain short ASCII, and a variable that cannot be added safely: quoting, other redirections or files, a value other than a switch (`0`, `1`, `true`, `false`, `yes`, `no`, `on`, `off`, `disabled`), or a variable that changes what runs, where traffic goes or what is trusted (`PATH`, `DYLD_*`, `*_PROXY`, `*TLS*`, `*VERIFY*` and the like). A yellow item stays yellow until the app can see the switch: variables are read from your login shell, so a variable must be in your shell profile, and some switches (a setting inside an app, or a tool's own `telemetry disable` command) cannot be read at all. The item says which case applies.
 
 ## Install
 
-With [Homebrew](https://brew.sh):
+Quiet wanted? Free, for macOS 15 or later. With [Homebrew](https://brew.sh), in two steps:
 
 ```sh
 brew tap dunky13/kanarie https://github.com/Dunky13/kanarie
@@ -74,15 +99,15 @@ brew install --cask dunky13/kanarie/kanarie
 
 Or download the latest `Kanarie-<version>-universal.dmg` from [Releases](https://github.com/Dunky13/kanarie/releases), open it and drag Kanarie onto Applications.
 
-Either way it needs macOS 15 or later and updates itself through [Sparkle](https://sparkle-project.org). The cask lives in this repository ([Casks/kanarie.rb](Casks/kanarie.rb)), which is why the tap needs the address. Use the full name as shown for the first install: Homebrew refuses a short name from a tap it has not been told to trust.
+Open Kanarie from Applications, then look for the bird in your menu bar. While its list window is open it is also in the Dock and the app switcher (Command-Tab). If you use a menu bar manager, or your Mac has a notch and a full menu bar, the icon may be hidden: opening the app again from Finder shows the list.
+
+Both installs update themselves through [Sparkle](https://sparkle-project.org). The cask lives in this repository ([Casks/kanarie.rb](Casks/kanarie.rb)), which is why the tap needs the address. Use the full name as shown for the first install: Homebrew refuses a short name from a tap it has not been told to trust.
 
 If you installed it with Homebrew, remove it again, with its settings and the API key of the AI lookup, in one go:
 
 ```sh
 brew uninstall --cask --zap dunky13/kanarie/kanarie && brew untap dunky13/kanarie
 ```
-
-Kanarie lives in the menu bar: look for the bird. While its list window is open it is also in the Dock and the app switcher (Command-Tab). If you use a menu bar manager, or your Mac has a notch and a full menu bar, the icon may be hidden: opening the app again from Finder shows the list.
 
 ## AI lookup
 
@@ -107,7 +132,7 @@ The Claude Code CLI is started without your Claude settings, and with its own me
 
 ## Privacy
 
-Kanarie has no telemetry. It talks to the network in four cases:
+Kanarie itself sends no telemetry. It talks to the network in four cases:
 
 - At launch and then once a day it downloads the findings from this repository (can be switched off in Settings). It fetches every file that changed, not only those for apps you have, so the requests say nothing about your Mac. Files are only used if they match the list the maintainer signed. With the same setting, it reads the list of open finding issues (when you look at an item or submit several, at most every ten minutes, or a minute after the network was not there), to link to a finding that is waiting for review. That list is the same for everyone too.
 - Sparkle checks this repository for updates, after asking you once. The anonymous system profile is disabled.
