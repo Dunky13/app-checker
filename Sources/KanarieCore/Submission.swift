@@ -84,6 +84,16 @@ public enum Submission {
         return lines(rule.disabledWhen, "switches it off") + lines(rule.enabledWhen, "switches it on") + ["Verdict with this finding: \(colour). \(verdict.state)"]
     }
 
+    /// A lookup as a bulk submission sends it: for this item, and only when the form would send the same, so that
+    /// "not edited" holds. The form fills in what a lookup left out, such as steps for an opt-in without any.
+    public static func unedited(_ found: Rule, item: Item) -> Rule? {
+        var sent = found
+        sent.match = [item.id]
+        // A lookup writes "no checks" as an empty list, the form leaves the field out: the same finding.
+        (sent.disabledWhen, sent.enabledWhen) = (sent.disabledWhen?.isEmpty == false ? sent.disabledWhen : nil, sent.enabledWhen?.isEmpty == false ? sent.enabledWhen : nil)
+        return Draft(from: found, item: item).rule(for: item) == sent ? sent : nil
+    }
+
     /// Whether the names a finding relies on appear literally on the pages it cites.
     /// An invented variable or settings key is the main risk of an AI lookup, and this catches it without trusting anyone.
     public struct SourceCheck: Hashable, Sendable {

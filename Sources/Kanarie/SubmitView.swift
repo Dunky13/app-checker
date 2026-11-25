@@ -157,10 +157,7 @@ func bulkFinding(for item: Item, model: AppModel) -> (rule: Rule?, why: String) 
     let draft = Submission.Draft(from: found, item: item)
     let problems = draft.problems(for: item)
     guard problems.isEmpty else { return (nil, "Not ready: \(problems.joined(separator: "; ")). Fix it with Submit a Finding…") }
-    // "Not edited" must hold: the form fills in what a lookup left out, such as steps for an opt-in without any.
-    var sent = found
-    sent.match = [item.id]
-    guard draft.rule(for: item) == sent else { return (nil, "The form would change this lookup. Check it with Submit a Finding…") }
+    guard let sent = Submission.unedited(found, item: item) else { return (nil, "The form would change this lookup. Check it with Submit a Finding…") }
     return (sent, "")
 }
 

@@ -991,6 +991,16 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         found.optOut = OptOut(instructions: "Set the variable.", command: "echo 'export EXAMPLE_TELEMETRY=0' >> ~/.zshrc", url: "https://example.com/docs")
         found.disabledWhen = [Check(env: "EXAMPLE_TELEMETRY", equals: "0")]
         #expect(Submission.Draft(from: found, item: item).rule(for: item) == found)
+        #expect(Submission.unedited(found, item: item) == found)
+        // A lookup writes "no checks" as empty lists: still unedited, sent without them.
+        var empty = Rule(match: ["brew:x"], telemetry: .forced, summary: "Usage events.")
+        (empty.name, empty.sources, empty.disabledWhen, empty.enabledWhen) = ("Example CLI", ["https://example.com/docs"], [], [])
+        #expect(Submission.unedited(empty, item: item)?.disabledWhen == nil)
+        #expect(Submission.unedited(empty, item: item)?.enabledWhen == nil)
+        // An opt-in without steps would get them filled in by the form, so it is not sent as unedited.
+        var optIn = Rule(match: ["brew:x"], telemetry: .optIn, summary: "Usage events.")
+        (optIn.name, optIn.sources) = ("Example CLI", ["https://example.com/docs"])
+        #expect(Submission.unedited(optIn, item: item) == nil)
         for telemetry in [Telemetry.none, .forced] {
             var other = Rule(match: ["brew:x"], telemetry: telemetry, summary: "Usage events.")
             (other.name, other.sources) = ("Example CLI", ["https://example.com/docs"])
