@@ -6,6 +6,8 @@ Kanarie is Dutch for canary, as in the canary in a coal mine: it lets you know w
 
 It is a macOS menu bar app that lists the software on your Mac and tells you whether it sends telemetry, whether you have switched that off, and how to switch it off.
 
+Homepage: https://dunky13.github.io/kanarie/
+
 Many tools collect usage data unless you opt out, and the opt-out is often an environment variable that is only mentioned in an issue tracker. Kanarie keeps those switches in one folder of findings, one per app, and checks them against your Mac.
 
 ## Meet Arie
@@ -105,7 +107,7 @@ The Claude Code CLI is started without your Claude settings, and with its own me
 
 ## Privacy
 
-Kanarie has no telemetry. It talks to the network in three cases:
+Kanarie has no telemetry. It talks to the network in four cases:
 
 - At launch and then once a day it downloads the findings from this repository (can be switched off in Settings). It fetches every file that changed, not only those for apps you have, so the requests say nothing about your Mac. Files are only used if they match the list the maintainer signed.
 - Sparkle checks this repository for updates, after asking you once. The anonymous system profile is disabled.
