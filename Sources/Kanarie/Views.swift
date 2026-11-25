@@ -43,6 +43,26 @@ extension Verdict.Source {
         case .none: "Nothing known"
         }
     }
+
+    /// Where the finding came from: a cloud for the Kanarie findings on GitHub, a computer for this Mac's own files.
+    var symbol: String? {
+        switch self {
+        case .rules: "cloud"
+        case .ai: "sparkles"
+        case .sdk: "desktopcomputer"
+        case .none: nil
+        }
+    }
+
+    var help: String {
+        switch self {
+        case .rules: "From the Kanarie findings on GitHub"
+        case .ai: "From an AI lookup, not verified"
+        // Tense-neutral: a removed item keeps the hint from when it was installed.
+        case .sdk: "From a search of its files on this Mac"
+        case .none: "Nothing known"
+        }
+    }
 }
 
 struct StatusIcon: View {
@@ -233,8 +253,8 @@ struct MainView: View {
                             .font(.caption).foregroundStyle(.secondary)
                     }
                     Spacer()
-                    if model.verdicts[item.id]?.source == .ai {
-                        Image(systemName: "sparkles").foregroundStyle(.secondary).help("From an AI lookup, not verified").accessibilityLabel("From an AI lookup, not verified")
+                    if let source = model.verdicts[item.id]?.source, let symbol = source.symbol {
+                        Image(systemName: symbol).foregroundStyle(.secondary).help(source.help).accessibilityLabel(source.help)
                     }
                     if model.analysing.contains(item.id) {
                         ProgressView().controlSize(.small).accessibilityLabel("Looking up")
@@ -271,7 +291,8 @@ struct MainView: View {
                     Button("Look Up \(lookupCandidates.count) Items with AI", systemImage: "sparkles") { (pending, confirmBatch) = (lookupCandidates, true) }
                         .disabled(lookupCandidates.isEmpty || model.batch != nil)
                     // Always open: the sheet says which items go and why the others do not.
-                    Button("Submit Findings…", systemImage: "square.and.pencil") { submitting = picked }
+                    Button("Submit Findings…", systemImage: "square.and.pencil") { Task { await model.checkOpenFindings(); submitting = picked } }
+                        .disabled(model.readingOpenFindings)
                         .help("Sends their AI lookups, as they are, in one GitHub issue")
                 }
             // A single selected item stays open when its new verdict moves it out of the filtered list.
@@ -302,7 +323,12 @@ struct MainView: View {
                     Picker("Verdict from", selection: $source) {
                         Text("Any source (\(listed(filter, .any, kind).count))").tag(SourceFilter.any)
                         ForEach([Verdict.Source.rules, .ai, .sdk, .none].map(SourceFilter.only) + [.notAI], id: \.self) { entry in
-                            Text("\(entry.label ?? "") (\(listed(filter, entry, kind).count))").tag(entry)
+                            let title = "\(entry.label ?? "") (\(listed(filter, entry, kind).count))"
+                            if case .only(let source) = entry, let symbol = source.symbol {
+                                Label(title, systemImage: symbol).tag(entry)
+                            } else {
+                                Text(title).tag(entry)
+                            }
                         }
                     }
                     Picker("Kind", selection: $kind) {
@@ -331,7 +357,7 @@ struct MainView: View {
         .confirmationDialog("Look up \(pending.count) items with AI?", isPresented: $confirmBatch) {
             Button("Look Up \(pending.count) Items") { model.analyseAll(pending) }
         } message: {
-            Text("A lookup sends each item's name, identifier and version to the AI backend chosen in Settings and uses your quota or credits. The items go out in groups of \(LLM.batchSize), one group at a time. Stopping ends the group that is running without an answer.")
+            Text("A lookup sends each item's name, identifier and version to the AI backend chosen in Settings and uses your quota or credits. The items go out in groups of \(LLM.batchSize), one group at a time. Stopping ends the group that is running without an answer.\(pending.contains { model.isEdited($0.id) } ? " A new lookup replaces the changes you saved on this Mac." : "")")
         }
         .sheet(isPresented: $showSettings) { SettingsView() }
         .sheet(isPresented: Binding { submitting != nil } set: { if !$0 { submitting = nil } }) { BulkSubmitView(model: model, items: submitting ?? []) }
@@ -349,12 +375,16 @@ struct DetailView: View {
     @State private var working = false
     @State private var submitting = false
     @State private var log: OpenedLog?
+    @State private var confirmRelookup = false
 
     private var sourceNote: String {
         switch verdict.source {
-        case .rules: "From the Kanarie findings."
-        case .ai: "From an AI lookup. Not verified: check its sources before relying on it."
-        case .sdk: "The hint comes from an offline search of the installed files for analytics service names."
+        case .rules: "From the Kanarie findings, kept on GitHub."
+        case .ai: model.isEdited(item.id) ? "From an AI lookup, edited by you on this Mac. Not verified: check its sources before relying on it."
+            : "From an AI lookup. Not verified: check its sources before relying on it."
+        case .sdk: model.removed.contains(item.id)
+            ? "The hint came from an offline search of its files on this Mac, while it was installed, for analytics service names."
+            : "The hint comes from an offline search of the installed files on this Mac for analytics service names."
         case .none: "Not in the Kanarie findings."
         }
     }
@@ -374,8 +404,22 @@ struct DetailView: View {
                     Label(item.version.isEmpty ? "No longer installed." : "No longer installed. Last seen: version \(item.version).", systemImage: "circle.slash")
                         .foregroundStyle(.secondary)
                 }
-                Text(verdict.state).font(.headline)
-                if let summary = verdict.rule?.summary { Text(summary) }
+                // Each part says where it comes from: this Mac, the Kanarie findings or an AI lookup.
+                // An AI lookup keeps its sparkles even when read here: the AI chose what to read.
+                let checked = switch (verdict.readsThisMac, verdict.source) {
+                case (true, .ai): "Checked on this Mac with checks an AI lookup suggested, not verified"
+                case (true, .sdk): verdict.source.help
+                case (true, _): "Checked on this Mac"
+                case (false, _): verdict.source.help
+                }
+                if let symbol = verdict.readsThisMac && verdict.source != .ai ? "desktopcomputer" : verdict.source.symbol {
+                    Label(verdict.state, systemImage: symbol).font(.headline).help(checked).accessibilityLabel("\(checked): \(verdict.state)")
+                } else {
+                    Text(verdict.state).font(.headline)
+                }
+                if let summary = verdict.rule?.summary, !summary.isEmpty, let symbol = verdict.source.symbol {
+                    Label(summary, systemImage: symbol).help(verdict.source.help).accessibilityLabel("\(verdict.source.help): \(summary)")
+                }
 
                 if let optOut = verdict.rule?.optOut {
                     GroupBox {
@@ -401,7 +445,7 @@ struct DetailView: View {
                                 .padding(8)
                                 .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
                                 if verdict.source == .ai {
-                                    Label("This command was suggested by an AI lookup. Read it and check the linked source before you run it.", systemImage: "exclamationmark.triangle")
+                                    Label(model.isEdited(item.id) ? "This command is from an AI lookup you edited. Read it and check the linked source before you run it." : "This command was suggested by an AI lookup. Read it and check the linked source before you run it.", systemImage: "exclamationmark.triangle")
                                         .font(.callout).foregroundStyle(.secondary)
                                 }
                                 switch outcome {
@@ -431,13 +475,23 @@ struct DetailView: View {
                 }
 
                 Divider()
-                Text(sourceNote).font(.callout).foregroundStyle(.secondary)
+                if let symbol = verdict.source.symbol {
+                    Label(sourceNote, systemImage: symbol).font(.callout).foregroundStyle(.secondary)
+                } else {
+                    Text(sourceNote).font(.callout).foregroundStyle(.secondary)
+                }
                 if verdict.source != .rules {
                     HStack {
                         Button(verdict.source == .ai ? "Look Up Again with AI" : "Look Up with AI", systemImage: "sparkles") {
-                            Task { await model.analyse([item]) }
+                            // A saved edit is not kept anywhere else: ask before a lookup replaces it.
+                            if model.isEdited(item.id) { confirmRelookup = true } else { Task { await model.analyse([item]) } }
                         }
                         .disabled(model.analysing.contains(item.id))
+                        .confirmationDialog("Look up \(item.name) again with AI?", isPresented: $confirmRelookup) {
+                            Button("Look Up Again") { Task { await model.analyse([item]) } }
+                        } message: {
+                            Text("A new lookup replaces the changes you saved on this Mac.")
+                        }
                         if model.analysing.contains(item.id) {
                             ProgressView().controlSize(.small).accessibilityHidden(true)
                             Text("Searching the web. This can take a minute or two.").foregroundStyle(.secondary)
@@ -456,7 +510,15 @@ struct DetailView: View {
                     if !model.removed.contains(item.id) {
                         Button("Show in Finder", systemImage: "folder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: item.path)]) }
                     }
-                    Button(verdict.source == .rules ? "Suggest a Correction…" : "Submit a Finding…", systemImage: "square.and.pencil") { submitting = true }
+                    if let number = model.openFinding(for: item) {
+                        // Someone proposed a finding already: add to that one instead of opening another.
+                        Button("Open Finding #\(number)", systemImage: "arrow.up.right.square") { NSWorkspace.shared.open(Submission.issue(number)) }
+                            .help("A finding for this item is waiting for review on GitHub")
+                        // An AI lookup can still be edited and kept on this Mac.
+                        if verdict.source == .ai { Button("Edit…", systemImage: "square.and.pencil") { submitting = true } }
+                    } else {
+                        Button(verdict.source == .rules ? "Suggest a Correction…" : verdict.source == .ai ? "Edit or Submit…" : "Submit a Finding…", systemImage: "square.and.pencil") { submitting = true }
+                    }
                 }
                 Text(item.id).font(.caption.monospaced()).foregroundStyle(.secondary).textSelection(.enabled)
             }
@@ -476,6 +538,7 @@ struct DetailView: View {
             Text(step.message)
         }
         .sheet(isPresented: $submitting) { SubmitView(model: model, item: item, verdict: verdict) }
+        .task { await model.checkOpenFindings() }
         .sheet(item: $log) { LookupLogView(log: $0) }
     }
 }
@@ -599,7 +662,7 @@ struct SettingsView: View {
                     }
                 Toggle("Download new findings daily", isOn: $refreshRules)
             } footer: {
-                Text("Findings are fetched from GitHub. Nothing about your Mac is sent.").frame(maxWidth: .infinity, alignment: .leading)
+                Text("Findings, and the list of findings waiting for review, are fetched from GitHub. Nothing about your Mac is sent.").frame(maxWidth: .infinity, alignment: .leading)
             }
             Section {
                 Picker("Backend", selection: $backend) {

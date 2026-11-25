@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 320" width="1200" height="320">
+<defs>
+<pattern id="b" width="240" height="64" patternUnits="userSpaceOnUse"><rect width="240" height="64" fill="#dfd8cf"/><g fill="#f1ece3"><rect x="1" y="1" width="58" height="30" rx="3"/><rect x="121" y="1" width="58" height="30" rx="3"/><rect x="31" y="33" width="58" height="30" rx="3"/><rect x="151" y="33" width="58" height="30" rx="3"/></g><g fill="#f0e8de"><rect x="61" y="1" width="58" height="30" rx="3"/><rect x="91" y="33" width="58" height="30" rx="3"/><rect x="-29" y="33" width="58" height="30" rx="3"/><rect x="211" y="33" width="58" height="30" rx="3"/></g><rect x="181" y="1" width="58" height="30" rx="3" fill="#f3f0e8"/></pattern>
+<radialGradient id="l" cx="8%" cy="0" r="75%"><stop offset="0" stop-color="#fffcd6" stop-opacity="0.6"/><stop offset="1" stop-color="#fffcd6" stop-opacity="0"/></radialGradient>
+<filter id="s" x="-10%" y="-10%" width="120%" height="140%"><feDropShadow dx="0" dy="10" stdDeviation="9" flood-color="#5a3d1f" flood-opacity="0.18"/></filter>
+</defs>
+<rect width="1200" height="320" rx="14" fill="url(#b)"/><rect width="1200" height="320" rx="14" fill="url(#l)"/>
+<g transform="translate(40 14) scale(1.56)">
+<rect x="50" y="175" width="155" height="8" rx="4" fill="#878c97"/>
+<path d="M125 167 123 178M145 167 143 178" fill="none" stroke="#e77412" stroke-width="4" stroke-linecap="round"/>
+<path d="M84 140 46 162Q41 166 45 171L50 176Q53 179 57 177L96 158Z" fill="#f2ac00"/>
+<path d="M140 90C118 92 99 102 90 111 80 121 75 133 76 145 77 157 87 165 100 169 108 171 118 171 128 171H150C166 168 178 152 180 130 182 116 184 106 176 98Z" fill="#ffd200"/>
+<path d="M108 110C92 116 82 127 82 138 82 147 90 151 102 151 124 151 142 141 150 127 155 117 150 108 140 106 128 104 116 106 108 110Z" fill="#f2ac00"/>
+<path d="M178 83.6 208 84 178 94.2Z" fill="#e77412"/><path d="M178 69.6 212 84 178 85.6Z" fill="#f48815"/>
+<circle cx="161" cy="84" r="29" fill="#ffd200"/><circle cx="170" cy="77.5" r="4.6" fill="#16181d"/>
+<g transform="translate(149 101) rotate(8)"><path d="M-38 2Q-38 0-36 0H36Q38 0 38 2V42C38 65 20 79 0 88-20 79-38 65-38 42Z" fill="#dfe5ef"/><path d="M-31.5 6.5H31.5V42C31.5 61 16 74 0 81-16 74-31.5 61-31.5 42Z" fill="#3e7ce4"/><path d="M0 6.5H31.5V42C31.5 61 16 74 0 81Z" fill="#285cc2"/></g>
+<path transform="translate(121 117)" d="M0-8 1.8-1.8 8 0 1.8 1.8 0 8-1.8 1.8-8 0-1.8-1.8Z" fill="#faf8f1"/>
+</g>
+<g transform="translate(520 58) rotate(-2)">
+<rect width="560" height="200" rx="6" fill="#fcfaf4" filter="url(#s)"/>
+<rect x="228" y="-14" width="104" height="28" fill="#f2e8c3" opacity=".85" transform="rotate(3 280 0)"/>
+<text x="40" y="80" font-family="Marker Felt, Chalkboard SE, Comic Sans MS, cursive" font-size="58" fill="#1f2635">No humming</text>
+<text x="40" y="138" font-family="Marker Felt, Chalkboard SE, Comic Sans MS, cursive" font-size="58" fill="#1f2635">on this Mac.</text>
+<text x="520" y="182" text-anchor="end" font-family="Noteworthy, Chalkboard SE, Bradley Hand, cursive" font-size="36" fill="#1f2635" opacity=".75">House rule 1. Signed, Arie.</text>
+</g>
+</svg>
