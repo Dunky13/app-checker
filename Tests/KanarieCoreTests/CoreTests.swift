@@ -1063,6 +1063,20 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         }
     }
 
+    /// Items with a finding issue open: by the app's titles and Item lines, the oldest issue per item, pull requests skipped.
+    @Test func openFindingsAreReadFromTheIssueList() throws {
+        let list = #"""
+        [{"number": 34, "title": "Findings: cloudflared, agy", "body": "### Finding 1\n**Item:** `brew:cloudflared` (`cloudflared`, version `1`)\n### Finding 2\n**Item:** `bin:agy` (`agy`, version unknown)"},
+         {"number": 29, "title": "Finding: MQTT Explorer", "body": "**Item:** `app:de.t7n.apps.mqtt-explorer` (`MQTT Explorer`, version `0.3.5`)"},
+         {"number": 40, "title": "Finding: cloudflared again", "body": "**Item:** `brew:cloudflared` (`cloudflared`, version `2`)"},
+         {"number": 38, "title": "Finding: a pull request", "body": "**Item:** `brew:pr`", "pull_request": {"url": "x"}},
+         {"number": 39, "title": "Linux support", "body": "**Item:** `brew:other`"},
+         {"number": 41, "title": "Finding: quoted", "body": "> **Item:** `brew:quoted`", "user": {"login": "x"}}]
+        """#
+        #expect(try Submission.openFindings(Data(list.utf8)) == ["brew:cloudflared": 34, "bin:agy": 34, "app:de.t7n.apps.mqtt-explorer": 29])
+        #expect(Submission.issue(29).absoluteString == "https://github.com/Dunky13/kanarie/issues/29")
+    }
+
     /// A lookup that could not tell stays so in the form: saved by hand it is still a lookup, sent it is refused until a class is chosen.
     @Test func aLookupThatCouldNotTellStaysSo() {
         var found = Rule(match: ["brew:x"], telemetry: .unknown, summary: "Nothing found about telemetry.")

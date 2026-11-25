@@ -34,6 +34,9 @@ final class AppModel {
     private(set) var verdicts: [String: Verdict] = [:]
     private(set) var analysing: Set<String> = []
     private(set) var errors: [String: String] = [:]
+    /// Items with a finding issue open on GitHub, and its number, so the app links to it instead of starting another.
+    private(set) var openFindings: [String: Int] = [:]
+    private var openFindingsChecked: Date?
     private(set) var scanning = false
     private(set) var batch: Task<Void, Never>?
     /// True when the login shell could not be asked for its variables, so variable-based settings may wrongly read as "on".
@@ -306,6 +309,19 @@ final class AppModel {
             save()
         } catch {
             NSLog("Kanarie: findings not updated, keeping the current ones: \(error.localizedDescription)")
+        }
+    }
+
+    /// Reads which items have a finding waiting for review, at most every ten minutes. The list is the same for
+    /// everyone, so the request says nothing about this Mac. Off with the findings download.
+    func checkOpenFindings() async {
+        guard UserDefaults.standard.bool(forKey: "refreshRules"), openFindingsChecked.map({ -$0.timeIntervalSinceNow > 600 }) ?? true else { return }
+        openFindingsChecked = .now
+        do {
+            // shortcut: only the 100 newest open issues are read; follow GitHub's Link header if more are ever open.
+            openFindings = try Submission.openFindings(try await URLSession(configuration: .ephemeral).data(from: Submission.openIssues, limit: 5_000_000))
+        } catch {
+            NSLog("Kanarie: open findings not read: \(error.localizedDescription)")
         }
     }
 

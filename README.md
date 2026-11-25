@@ -31,7 +31,7 @@ Every item shows what it collects, whether that is switched off on this Mac, and
 
 ![The form to suggest a correction, filled in with the Homebrew finding](docs/screenshots/submit.png)
 
-A finding can be proposed or corrected from the app. Kanarie checks it and then opens a prefilled GitHub issue in your browser.
+A finding can be proposed or corrected from the app. Kanarie checks it and then opens a prefilled GitHub issue in your browser. When a finding for the item is already waiting for review, the app links to that issue instead (**Open Finding #…**), so you can add to it rather than open another.
 
 ## What it checks
 
@@ -109,7 +109,7 @@ The Claude Code CLI is started without your Claude settings, and with its own me
 
 Kanarie has no telemetry. It talks to the network in four cases:
 
-- At launch and then once a day it downloads the findings from this repository (can be switched off in Settings). It fetches every file that changed, not only those for apps you have, so the requests say nothing about your Mac. Files are only used if they match the list the maintainer signed.
+- At launch and then once a day it downloads the findings from this repository (can be switched off in Settings). It fetches every file that changed, not only those for apps you have, so the requests say nothing about your Mac. Files are only used if they match the list the maintainer signed. With the same setting, it reads the list of open finding issues (at most every ten minutes, when you look at an item), to link to a finding that is waiting for review. That list is the same for everyone too.
 - Sparkle checks this repository for updates, after asking you once. The anonymous system profile is disabled.
 - AI lookups, when you ask for them.
 - Submitting a finding, when you choose to: the app fetches the pages the finding cites, then opens GitHub in your browser.
