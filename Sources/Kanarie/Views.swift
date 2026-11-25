@@ -230,7 +230,8 @@ struct MainView: View {
                 }
             // A single selected item stays open when its new verdict moves it out of the filtered list.
             } else if let item = picked.first ?? (selection.count == 1 ? model.items.first { selection.contains($0.id) } : nil), let verdict = model.verdicts[item.id] {
-                DetailView(model: model, item: item, verdict: verdict)
+                // Its own state per item: a copy, a run's outcome or an open confirmation does not carry over to the next item.
+                DetailView(model: model, item: item, verdict: verdict).id(item.id)
             } else {
                 ContentUnavailableView("Select an item", systemImage: "bird", description: Text("\(model.items.count - model.removed.count) apps, packages and extensions checked."))
             }
@@ -292,6 +293,10 @@ struct DetailView: View {
     var item: Item
     var verdict: Verdict
     @State private var copied = false
+    /// The run or the profile change waiting for confirmation, what it did, and whether it is running.
+    @State private var confirming: OptOutStep?
+    @State private var outcome: Result<String, Error>?
+    @State private var working = false
     @State private var submitting = false
     @State private var log: OpenedLog?
 
@@ -330,10 +335,17 @@ struct DetailView: View {
                                 HStack {
                                     Text(command).font(.body.monospaced()).textSelection(.enabled)
                                     Spacer()
-                                    Button(copied ? "Copied" : "Copy", systemImage: copied ? "checkmark" : "doc.on.doc") {
-                                        NSPasteboard.general.clearContents()
-                                        NSPasteboard.general.setString(command, forType: .string)
-                                        copied = true
+                                    if working { ProgressView().controlSize(.small).accessibilityLabel("Working") }
+                                    switch OptOutStep(command: command, env: model.env, ai: verdict.source == .ai) {
+                                    case let step?:
+                                        Button(step.button, systemImage: step.icon) { confirming = step }.disabled(working)
+                                    case nil:
+                                        // A shell this does not know, or a command that cannot be done safely: copy it, as before.
+                                        Button(copied ? "Copied" : "Copy", systemImage: copied ? "checkmark" : "doc.on.doc") {
+                                            NSPasteboard.general.clearContents()
+                                            NSPasteboard.general.setString(command, forType: .string)
+                                            copied = true
+                                        }
                                     }
                                 }
                                 .padding(8)
@@ -341,6 +353,11 @@ struct DetailView: View {
                                 if verdict.source == .ai {
                                     Label("This command was suggested by an AI lookup. Read it and check the linked source before you run it.", systemImage: "exclamationmark.triangle")
                                         .font(.callout).foregroundStyle(.secondary)
+                                }
+                                switch outcome {
+                                case .success(let text)?: Label(text, systemImage: "checkmark.circle").font(.callout).foregroundStyle(.secondary)
+                                case .failure(let error)?: Label(error.localizedDescription, systemImage: "exclamationmark.triangle").font(.callout).foregroundStyle(.red)
+                                case nil: EmptyView()
                                 }
                             }
                             if let url = safeURL(optOut.url) { Link("Opt-out documentation", destination: url) }
@@ -396,7 +413,18 @@ struct DetailView: View {
             .padding()
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .onChange(of: item.id) { copied = false }
+        .alert(confirming?.title ?? "", isPresented: Binding { confirming != nil } set: { if !$0 { confirming = nil } }, presenting: confirming) { step in
+            Button(step.button) {
+                working = true
+                Task {
+                    do { outcome = .success(try await step.perform(model)) } catch { outcome = .failure(error) }
+                    working = false
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: { step in
+            Text(step.message)
+        }
         .sheet(isPresented: $submitting) { SubmitView(model: model, item: item, verdict: verdict) }
         .sheet(item: $log) { LookupLogView(log: $0) }
     }
@@ -563,6 +591,65 @@ extension View {
     func sheetFooter(@ViewBuilder _ content: () -> some View) -> some View {
         safeAreaInset(edge: .bottom, spacing: 0) {
             content().padding(.horizontal, 20).padding(.vertical, 12).frame(maxWidth: .infinity, alignment: .leading).background(.bar)
+        }
+    }
+}
+
+/// Running an opt-out command, or adding the variable it sets to the shell profile. Always confirmed first.
+struct OptOutStep: Identifiable {
+    enum Kind { case run(String), add(line: String, file: URL) }
+    var kind: Kind
+    /// Fixed when the button is pressed, so a verdict changing behind the alert cannot change what it says.
+    var ai: Bool
+    var id: String { title + message }
+    private var home: URL { FileManager.default.homeDirectoryForCurrentUser }
+
+    /// nil when only copying is offered: a shell this does not know, or a command that cannot be done safely.
+    init?(command: String, env: [String: String], ai: Bool) {
+        self.ai = ai
+        switch ShellProfile.action(for: command) {
+        case .run: kind = .run(command)
+        case let .add(name, value):
+            let home = FileManager.default.homeDirectoryForCurrentUser
+            guard let addition = ShellProfile.addition(name: name, value: value, shell: ShellProfile.loginShell, home: home, env: env) else { return nil }
+            kind = .add(line: addition.line, file: addition.file)
+        case .copyOnly: return nil
+        }
+    }
+
+    var button: String {
+        switch kind {
+        case .run: "Run"
+        case .add(_, let file): "Add to \(ShellProfile.display(file, home: home))"
+        }
+    }
+
+    var icon: String {
+        switch kind {
+        case .run: "play"
+        case .add: "text.badge.plus"
+        }
+    }
+
+    var title: String {
+        switch kind {
+        case .run: "Run this command?"
+        case .add(_, let file): "Add these lines to \(ShellProfile.display(file, home: home))?"
+        }
+    }
+
+    var message: String {
+        let text = switch kind {
+        case .run(let command): "\(command)\n\nIt runs once in sh, from your home folder, with your login shell's variables."
+        case .add(let line, _): "\(ShellProfile.block(line))\n\nNew terminal windows will have it set. Apps opened from the Dock or Finder do not read this file."
+        }
+        return text + (ai ? "\n\nAn AI lookup suggested this. Check the linked source first." : "")
+    }
+
+    @MainActor func perform(_ model: AppModel) async throws -> String {
+        switch kind {
+        case .run(let command): try await model.runOptOut(command)
+        case let .add(line, file): try await model.addToProfile(line, file: file)
         }
     }
 }

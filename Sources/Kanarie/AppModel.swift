@@ -41,7 +41,7 @@ final class AppModel {
     private var rules: [Rule] = []
     private var serial = 0
     private var saved = Saved()
-    private var env: [String: String] = [:]
+    private(set) var env: [String: String] = [:]
     private var watcher: Watcher?
     private var rescanQueued = false
     private var shell: ShellInfo?
@@ -228,6 +228,22 @@ final class AppModel {
     }
 
     nonisolated static func sdkKey(_ item: Item) -> String { "\(item.id)@\(item.version)" }
+
+    /// Runs an opt-out command the person confirmed, then reads the settings and the shell again. Returns what to say.
+    func runOptOut(_ command: String) async throws -> String {
+        let (env, home) = (env, FileManager.default.homeDirectoryForCurrentUser)
+        let output = try await Task.detached { try ShellProfile.run(command, env: env, home: home) }.value
+        await rescan(userInitiated: true)
+        return output.isEmpty ? "Done." : "Done: \(output.suffix(300))"
+    }
+
+    /// Adds a line the person confirmed to their shell profile, then reads the shell again so the verdict follows.
+    func addToProfile(_ line: String, file: URL) async throws -> String {
+        let added = try await Task.detached { try ShellProfile.append(line, to: file) }.value
+        await rescan(userInitiated: true)
+        let name = ShellProfile.display(file, home: FileManager.default.homeDirectoryForCurrentUser)
+        return added ? "Added to \(name). New terminal windows have it." : "\(name) has this line already."
+    }
 
     /// This Mac's settings as the checks read them, for a finding that is not in use yet.
     var probe: Probe { Probe.live(env: env) }
