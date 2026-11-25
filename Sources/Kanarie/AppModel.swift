@@ -24,6 +24,7 @@ final class AppModel {
         var serial: Int?                       // highest findings index accepted so far, which also holds when the cache is lost
         var names: [String: String]?           // item id -> last seen name, to list an item after it is removed
         var editors: [String: [String]]?       // extension id -> editors it was last seen in, for its verdict after it is removed
+        var submitted: [String: Rule]?         // item id -> AI lookup last sent from this Mac, so a bulk submission sends only new ones
     }
 
     /// Installed items, followed by the ones that were removed since an earlier scan.
@@ -105,6 +106,15 @@ final class AppModel {
                 try? await Task.sleep(for: .seconds(86400))
             }
         }
+    }
+
+    /// Whether this lookup was sent from this Mac before. A lookup done again with another result is new.
+    func wasSubmitted(_ id: String, _ rule: Rule) -> Bool { saved.submitted?[id] == rule }
+
+    /// Remembers lookups whose issue was opened. Whether it was submitted on GitHub cannot be seen from here.
+    func markSubmitted(_ sent: [(id: String, rule: Rule)]) {
+        for entry in sent { saved.submitted = (saved.submitted ?? [:]).merging([entry.id: entry.rule]) { $1 } }
+        save()
     }
 
     func count(_ status: Status) -> Int { verdicts.count { !removed.contains($0.key) && $0.value.status == status } }

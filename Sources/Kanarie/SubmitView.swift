@@ -16,9 +16,12 @@ struct SubmitView: View {
     /// The finding is too long for a link, and the person has been told that continuing replaces the clipboard.
     @State private var mayCopy = false
     @State private var failure: String?
+    /// The AI lookup as a bulk submission would send it, so a bulk submission does not send it again.
+    private let lookup: Rule?
 
     init(model: AppModel, item: Item, verdict: Verdict) {
         (self.model, self.item) = (model, item)
+        lookup = verdict.source == .ai ? verdict.rule.flatMap { Submission.unedited($0, item: item) } : nil
         let start = Submission.Draft(from: verdict.rule, item: item)
         (_draft, _initial, _source) = (State(initialValue: start), State(initialValue: start), State(initialValue: verdict.source))
     }
@@ -136,6 +139,7 @@ struct SubmitView: View {
                 NSPasteboard.general.setString(text, forType: .string)
             }
             NSWorkspace.shared.open(issue.url)
+            if let lookup { model.markSubmitted([(item.id, lookup)]) }
             dismiss()
         } catch {
             failure = error.localizedDescription
@@ -158,6 +162,7 @@ func bulkFinding(for item: Item, model: AppModel) -> (rule: Rule?, why: String) 
     let problems = draft.problems(for: item)
     guard problems.isEmpty else { return (nil, "Not ready: \(problems.joined(separator: "; ")). Fix it with Submit a Finding…") }
     guard let sent = Submission.unedited(found, item: item) else { return (nil, "The form would change this lookup. Check it with Submit a Finding…") }
+    guard !model.wasSubmitted(item.id, sent) else { return (nil, "Already sent from this Mac. To send it again, use Submit a Finding…") }
     return (sent, "")
 }
 
@@ -211,10 +216,13 @@ struct BulkSubmitView: View {
             }
             if !skipped.isEmpty {
                 Section("Left out (\(skipped.count))") {
-                    ForEach(skipped, id: \.item.id) { entry in
+                    // One row per reason: with every item selected, most are left out for the same few.
+                    let reasons = skipped.map(\.why).enumerated().filter { skipped.map(\.why).firstIndex(of: $0.element) == $0.offset }.map(\.element)
+                    ForEach(reasons, id: \.self) { why in
+                        let names = skipped.filter { $0.why == why }.map(\.item.name)
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(entry.item.name)
-                            Text(entry.why).font(.caption).foregroundStyle(.secondary)
+                            Text(names.count == 1 ? names[0] : "\(names.count) items: \(names.joined(separator: ", "))").lineLimit(3)
+                            Text(why).font(.caption).foregroundStyle(.secondary)
                         }
                         .accessibilityElement(children: .combine)
                     }
@@ -296,6 +304,7 @@ struct BulkSubmitView: View {
                 NSPasteboard.general.setString(text, forType: .string)
             }
             NSWorkspace.shared.open(issue.url)
+            model.markSubmitted(included.map { ($0.item.id, $0.rule) })
             dismiss()
         } catch {
             failure = error.localizedDescription
