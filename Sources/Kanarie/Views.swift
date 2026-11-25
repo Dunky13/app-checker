@@ -327,7 +327,7 @@ struct MainView: View {
         .confirmationDialog("Look up \(pending.count) items with AI?", isPresented: $confirmBatch) {
             Button("Look Up \(pending.count) Items") { model.analyseAll(pending) }
         } message: {
-            Text("A lookup sends each item's name, identifier and version to the AI backend chosen in Settings and uses your quota or credits. The items go out in groups of \(LLM.batchSize), one group at a time. Stopping ends the group that is running without an answer.")
+            Text("A lookup sends each item's name, identifier and version to the AI backend chosen in Settings and uses your quota or credits. The items go out in groups of \(LLM.batchSize), one group at a time. Stopping ends the group that is running without an answer.\(pending.contains { model.isEdited($0.id) } ? " A new lookup replaces the changes you saved on this Mac." : "")")
         }
         .sheet(isPresented: $showSettings) { SettingsView() }
         .sheet(isPresented: Binding { submitting != nil } set: { if !$0 { submitting = nil } }) { BulkSubmitView(model: model, items: submitting ?? []) }
@@ -398,7 +398,7 @@ struct DetailView: View {
                                 .padding(8)
                                 .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
                                 if verdict.source == .ai {
-                                    Label("This command was suggested by an AI lookup. Read it and check the linked source before you run it.", systemImage: "exclamationmark.triangle")
+                                    Label(model.isEdited(item.id) ? "This command is from an AI lookup you edited. Read it and check the linked source before you run it." : "This command was suggested by an AI lookup. Read it and check the linked source before you run it.", systemImage: "exclamationmark.triangle")
                                         .font(.callout).foregroundStyle(.secondary)
                                 }
                                 switch outcome {

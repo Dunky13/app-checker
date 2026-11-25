@@ -84,6 +84,7 @@ final class AppModel {
         // Answers saved by an older version must pass today's checks too.
         for (id, rule) in saved.aiRules where !rule.problems(curated: false).isEmpty {
             saved.aiRules[id] = nil
+            saved.edited?.remove(id)
             // Its log would show a lookup that looks fine next to an item nothing is known about.
             Self.lookupLogs.removeVerdictLog(for: id)
         }

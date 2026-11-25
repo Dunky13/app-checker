@@ -19,10 +19,14 @@ struct SubmitView: View {
     /// The AI lookup as a bulk submission would send it, so a bulk submission does not send it again.
     /// State, like the draft: the verdict may change behind the sheet, and the lookup sent is the one the draft started from.
     @State private var lookup: Rule?
+    /// The lookup the form opened with, and whether it was a hand edit. Saving over a newer lookup would undo it.
+    @State private var opened: Rule?
+    @State private var wasEdited: Bool
 
     init(model: AppModel, item: Item, verdict: Verdict) {
         (self.model, self.item) = (model, item)
         _lookup = State(initialValue: verdict.source == .ai ? verdict.rule.flatMap { Submission.unedited($0, item: item) } : nil)
+        (_opened, _wasEdited) = (State(initialValue: verdict.rule), State(initialValue: model.isEdited(item.id)))
         let start = Submission.Draft(from: verdict.rule, item: item)
         (_draft, _initial, _source) = (State(initialValue: start), State(initialValue: start), State(initialValue: verdict.source))
     }
@@ -30,7 +34,7 @@ struct SubmitView: View {
     private var origin: String {
         switch source {
         case .rules: "Correction of the current finding"
-        case .ai: draft == initial && !model.isEdited(item.id) ? "AI lookup, not edited" : "AI lookup, edited by hand"
+        case .ai: draft == initial && !wasEdited ? "AI lookup, not edited" : "AI lookup, edited by hand"
         case .sdk, .none: "Written by hand"
         }
     }
@@ -42,6 +46,7 @@ struct SubmitView: View {
                 LabeledContent("Item", value: item.id)
                 TextField("Name", text: $draft.name)
                 Picker("Telemetry", selection: $draft.telemetry) {
+                    if initial.telemetry == .unknown { Text("Could not tell").tag(Telemetry.unknown) }
                     Text("None").tag(Telemetry.none)
                     Text("Off until you switch it on").tag(Telemetry.optIn)
                     Text("On, can be switched off").tag(Telemetry.optOut)
@@ -118,7 +123,8 @@ struct SubmitView: View {
                             dismiss()
                         }
                         .help("Keeps your changes in place of the AI lookup, on this Mac only. A new lookup replaces them.")
-                        .disabled(draft == initial || !rule.problems(curated: false).isEmpty || task != nil)
+                        .disabled(draft == initial || !rule.problems(curated: false).isEmpty || task != nil
+                                  || model.analysing.contains(item.id) || model.verdicts[item.id]?.rule != opened)
                     }
                     Button(mayCopy ? "Copy and Continue" : check?.missing.isEmpty == false ? "Continue Anyway" : "Continue on GitHub…") {
                         // Set here and not inside the task, so a second press in the same moment starts nothing.
@@ -175,7 +181,9 @@ func bulkFinding(for item: Item, model: AppModel) -> (rule: Rule?, why: String) 
     case .sdk, .none: return (nil, "No finding to send. Look it up with AI first, or write one with Submit a Finding…")
     case .ai: break
     }
-    // The form turns "unknown" into a telemetry class, which would be a claim the lookup did not make.
+    // Sent as the lookup gave it: a hand edit was not the lookup's, and is sent through the form.
+    guard !model.isEdited(item.id) else { return (nil, "Edited by you. Send it with Edit or Submit…") }
+    // A finding needs a telemetry class, which would be a claim the lookup did not make.
     guard let found = verdict.rule, found.telemetry != .unknown else { return (nil, "The lookup could not tell. Use Edit or Submit… to write one.") }
     let draft = Submission.Draft(from: found, item: item)
     let problems = draft.problems(for: item)

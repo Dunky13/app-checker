@@ -19,7 +19,8 @@ public enum Submission {
         public init(from rule: Rule?, item: Item) {
             (base, name) = (rule, rule?.name ?? item.name)
             guard let rule else { return }
-            telemetry = rule.telemetry == .unknown ? .optOut : rule.telemetry
+            // An AI lookup that could not tell stays so: any class here would be a claim the lookup did not make.
+            telemetry = rule.telemetry
             (summary, policyURL, sources) = (rule.summary, rule.policyURL ?? "", (rule.sources ?? []).joined(separator: "\n"))
             (instructions, command, optOutURL) = (rule.optOut?.instructions ?? "", rule.optOut?.command ?? "", rule.optOut?.url ?? "")
         }

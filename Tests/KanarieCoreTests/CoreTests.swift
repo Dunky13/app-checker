@@ -1063,6 +1063,18 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         }
     }
 
+    /// A lookup that could not tell stays so in the form: saved by hand it is still a lookup, sent it is refused until a class is chosen.
+    @Test func aLookupThatCouldNotTellStaysSo() {
+        var found = Rule(match: ["brew:x"], telemetry: .unknown, summary: "Nothing found about telemetry.")
+        found.name = "Example CLI"
+        var draft = Submission.Draft(from: found, item: item)
+        #expect(draft.telemetry == .unknown)
+        draft.summary = "The docs say nothing about telemetry."
+        #expect(draft.rule(for: item).telemetry == .unknown)
+        #expect(draft.rule(for: item).problems(curated: false).isEmpty)
+        #expect(!draft.problems(for: item).isEmpty)
+    }
+
     @Test func theIssueCarriesTheFindingAndSurvivesTheLink() throws {
         var found = draft { $0.summary = "A+B & C #1 100% `tick`" }.rule(for: item)
         let check = Submission.sourceCheck(found, pages: ["EXAMPLE_TELEMETRY"], cited: 2)
