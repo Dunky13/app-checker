@@ -57,6 +57,9 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         #expect(optOut.status == .warn && optOut.state.contains("did not let Kanarie read"))
         let optIn = rule(.optIn, enabledWhen: [check]).evaluate(probe(blocked: ["protected.json"]))
         #expect(optIn.status == .ok && optIn.state.contains("did not let Kanarie read"))
+        // A refused read is not a reading, whichever switch it was.
+        let forcedBlocked = rule(.optOut, enabledWhen: [check]).evaluate(probe(blocked: ["protected.json"]))
+        #expect(!optOut.read && !optIn.read && !forcedBlocked.read && forcedBlocked.status == .warn)
     }
 
     @Test func wellFormedness() {
@@ -157,6 +160,8 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         #expect(onInCursor.status == .warn && onInCursor.state.hasPrefix("In Cursor: "))
         let blockedInCursor = Verdict(item: item, rules: optIn, aiRules: [:], sdks: [], probe: probe(blocked: [cursorFile]))
         #expect(blockedInCursor.status == .ok && blockedInCursor.state.hasPrefix("In Cursor: ") && blockedInCursor.state.contains("did not let Kanarie read"))
+        // The read flag is the shown editor's: Cursor was refused, so nothing was read there.
+        #expect(onInCursor.readsThisMac && !blockedInCursor.readsThisMac)
     }
 
     @Test func onlyHTTPLinksAreSafe() {

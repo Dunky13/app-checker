@@ -157,7 +157,8 @@ public struct Rule: Codable, Sendable, Hashable {
     }
 
     /// Maps the rule plus this Mac's current settings to a status and a one-line explanation, and whether a setting
-    /// read on this Mac decided it: not when the finding has nothing to read, nor when macOS refused the read.
+    /// read on this Mac decided it: not when the finding has nothing to read, when macOS refused the read, or when an
+    /// opt-out finding read only an unset "on" switch.
     public func evaluate(_ probe: Probe) -> (status: Status, state: String, read: Bool) {
         switch telemetry {
         case .none: return (.ok, "No telemetry.", false)
@@ -281,8 +282,8 @@ public struct Verdict: Sendable, Equatable {
     public var rule: Rule?
     public var source: Source
 
-    /// Whether the state was read from this Mac: a setting the finding's checks look at, or the installed files.
-    /// Not when macOS refused the read: then the state is the finding's default.
+    /// Whether the state was read from this Mac: a setting that decided it, or a search of its files.
+    /// Not when macOS refused the read, nor when an opt-out finding read only an unset "on" switch: then the state is the finding's default.
     public var readsThisMac: Bool
 
     /// Curated rules win over AI lookups. Without either the item is unknown; SDK scan hits only add a hint.
