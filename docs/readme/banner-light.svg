@@ -19,8 +19,8 @@
 <g transform="translate(520 58) rotate(-2)">
 <rect width="560" height="200" rx="6" fill="#fcfaf4" filter="url(#s)"/>
 <rect x="228" y="-14" width="104" height="28" fill="#f2e8c3" opacity=".85" transform="rotate(3 280 0)"/>
-<text x="40" y="92" font-family="Marker Felt, Chalkboard SE, Comic Sans MS, cursive" font-size="58" fill="#1f2635">No humming</text>
-<text x="40" y="152" font-family="Marker Felt, Chalkboard SE, Comic Sans MS, cursive" font-size="58" fill="#1f2635">on this Mac.</text>
-<text x="520" y="184" text-anchor="end" font-family="Noteworthy, Chalkboard SE, Bradley Hand, cursive" font-size="22" fill="#1f2635" opacity=".75">House rule 1. Signed, Arie.</text>
+<text x="40" y="80" font-family="Marker Felt, Chalkboard SE, Comic Sans MS, cursive" font-size="58" fill="#1f2635">No humming</text>
+<text x="40" y="138" font-family="Marker Felt, Chalkboard SE, Comic Sans MS, cursive" font-size="58" fill="#1f2635">on this Mac.</text>
+<text x="520" y="182" text-anchor="end" font-family="Noteworthy, Chalkboard SE, Bradley Hand, cursive" font-size="30" fill="#1f2635" opacity=".75">House rule 1. Signed, Arie.</text>
 </g>
 </svg>

@@ -1,9 +1,9 @@
+# Kanarie
+
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/readme/banner-dark.svg">
   <img src="docs/readme/banner-light.svg" width="100%" alt="Arie, a yellow canary with a blue shield, on a perch against a brick wall, next to a taped note: No humming on this Mac. House rule 1. Signed, Arie.">
 </picture>
-
-# Kanarie
 
 A free, open-source menu bar app for macOS. It lists the software on your Mac, tells you which of it sends telemetry, and shows you how to switch that off.
 
@@ -34,10 +34,10 @@ Every item gets one of four colours. Arie has a mood for each.
 
 | Colour | Arie says | What it means |
 | --- | --- | --- |
-| <img src="docs/readme/red.svg" width="18" alt="" align="top"> **Red** | *Stop that hum!* | It sends telemetry, and there is no known way to switch it off. Arie sings at it, loudly. |
-| <img src="docs/readme/yellow.svg" width="18" alt="" align="top"> **Yellow** | *We want opt-outs!* | It sends telemetry, and there is a switch. Arie ruffles his feathers and shows you where it is. |
-| <img src="docs/readme/green.svg" width="18" alt="" align="top"> **Green** | *Thank you for keeping it down.* | No telemetry, or you switched it off on this Mac. Arie dozes. |
-| <img src="docs/readme/grey.svg" width="18" alt="" align="top"> **Grey** | *Missing: the facts.* | Unknown. Arie cocks his head. Know the answer? Suggest a finding from the app. |
+| <img src="docs/readme/red.svg" width="18" alt="cross" align="top"> **Red** | *Stop that hum!* | It sends telemetry, and there is no known way to switch it off. Arie sings at it, loudly. |
+| <img src="docs/readme/yellow.svg" width="18" alt="warning" align="top"> **Yellow** | *We want opt-outs!* | It sends telemetry, and there is a switch. Arie ruffles his feathers and shows you where it is. |
+| <img src="docs/readme/green.svg" width="18" alt="check" align="top"> **Green** | *Thank you for keeping it down.* | No telemetry, or you switched it off on this Mac. Arie dozes. |
+| <img src="docs/readme/grey.svg" width="18" alt="question mark" align="top"> **Grey** | *Missing: the facts.* | Unknown. Arie cocks his head. Know the answer? Suggest a finding from the app. |
 
 The exact rules, and the crossed-out circle for apps you removed, are under [What the colours mean](#what-the-colours-mean).
 
