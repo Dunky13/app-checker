@@ -26,6 +26,9 @@ CHECK = ["env", "defaults", "json", "file", "key", "equals", "contains", "notIn"
 IGNORABLE = {0x034F, 0x115F, 0x1160, 0x17B4, 0x17B5, 0x2800, 0x3164, 0xFFA0, 0x16FE4, *range(0x180B, 0x1810),
              *range(0xFE00, 0xFE10), *range(0xFFF0, 0xFFF9), *range(0xE0000, 0xE1000)}
 SIGNATURE_TEST = "indexIsSignedWithTheUpdateKeyAndListsEveryFile"
+# An issue with several findings has a section per finding, headed like this. Submission.bulkLimit in the app.
+HEADING = re.compile(r"^### Finding (\d+)$", re.M)
+BULK_LIMIT = 10
 
 
 def findings():
@@ -139,6 +142,30 @@ def target(body, findings):
     return path, json.dumps(rule, indent=2, ensure_ascii=False) + "\n"
 
 
+def targets(body, findings):
+    """Every finding of an issue, in its order: [(path below findings/, text)]. Without headings the issue holds one."""
+    body = body.replace("\r\n", "\n")
+    parts = HEADING.split(body)
+    if len(parts) == 1:
+        return [target(body, findings)]
+    # What stands before the first heading is the app's introduction, and is not read.
+    numbers, sections = parts[1::2], parts[2::2]
+    if len(sections) > BULK_LIMIT:
+        raise ValueError(f"the issue holds more than {BULK_LIMIT} findings")
+    if numbers != [str(number) for number in range(1, len(numbers) + 1)]:
+        raise ValueError("the findings are not numbered 1, 2, 3 and so on")
+    placed = []
+    for number, section in zip(numbers, sections):
+        try:
+            path, text = target(section, findings)
+        except ValueError as error:
+            raise ValueError(f"finding {number}: {error}") from None
+        if any(path == earlier for earlier, _ in placed):
+            raise ValueError(f"finding {number} goes to findings/{path} as an earlier one does")
+        placed.append((path, text))
+    return placed
+
+
 def run(*command, **options):
     return subprocess.run(command, cwd=ROOT, check=True, text=True, **options)
 
@@ -189,18 +216,19 @@ def accept(issues):
             if issue["state"] != "OPEN":
                 sys.exit(f"#{number} is not open.")
             try:
-                path, finding = target(issue["body"], findings())
+                placed = targets(issue["body"], findings())
             except ValueError as error:
                 sys.exit(f"#{number}: {error}.")
-            if path in written:
-                sys.exit(f"#{number}: another issue of this run already wrote findings/{path}. Take them one at a time.")
-            written.add(path)
-            file = ROOT / "findings" / path
-            # The login is in a code span, so the pull request does not notify the submitter.
-            lines.append(f"- Closes #{number}: {'corrects' if file.exists() else 'adds'} `findings/{path}`, sent in by `{issue['author']['login']}`.")
-            folders.append(file.parent.name)
-            file.parent.mkdir(exist_ok=True)
-            file.write_text(finding, encoding="utf-8")
+            for path, finding in placed:
+                if path in written:
+                    sys.exit(f"#{number}: another issue of this run already wrote findings/{path}. Take them one at a time.")
+                written.add(path)
+                file = ROOT / "findings" / path
+                # The login is in a code span, so the pull request does not notify the submitter.
+                lines.append(f"- Closes #{number}: {'corrects' if file.exists() else 'adds'} `findings/{path}`, sent in by `{issue['author']['login']}`.")
+                folders.append(file.parent.name)
+                file.parent.mkdir(exist_ok=True)
+                file.write_text(finding, encoding="utf-8")
         title = "Findings: " + ", ".join(folders)
         # First the tests, with their own switch for an index that is not signed yet: what they reject is never signed.
         run("swift", "test", "--parallel", "--num-workers", "2", capture_output=True, env={**os.environ, "GITHUB_EVENT_NAME": "pull_request"})
@@ -254,10 +282,11 @@ if __name__ == "__main__":
     arguments = sys.argv[1:]
     try:
         if len(arguments) == 2 and arguments[0] == "--parse":
-            # For the tests: the issue body in a file, the target file and its text out, or why it is refused.
+            # For the tests: the issue body in a file, each target file and its text out, or why it is refused.
             # Read as bytes, so the line ends arrive as GitHub sends them.
             try:
-                print(*target(Path(arguments[1]).read_bytes().decode(), findings()), sep="\n", end="")
+                placed = targets(Path(arguments[1]).read_bytes().decode(), findings())
+                print("".join(f"{path}\n{text}" for path, text in placed), end="")
             except ValueError as error:
                 print(f"Refused: {error}.")
                 sys.exit(1)
