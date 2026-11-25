@@ -330,7 +330,9 @@ def accept(issues):
         else:
             run("gh", "pr", "create", "--base", "main", "--head", branch, "--title", title, "--body", body)
     except subprocess.CalledProcessError:
-        print(f"The branch {branch} is pushed, with the signed index. {'Mark its pull request ready' if draft else 'Open its pull request'} by hand.", file=sys.stderr)
+        print(f"The branch {branch} is pushed, with the signed index. " + (
+            f"Check on GitHub that pull request #{draft[0]['number']} holds {signed_head} before you mark it ready by hand: "
+            "it may be ready already, or changed since." if draft else "Open its pull request by hand."), file=sys.stderr)
         raise
 
 
@@ -377,12 +379,14 @@ def drafted(event):
             # What the branch changes, the index aside. The same findings, and nothing else, need no new commit.
             ref = f"refs/remotes/origin/{branch}"
             run("git", "fetch", "-q", "origin", f"+refs/heads/{branch}:{ref}")
-            base = run("git", "merge-base", "origin/main", ref, capture_output=True).stdout.strip()
+            # A branch with no history in common with main: compared with main itself, so it counts as changed.
+            base = subprocess.run(["git", "merge-base", "origin/main", ref], cwd=ROOT, capture_output=True, text=True).stdout.strip() or "origin/main"
             changed = dict(reversed(line.split("\t")) for line in run(
                 "git", "diff", "--name-status", "--no-renames", base, ref, capture_output=True).stdout.splitlines())
-            if not pull and "findings/index.json.sig" in changed:
+            if not pull and changed.get("findings/index.json.sig") in ("A", "M"):
                 # Only the maintainer signs: accept-finding.py has pushed and is about to open its pull request. Leave it be.
-                print(f"The branch {branch} holds a signed index and has no open pull request yet: left alone.", file=sys.stderr)
+                # A warning, so a pull request that accept-finding.py failed to open shows in Actions.
+                print(f"::warning::The branch {branch} holds a signed index and has no open pull request yet: left alone.", file=sys.stderr)
                 return
             index = {"findings/index.json", "findings/index.json.sig"}
             if (pull and set(changed.values()) <= {"A", "M"} and set(changed) - index == {f"findings/{path}" for path, _ in placed}
@@ -402,10 +406,11 @@ def drafted(event):
                                 cwd=ROOT, capture_output=True, text=True)
         if pushed.returncode == 0:
             break
-        if "stale info" not in pushed.stderr and "rejected" not in pushed.stderr:
+        # Another try only when the branch moved; a push the server declined would be declined again.
+        if remote_head(branch) == head:
             sys.exit(f"The branch {branch} could not be pushed:\n{pushed.stderr}")
     else:
-        sys.exit(f"The branch {branch} kept changing while this ran.")
+        sys.exit(f"The branch {branch} kept changing while this ran. The last push said:\n{pushed.stderr}")
     body = ("\n".join(line for line, _ in described) + "\n\nWritten from the issue by a workflow. The findings passed the parser's checks; "
             "the tests and the review are still to come. The index is not signed, so the app would not take this change: "
             f"do not merge it as it is. To accept it, run `scripts/accept-finding.py {number}`. It writes the branch again from main, "
@@ -414,9 +419,11 @@ def drafted(event):
     if not pull:
         run("gh", "pr", "create", "--draft", "--base", "main", "--head", branch, "--title", title, "--body-file", "-", input=body)
         return
-    run("gh", "pr", "edit", str(pull["number"]), "--title", title, "--body-file", "-", input=body)
-    # Again: the maintainer may have marked it ready between the first time and the push.
-    unready(pull)
+    try:
+        run("gh", "pr", "edit", str(pull["number"]), "--title", title, "--body-file", "-", input=body)
+    finally:
+        # Again, even when the edit fails: the maintainer may have marked it ready between the first time and the push.
+        unready(pull)
 
 if __name__ == "__main__":
     arguments = sys.argv[1:]
