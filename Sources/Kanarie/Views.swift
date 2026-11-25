@@ -64,6 +64,10 @@ struct MenuView: View {
     var model: AppModel
     var updater: Updater
     @Environment(\.dismiss) private var dismiss
+    /// Holding Option turns About Kanarie into About Arie, which opens where he comes from.
+    @State private var option = false
+    @State private var flags: Any?
+    private let origin = (Bundle.main.object(forInfoDictionaryKey: "ArieOrigin") as? String).flatMap(URL.init(string:))
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -92,8 +96,13 @@ struct MenuView: View {
             }
             Button("Rescan Now") { Task { await model.rescan(userInitiated: true) } }.disabled(model.scanning)
             Button("Check for Updates…") { updater.checkForUpdates() }
-            Button("About Kanarie") {
+            // One button, so focus and a click in progress survive Option going down or up. The click reads the key itself.
+            Button(option && origin != nil ? "About Arie" : "About Kanarie") {
                 dismiss()
+                if NSEvent.modifierFlags.contains(.option), let origin {
+                    NSWorkspace.shared.open(origin)
+                    return
+                }
                 NSApp.activate(ignoringOtherApps: true)
                 let centred = NSMutableParagraphStyle()
                 centred.alignment = .center
@@ -107,6 +116,22 @@ struct MenuView: View {
         }
         .buttonStyle(.link)
         .padding()
+        .onAppear {
+            option = NSEvent.modifierFlags.contains(.option)
+            guard flags == nil else { return }
+            flags = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { event in
+                option = event.modifierFlags.contains(.option)
+                return event
+            }
+        }
+        .onDisappear {
+            if let flags { NSEvent.removeMonitor(flags) }
+            flags = nil
+        }
+        // Option may have changed while another app was active, where the monitor does not hear it.
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { _ in
+            option = NSEvent.modifierFlags.contains(.option)
+        }
         .frame(width: 300)
     }
 

@@ -21,7 +21,7 @@ Warm, honest, cheeky. The facts are exact and plainly said; the mischief comes f
 - Generic SaaS landing pages: centered hero, gradients, three identical feature cards, "Get started" buttons.
 - Privacy scare and hacker dark: black backgrounds, neon, padlocks, "they are watching you".
 - Childish: Arie is charming, but Kanarie runs commands and edits shell profiles after confirmation, so it must stay trustworthy.
-- Naming what inspired Arie: those who know, know.
+- Naming what inspired Arie: those who know, know. The only exception is the hidden Easter eggs, which link to it without a title or name (seven taps on Arie on the homepage, the browser console, the 404 page, Option on the menu's About item, and `ArieOrigin` in Info.plist).
 
 ## Design Principles
 
