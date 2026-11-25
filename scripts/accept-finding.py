@@ -152,7 +152,9 @@ def targets(body, findings):
     parts = HEADING.split(body)
     if len(parts) == 1:
         return [target(body, findings)]
-    # What stands before the first heading is the app's introduction, and is not read.
+    # What stands before the first heading is the app's introduction. A finding there would be lost, so it is refused.
+    if re.search(r"^````json$|^\*\*Proposed as:\*\*", parts[0], re.M):
+        raise ValueError("there is a finding before the first heading")
     numbers, sections = parts[1::2], parts[2::2]
     if len(sections) > BULK_LIMIT:
         raise ValueError(f"the issue holds more than {BULK_LIMIT} findings")

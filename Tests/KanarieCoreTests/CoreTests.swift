@@ -972,8 +972,9 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         let twice = "Refused: finding 1: there is more than one finding where one is expected, perhaps under a heading that is not exactly \"### Finding <n>\".\n"
         #expect(try parse(text.replacingOccurrences(of: "### Finding 2\n", with: "### Finding 2 \n")) == twice)
         #expect(try parse(first + "\n" + first).hasPrefix("Refused: there is more than one finding where one is expected"))
-        // What stands before the first heading is not read.
-        #expect(try parse(text.replacingOccurrences(of: "2 findings, each in a section of its own.", with: first)) == placed)
+        // A sentence before the first heading is not read, a finding there is refused.
+        #expect(try parse(text.replacingOccurrences(of: "2 findings, each in a section of its own.", with: "Some words.")) == placed)
+        #expect(try parse(text.replacingOccurrences(of: "2 findings, each in a section of its own.", with: first)) == "Refused: there is a finding before the first heading.\n")
         #expect(throws: Submission.TooMany.self) { try Submission.issue(Array(repeating: entry("Example One"), count: 11), appVersion: "1") }
         // A long list of names is cut short in the title, which GitHub limits to 256 characters.
         let many = try Submission.issue((1...10).map { entry("Example Tool With A Rather Long Name \($0)") }, appVersion: "1")
