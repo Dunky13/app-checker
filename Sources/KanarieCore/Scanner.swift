@@ -23,6 +23,15 @@ public struct Item: Sendable, Identifiable, Hashable {
 public enum Scanner {
     static var fm: FileManager { .default }
 
+    /// Items an earlier scan found that this one does not, so a finding can still be sent for them. A kind in `unread` was
+    /// not fully read this time (npm without a login shell), and a missing item of that kind is not called gone.
+    public static func gone(known: [String: String], names: [String: String], present: [Item], unread: Set<String>) -> [Item] {
+        let here = Set(present.map(\.id))
+        return known.filter { !here.contains($0.key) }
+            .map { Item(id: $0.key, name: names[$0.key] ?? String($0.key.drop { $0 != ":" }.dropFirst()), version: $0.value, path: "") }
+            .filter { !unread.contains($0.kind) }
+    }
+
     static func children(_ dir: URL) -> [URL] {
         // Numeric-aware, so version folder 1.10 sorts after 1.9 and `last` is the newest.
         ((try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)) ?? [])

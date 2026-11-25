@@ -47,12 +47,14 @@ extension Verdict.Source {
 
 struct StatusIcon: View {
     var status: Status
+    /// No longer installed: a crossed-out circle instead of the status, which the detail pane still shows.
+    var removed = false
 
     var body: some View {
         // Every status takes the room of the widest symbol, so the texts next to the icons line up.
         Image(systemName: Status.warn.symbol).hidden()
-            .overlay { Image(systemName: status.symbol).foregroundStyle(status.color) }
-            .accessibilityElement().accessibilityLabel(status.label).accessibilityAddTraits(.isImage)
+            .overlay { Image(systemName: removed ? "circle.slash" : status.symbol).foregroundStyle(removed ? .secondary : status.color) }
+            .accessibilityElement().accessibilityLabel(removed ? "Removed, \(status.label)" : status.label).accessibilityAddTraits(.isImage)
     }
 }
 
@@ -143,8 +145,10 @@ struct MainView: View {
     private var shown: [Item] {
         listed(filter, source, kind)
             .sorted { a, b in
+                // Removed items go last.
+                let (ga, gb) = (model.removed.contains(a.id), model.removed.contains(b.id))
                 let (ra, rb) = (model.verdicts[a.id]?.status.rank ?? 0, model.verdicts[b.id]?.status.rank ?? 0)
-                return ra != rb ? ra < rb : a.name.localizedCaseInsensitiveCompare(b.name) == .orderedAscending
+                return ga != gb ? gb : ra != rb ? ra < rb : a.name.localizedCaseInsensitiveCompare(b.name) == .orderedAscending
             }
     }
 
@@ -153,7 +157,8 @@ struct MainView: View {
     private func lookupCandidates(shown: [Item], picked: [Item]) -> [Item] {
         // An item that is being looked up right now is left out: a batch would skip it anyway.
         let free = (picked.count > 1 ? picked : shown).filter { !model.analysing.contains($0.id) }
-        guard picked.count > 1 else { return free.filter { [.sdk, Verdict.Source.none].contains(model.verdicts[$0.id]?.source) } }
+        // Removed items only when selected: the list of everything ever uninstalled is not worth a batch.
+        guard picked.count > 1 else { return free.filter { !model.removed.contains($0.id) && [.sdk, Verdict.Source.none].contains(model.verdicts[$0.id]?.source) } }
         return free.filter { model.verdicts[$0.id]?.source != .rules }
     }
 
@@ -172,10 +177,11 @@ struct MainView: View {
         NavigationSplitView {
             List(shown, selection: $selection) { item in
                 HStack {
-                    StatusIcon(status: model.verdicts[item.id]?.status ?? .unknown)
+                    let removed = model.removed.contains(item.id)
+                    StatusIcon(status: model.verdicts[item.id]?.status ?? .unknown, removed: removed)
                     VStack(alignment: .leading) {
-                        Text(item.name)
-                        Text([kindNames[item.kind] ?? item.kind, item.version].filter { !$0.isEmpty }.joined(separator: " · "))
+                        Text(item.name).foregroundStyle(removed ? .secondary : .primary)
+                        Text([kindNames[item.kind] ?? item.kind, item.version, removed ? "Removed" : ""].filter { !$0.isEmpty }.joined(separator: " · "))
                             .font(.caption).foregroundStyle(.secondary)
                     }
                     Spacer()
@@ -221,7 +227,7 @@ struct MainView: View {
             } else if let item = picked.first ?? (selection.count == 1 ? model.items.first { selection.contains($0.id) } : nil), let verdict = model.verdicts[item.id] {
                 DetailView(model: model, item: item, verdict: verdict)
             } else {
-                ContentUnavailableView("Select an item", systemImage: "bird", description: Text("\(model.items.count) apps, packages and extensions checked."))
+                ContentUnavailableView("Select an item", systemImage: "bird", description: Text("\(model.items.count - model.removed.count) apps, packages and extensions checked."))
             }
         }
         // In the toolbar: a sidebar search field scrolls out of sight with a long list.
@@ -303,6 +309,10 @@ struct DetailView: View {
                         Text(verdict.status.label).foregroundStyle(.secondary)
                     }
                 }
+                if model.removed.contains(item.id) {
+                    Label(item.version.isEmpty ? "No longer installed." : "No longer installed. Last seen: version \(item.version).", systemImage: "circle.slash")
+                        .foregroundStyle(.secondary)
+                }
                 Text(verdict.state).font(.headline)
                 if let summary = verdict.rule?.summary { Text(summary) }
 
@@ -370,7 +380,9 @@ struct DetailView: View {
                     }
                 }
                 HStack {
-                    Button("Show in Finder", systemImage: "folder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: item.path)]) }
+                    if !model.removed.contains(item.id) {
+                        Button("Show in Finder", systemImage: "folder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: item.path)]) }
+                    }
                     Button(verdict.source == .rules ? "Suggest a Correction…" : "Submit a Finding…", systemImage: "square.and.pencil") { submitting = true }
                 }
                 Text(item.id).font(.caption.monospaced()).foregroundStyle(.secondary).textSelection(.enabled)

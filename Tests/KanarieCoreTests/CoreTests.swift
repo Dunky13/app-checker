@@ -358,6 +358,15 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
 }
 
 @Suite struct Scanning {
+    @Test func goneItemsKeepTheirLastNameAndVersion() {
+        let known = ["app:com.example.gone": "2.1", "app:com.example.here": "1.0", "npm:left-out": "3.0", "brew:nameless": "0.9"]
+        let gone = Scanner.gone(known: known, names: ["app:com.example.gone": "Gone"],
+                                present: [Item(id: "app:com.example.here", name: "Here", version: "1.1", path: "/x")], unread: ["npm"])
+        #expect(gone.map(\.id).sorted() == ["app:com.example.gone", "brew:nameless"])
+        #expect(gone.first { $0.id == "app:com.example.gone" }.map { [$0.name, $0.version, $0.path] } == ["Gone", "2.1", ""])
+        #expect(gone.first { $0.id == "brew:nameless" }?.name == "nameless")
+    }
+
     let dir = FileManager.default.temporaryDirectory.appendingPathComponent("kanarie-tests-\(UUID().uuidString)")
 
     func write(_ path: String, _ content: String) throws {

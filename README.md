@@ -157,7 +157,7 @@ File paths must start with `~/` or a Homebrew prefix. Rules cannot run commands,
 
 A `command` is one line, and it should make the change permanent: `echo 'export NAME=1' >> ~/.zshrc`, not `export NAME=1`.
 
-Found a wrong or missing finding? Use **Submit a Finding…** (or **Suggest a Correction…**) on the item in the app, or open a pull request with a source. `swift test` validates every file.
+Found a wrong or missing finding? Use **Submit a Finding…** (or **Suggest a Correction…**) on the item in the app (removed items stay in the list for this), or open a pull request with a source. `swift test` validates every file.
 
 ### Submitting from the app
 

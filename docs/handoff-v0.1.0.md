@@ -114,7 +114,7 @@ A finding sent from the app arrives as an issue. `scripts/accept-finding.py <iss
 - The model object that ties scanning, saving and notifications together has no unit tests; it was checked by running the app.
 - Not scanned: apps outside the two Applications folders, iPhone and iPad apps, other Homebrew prefixes, and editors other than the six listed in the README.
 
-## Since 0.1.0, not released yet
+## In 0.1.1
 
 - **Lookup log.** Every AI lookup keeps its exchange: the prompt, the model's messages and its tool calls with their results, and the reason when it failed. **Show Lookup Log…** on an item shows it as a small chat log, with the tool calls between two messages folded into one group and JSON set as a code block (`LLM.blocks(of:)`; `LLM.laidOut(json:)` only adds white space, so numbers, escapes, key order and repeated keys stay as written). The Claude CLI is now run with `--output-format stream-json --verbose`, and `LLM.transcript(ofStream:)` reads that event stream.
   - Stored by `LookupLogs` (in `KanarieCore`) as one file per item in the `lookups` folder of the support folder, named by the SHA-256 of the item id. A failed lookup goes to a second file (`.failed.json`), also when it could not start; the next lookup that succeeds removes it. With both there, the sheet heads them "The lookup behind the verdict" and "A later lookup, which failed", and says so when the first is missing or unreadable although the verdict is a lookup's. A saved answer that today's checks reject at launch loses its log with it. The cask's zap removes the folder.
@@ -136,3 +136,11 @@ A finding sent from the app arrives as an issue. `scripts/accept-finding.py <iss
   - Not checked: the app switcher overlay itself (the classification is what it lists), full screen and several Spaces, macOS 15 and 26 (checked on 27 only).
   - Limit: closing the list while a Sparkle window is open takes that window out of the Dock and the app switcher too. It stays on screen and "Check for Updates…" in the menu brings it forward.
   - One launch during testing showed no window to the accessibility API for about 13 seconds while the app was already an ordinary one. Five later launches of the same build, two of them right after a rebuild, showed the window at once, so the cause is unknown.
+
+## Since 0.1.1, not released yet
+
+- **Removed items stay listed.** An item an earlier scan found and this one does not is listed last, with a crossed-out circle instead of its status and "Removed" after its version, so a finding can still be submitted for it. Its detail pane says "No longer installed" with the last version seen, keeps its verdict, the lookup and **Submit a Finding…**, and has no **Show in Finder**. Removed items are left out of the menu bar's count, the popover's counts, the SDK scan and the toolbar's lookup of listed items; a selection may still include them.
+  - The last name of each item is now kept in `state.json` (`names`). An item removed before this version is named after its AI lookup, else after its id. `Scanner.gone` builds the list; when the login shell could not be read, missing npm packages are not called removed, because their folders were not looked in.
+  - Evidence: in a build of this branch with its own support folder, two removed items written into its state (one with an AI verdict, one without a name): both listed last with the label "Removed, <status>" read by the accessibility API, the installed count unchanged (145), the detail pane as above, and the submit form filled in with the item's id, name and verdict. 52 tests pass, among them one for `Scanner.gone`.
+  - Not checked: the menu bar popover counts (reviewed in code only).
+  - Limits: a removed item cannot be forgotten yet, and the issue does not say the item was uninstalled. The verdict of a removed item still reads this Mac's settings.

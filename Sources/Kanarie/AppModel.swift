@@ -22,9 +22,12 @@ final class AppModel {
         var sdks: [String: [String]] = [:]     // "id@version" -> SDK scan result
         var blocked: [String]?                 // files macOS would not let the app read; optional so older state files still load
         var serial: Int?                       // highest findings index accepted so far, which also holds when the cache is lost
+        var names: [String: String]?           // item id -> last seen name, to list an item after it is removed
     }
 
+    /// Installed items, followed by the ones that were removed since an earlier scan.
     private(set) var items: [Item] = []
+    private(set) var removed: Set<String> = []
     private(set) var verdicts: [String: Verdict] = [:]
     private(set) var analysing: Set<String> = []
     private(set) var errors: [String: String] = [:]
@@ -103,7 +106,7 @@ final class AppModel {
         }
     }
 
-    func count(_ status: Status) -> Int { verdicts.values.count { $0.status == status } }
+    func count(_ status: Status) -> Int { verdicts.count { !removed.contains($0.key) && $0.value.status == status } }
 
     // MARK: Scanning
 
@@ -169,11 +172,15 @@ final class AppModel {
         refreshShell = false
         let snapshot = await Task.detached { Self.scan(shell: known) }.value
         shell = snapshot.shell
-        (env, shellFailed, items) = (snapshot.shell.env, snapshot.shell.failed, snapshot.items)
+        saved.names = (saved.names ?? [:]).merging(snapshot.items.map { ($0.id, $0.name) }) { $1 }
+        let names = saved.aiRules.compactMapValues(\.name).merging(saved.names ?? [:]) { $1 }
+        let gone = Scanner.gone(known: saved.known, names: names, present: snapshot.items, unread: snapshot.shell.complete ? [] : ["npm"])
+        removed = Set(gone.map(\.id))
+        (env, shellFailed, items) = (snapshot.shell.env, snapshot.shell.failed, snapshot.items + gone)
         evaluate()
 
         // Slow part, once per item version: look for telemetry SDKs in items nothing else is known about.
-        let unscanned = items.filter { verdicts[$0.id]?.source == Verdict.Source.none && saved.sdks[Self.sdkKey($0)] == nil }
+        let unscanned = items.filter { !removed.contains($0.id) && verdicts[$0.id]?.source == Verdict.Source.none && saved.sdks[Self.sdkKey($0)] == nil }
         let found = await Task.detached { unscanned.map { SDKScan.scan($0) } }.value
         for (item, sdks) in zip(unscanned, found) { saved.sdks[Self.sdkKey(item)] = sdks }
         let current = Set(items.map(Self.sdkKey))
