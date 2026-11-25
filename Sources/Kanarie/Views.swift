@@ -64,6 +64,10 @@ struct MenuView: View {
     var model: AppModel
     var updater: Updater
     @Environment(\.dismiss) private var dismiss
+    /// Holding Option turns About Kanarie into About Arie, which opens where he comes from.
+    @State private var option = false
+    @State private var flags: Any?
+    private let origin = (Bundle.main.object(forInfoDictionaryKey: "ArieOrigin") as? String).flatMap(URL.init(string:))
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -92,21 +96,39 @@ struct MenuView: View {
             }
             Button("Rescan Now") { Task { await model.rescan(userInitiated: true) } }.disabled(model.scanning)
             Button("Check for Updates…") { updater.checkForUpdates() }
-            Button("About Kanarie") {
-                dismiss()
-                NSApp.activate(ignoringOtherApps: true)
-                let centred = NSMutableParagraphStyle()
-                centred.alignment = .center
-                // Without attributes the credits are set in Helvetica, black also in dark mode.
-                let credits = NSAttributedString(
-                    string: "Arie, the canary, does not sing. He stays quiet while nothing on your Mac phones home, and sings right back at whatever does.",
-                    attributes: [.font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize), .foregroundColor: NSColor.labelColor, .paragraphStyle: centred])
-                NSApp.orderFrontStandardAboutPanel(options: [.credits: credits])
+            if option, let origin {
+                Button("About Arie") {
+                    dismiss()
+                    NSWorkspace.shared.open(origin)
+                }
+            } else {
+                Button("About Kanarie") {
+                    dismiss()
+                    NSApp.activate(ignoringOtherApps: true)
+                    let centred = NSMutableParagraphStyle()
+                    centred.alignment = .center
+                    // Without attributes the credits are set in Helvetica, black also in dark mode.
+                    let credits = NSAttributedString(
+                        string: "Arie, the canary, does not sing. He stays quiet while nothing on your Mac phones home, and sings right back at whatever does.",
+                        attributes: [.font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize), .foregroundColor: NSColor.labelColor, .paragraphStyle: centred])
+                    NSApp.orderFrontStandardAboutPanel(options: [.credits: credits])
+                }
             }
             Button("Quit Kanarie") { NSApp.terminate(nil) }
         }
         .buttonStyle(.link)
         .padding()
+        .onAppear {
+            option = NSEvent.modifierFlags.contains(.option)
+            flags = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { event in
+                option = event.modifierFlags.contains(.option)
+                return event
+            }
+        }
+        .onDisappear {
+            if let flags { NSEvent.removeMonitor(flags) }
+            flags = nil
+        }
         .frame(width: 300)
     }
 
