@@ -1,12 +1,12 @@
-<p align="center"><img src="Resources/logo.png" width="128" alt="Kanarie logo: a yellow canary on a perch, carrying a blue medieval shield"></p>
+<img src="Resources/logo.png" width="128" alt="Kanarie logo: a yellow canary on a perch, carrying a blue medieval shield">
 
-<h1 align="center">Kanarie</h1>
+# Kanarie
 
-<p align="center"><strong>No humming on this Mac.</strong></p>
+**No humming on this Mac.**
 
-<p align="center">A free, open-source menu bar app for macOS. It lists the software on your Mac, tells you which of it sends telemetry, and shows you how to switch that off.</p>
+A free, open-source menu bar app for macOS. It lists the software on your Mac, tells you which of it sends telemetry, and shows you how to switch that off.
 
-<p align="center"><a href="https://dunky13.github.io/kanarie/">Homepage</a> · <a href="#install">Install</a> · <a href="findings">Findings</a></p>
+[Homepage](https://dunky13.github.io/kanarie/) · [Install](#install) · [Findings](#findings)
 
 Kanarie is Dutch for canary, as in the canary in a coal mine. Its canary is Arie, and he has a complaint.
 
@@ -37,6 +37,8 @@ Every item gets one of four colours. Arie has a mood for each.
 | **Yellow** (warning) | *We want opt-outs!* | It sends telemetry, and there is a switch. Arie ruffles his feathers and shows you where it is. |
 | **Green** (check) | *Thank you for keeping it down.* | No telemetry, or you switched it off on this Mac. Arie dozes. |
 | **Grey** (question mark) | *Missing: the facts.* | Unknown. Arie cocks his head. Know the answer? Suggest a finding from the app. |
+
+The exact rules, and the crossed-out circle for apps you removed, are under [What the colours mean](#what-the-colours-mean).
 
 ## He points. You decide.
 
@@ -95,15 +97,15 @@ brew install --cask dunky13/kanarie/kanarie
 
 Or download the latest `Kanarie-<version>-universal.dmg` from [Releases](https://github.com/Dunky13/kanarie/releases), open it and drag Kanarie onto Applications.
 
-Either way it needs macOS 15 or later and updates itself through [Sparkle](https://sparkle-project.org). The cask lives in this repository ([Casks/kanarie.rb](Casks/kanarie.rb)), which is why the tap needs the address. Use the full name as shown for the first install: Homebrew refuses a short name from a tap it has not been told to trust.
+Then look for the bird in your menu bar. While its list window is open it is also in the Dock and the app switcher (Command-Tab). If you use a menu bar manager, or your Mac has a notch and a full menu bar, the icon may be hidden: opening the app again from Finder shows the list.
+
+Either way it updates itself through [Sparkle](https://sparkle-project.org). The cask lives in this repository ([Casks/kanarie.rb](Casks/kanarie.rb)), which is why the tap needs the address. Use the full name as shown for the first install: Homebrew refuses a short name from a tap it has not been told to trust.
 
 If you installed it with Homebrew, remove it again, with its settings and the API key of the AI lookup, in one go:
 
 ```sh
 brew uninstall --cask --zap dunky13/kanarie/kanarie && brew untap dunky13/kanarie
 ```
-
-Then look for the bird in your menu bar. While its list window is open it is also in the Dock and the app switcher (Command-Tab). If you use a menu bar manager, or your Mac has a notch and a full menu bar, the icon may be hidden: opening the app again from Finder shows the list.
 
 ## AI lookup
 
@@ -128,7 +130,7 @@ The Claude Code CLI is started without your Claude settings, and with its own me
 
 ## Privacy
 
-Kanarie itself sends no telemetry. Obviously. It talks to the network in four cases:
+Kanarie itself sends no telemetry. It talks to the network in four cases:
 
 - At launch and then once a day it downloads the findings from this repository (can be switched off in Settings). It fetches every file that changed, not only those for apps you have, so the requests say nothing about your Mac. Files are only used if they match the list the maintainer signed.
 - Sparkle checks this repository for updates, after asking you once. The anonymous system profile is disabled.
