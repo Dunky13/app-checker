@@ -84,6 +84,22 @@ public enum Submission {
         return lines(rule.disabledWhen, "switches it off") + lines(rule.enabledWhen, "switches it on") + ["Verdict with this finding: \(colour). \(verdict.state)"]
     }
 
+    /// A lookup as a bulk submission sends it: for this item, written as the form writes it, and only when the form
+    /// changes nothing more than that, so that "not edited" holds. The form trims text, leaves empty fields out and fills
+    /// in a missing name, all of which keep the finding; it also drops steps and checks the telemetry class does not use,
+    /// and adds empty steps to an opt-out without any, which change it.
+    public static func unedited(_ found: Rule, item: Item) -> Rule? {
+        let text = { (field: String) in field.trimmingCharacters(in: .whitespacesAndNewlines) }
+        let optional = { (field: String?) in field.map(text).flatMap { $0.isEmpty ? nil : $0 } }
+        var sent = found
+        (sent.match, sent.name, sent.summary, sent.policyURL) = ([item.id], optional(found.name) ?? item.name, text(found.summary), optional(found.policyURL))
+        sent.sources = (found.sources ?? []).joined(separator: "\n").split(whereSeparator: \.isNewline).map { text(String($0)) }.filter { !$0.isEmpty }
+        sent.optOut = found.optOut.map { OptOut(instructions: text($0.instructions), command: optional($0.command), url: optional($0.url)) }
+        // A lookup writes "no checks" as an empty list, the form leaves the field out: the same finding.
+        (sent.disabledWhen, sent.enabledWhen) = (found.disabledWhen?.isEmpty == false ? found.disabledWhen : nil, found.enabledWhen?.isEmpty == false ? found.enabledWhen : nil)
+        return Draft(from: found, item: item).rule(for: item) == sent ? sent : nil
+    }
+
     /// Whether the names a finding relies on appear literally on the pages it cites.
     /// An invented variable or settings key is the main risk of an AI lookup, and this catches it without trusting anyone.
     public struct SourceCheck: Hashable, Sendable {
