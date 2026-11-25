@@ -203,7 +203,7 @@ public enum Submission {
         let read = readings.map { $0.map { "- `\(plain($0, limit: 300))`" } }
             ?? ["- Not included: the checks came from an AI lookup, so what they read stays on the submitter's Mac."]
         let body = """
-        **Item:** `\(plain(item.id))` (`\(plain(item.name))`, \(item.version.isEmpty ? "version unknown" : "version `\(plain(item.version))`"))\(removed ? "\n**No longer installed:** the submitter removed it before sending this, so what was read below is this Mac without it." : "")
+        **Item:** `\(plain(item.id))` (`\(plain(item.name))`, \(item.version.isEmpty ? "version unknown" : "version `\(plain(item.version))`"))\(removed ? "\n**Not found on this Mac when sent:** Kanarie no longer finds it installed\(readings == nil ? "" : ", so the readings below are of this Mac without it")." : "")
         **Origin:** \(origin)
         **Proposed as:** \(file)
 

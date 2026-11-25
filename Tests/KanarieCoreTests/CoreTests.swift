@@ -375,6 +375,13 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         #expect(Scanner.unread(brewPrefixes: [dir], editors: [("Code", dir.appendingPathComponent("good"))]).isEmpty)
         try write("half/extensions.json", "[{\"identifier\": ")
         #expect(Scanner.unread(brewPrefixes: [dir], editors: [("Code", dir.appendingPathComponent("half"))]) == ["ext"])
+        // A Cellar that is there but cannot be listed.
+        let cellar = dir.appendingPathComponent("Cellar")
+        try FileManager.default.createDirectory(at: cellar, withIntermediateDirectories: true)
+        #expect(Scanner.unread(brewPrefixes: [dir], editors: []).isEmpty)
+        try FileManager.default.setAttributes([.posixPermissions: 0], ofItemAtPath: cellar.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: cellar.path) }
+        #expect(Scanner.unread(brewPrefixes: [dir], editors: []) == ["brew", "cask"])
     }
 
     let dir = FileManager.default.temporaryDirectory.appendingPathComponent("kanarie-tests-\(UUID().uuidString)")
@@ -875,7 +882,7 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
             let check = Submission.sourceCheck(rule, pages: [], cited: 0)
             let issue = try Submission.issue(item: item, rule: rule, origin: "o", readings: [], sourceCheck: check, appVersion: "1", removed: removed)
             let body = try #require(URLComponents(url: issue.url, resolvingAgainstBaseURL: false)?.queryItems?.last?.value)
-            #expect(body.contains("**No longer installed:**") == removed)
+            #expect(body.contains("**Not found on this Mac when sent:**") == removed)
             let file = folder.appendingPathComponent("body.md")
             // GitHub hands the body of an issue back with CRLF line ends.
             try Data(edit(body).replacingOccurrences(of: "\n", with: "\r\n").utf8).write(to: file)
@@ -920,6 +927,10 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         #expect(try read(found).hasPrefix("example-new-tool/0.json\n"))
         // The note on a removed item is no part of what the script reads.
         #expect(try read(found, removed: true).hasPrefix("example-new-tool/0.json\n"))
+        // Without readings the note does not point at them.
+        let bare = try Submission.issue(item: item, rule: found, origin: "o", readings: nil, sourceCheck: Submission.sourceCheck(found, pages: [], cited: 0), appVersion: "1", removed: true)
+        let bareBody = try #require(URLComponents(url: bare.url, resolvingAgainstBaseURL: false)?.queryItems?.last?.value)
+        #expect(bareBody.contains("Kanarie no longer finds it installed.") && !bareBody.contains("readings below"))
     }
 
     @Test func theIssueCarriesTheFindingAndSurvivesTheLink() throws {
