@@ -36,26 +36,31 @@ public enum Shell {
         process.standardOutput = out
         process.standardError = FileHandle.nullDevice
         try process.run()
+        // Signalled when the program has ended. Whoever is woken by it passes it on, so every thread below ends with the program.
+        let over = DispatchSemaphore(value: 0)
         // Asked nicely first; a program that ignores that is killed two seconds later.
+        // The waiting is done on threads of their own and not on a queue: callers wait in here on pooled threads, and on a
+        // machine with few cores those can all be taken, after which nothing queued runs and no timeout would ever come.
         let end = { @Sendable in
             process.terminate()
-            DispatchQueue.global().asyncAfter(deadline: .now() + 2) { if process.isRunning { kill(process.processIdentifier, SIGKILL) } }
+            Thread.detachNewThread {
+                if over.wait(timeout: .now() + 2) == .success { over.signal() } else if process.isRunning { kill(process.processIdentifier, SIGKILL) }
+            }
         }
         // Its own flag: a program that handles the signal exits like any other, and one that crashes was not timed out.
         let timedOut = OSAllocatedUnfairLock(initialState: false)
-        // A timer that can be cancelled: a plain delayed block would hold the process and its pipe until the timeout.
-        let timer = DispatchSource.makeTimerSource(queue: .global())
-        timer.schedule(deadline: .now() + timeout)
-        timer.setEventHandler {
-            guard process.isRunning else { return }
-            timedOut.withLock { $0 = true }
-            end()
+        Thread.detachNewThread {
+            if over.wait(timeout: .now() + timeout) == .success {
+                over.signal()
+            } else if process.isRunning {
+                timedOut.withLock { $0 = true }
+                end()
+            }
         }
-        timer.resume()
         stop?.attach(end)
         let data = out.fileHandleForReading.readDataToEndOfFile()
         process.waitUntilExit()
-        timer.cancel()
+        over.signal()
         let name = URL(fileURLWithPath: executable).lastPathComponent
         if stop?.asked == true { throw Failure(errorDescription: "\(name) was stopped.", output: data) }
         if timedOut.withLock({ $0 }) { throw Failure(errorDescription: "\(name) timed out after \(Int(timeout)) s.", output: data) }

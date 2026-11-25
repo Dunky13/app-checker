@@ -922,16 +922,17 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
     }
 
     /// A program that ignores the request to end is killed, and one that is stopped by the caller says so.
-    @Test func endsAProgramThatWillNotStop() async throws {
+    @Test func endsAProgramThatWillNotStop() {
         // The program writes a file once it ignores the request, so the stop cannot come before that.
         let ready = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: ready) }
-        let stop = Shell.Stop()
-        let run = Task.detached { try Shell.run("/bin/sh", ["-c", "trap '' TERM; echo part; : > \"$0\"; exec sleep 30", ready.path], timeout: 60, stop: stop) }
-        for _ in 0..<1500 where !FileManager.default.fileExists(atPath: ready.path) { try await Task.sleep(for: .milliseconds(20)) }
-        let asked = Date()
-        stop.now()
-        await #expect { try await run.value } throws: { error in
+        let (stop, asked) = (Shell.Stop(), Date())
+        // From a thread of its own: this test waits in `run` on a pooled thread, and the stop must not need another one.
+        Thread.detachNewThread {
+            for _ in 0..<1500 where !FileManager.default.fileExists(atPath: ready.path) { Thread.sleep(forTimeInterval: 0.02) }
+            stop.now()
+        }
+        #expect { try Shell.run("/bin/sh", ["-c", "trap '' TERM; echo part; : > \"$0\"; exec sleep 30", ready.path], timeout: 60, stop: stop) } throws: { error in
             (error as? Shell.Failure)?.output == Data("part\n".utf8) && error.localizedDescription == "sh was stopped."
         }
         #expect(Date().timeIntervalSince(asked) < 20)
