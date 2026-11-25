@@ -76,7 +76,7 @@ struct SubmitView: View {
         .onExitCommand { dismiss() }
         // Cancel, Escape or closing the window: stop fetching, and do not open anything afterwards.
         .onDisappear { task?.cancel() }
-        .safeAreaInset(edge: .bottom) {
+        .sheetFooter {
             VStack(alignment: .leading) {
                 // Below the form, where it stays in view whatever the form is scrolled to.
                 if !problems.isEmpty {
@@ -110,8 +110,6 @@ struct SubmitView: View {
                     .disabled(!problems.isEmpty || task != nil)
                 }
             }
-            .padding()
-            .background(.bar)
         }
         .frame(width: 560, height: 640)
     }

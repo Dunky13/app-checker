@@ -17,6 +17,11 @@ PRODUCTS="$("${BUILD[@]}" --show-bin-path)"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Frameworks"
 cp "$PRODUCTS/Kanarie" "$APP/Contents/MacOS/"
+# SwiftPM links without telling the linker which SDK it used, so the binary names the deployment target as its SDK
+# and macOS draws the app in that older look, with a toolbar that does not line up with the sidebar.
+MINIMUM="$(/usr/libexec/PlistBuddy -c "Print :LSMinimumSystemVersion" Info.plist)"
+xcrun vtool -set-build-version macos "$MINIMUM" "$(xcrun --sdk macosx --show-sdk-version)" -replace \
+  -output "$APP/Contents/MacOS/Kanarie" "$APP/Contents/MacOS/Kanarie"
 cp -R "$PRODUCTS/Sparkle.framework" "$APP/Contents/Frameworks/"
 cp Resources/AppIcon.icns "$APP/Contents/Resources/"
 cp -R findings "$APP/Contents/Resources/"

@@ -49,7 +49,10 @@ struct StatusIcon: View {
     var status: Status
 
     var body: some View {
-        Image(systemName: status.symbol).foregroundStyle(status.color).accessibilityLabel(status.label)
+        // Every status takes the room of the widest symbol, so the texts next to the icons line up.
+        Image(systemName: Status.warn.symbol).hidden()
+            .overlay { Image(systemName: status.symbol).foregroundStyle(status.color) }
+            .accessibilityElement().accessibilityLabel(status.label)
     }
 }
 
@@ -171,12 +174,11 @@ struct MainView: View {
                         Text([kindNames[item.kind] ?? item.kind, item.version].filter { !$0.isEmpty }.joined(separator: " · "))
                             .font(.caption).foregroundStyle(.secondary)
                     }
+                    Spacer()
                     if model.verdicts[item.id]?.source == .ai {
-                        Spacer()
                         Image(systemName: "sparkles").foregroundStyle(.secondary).help("From an AI lookup, not verified").accessibilityLabel("From an AI lookup, not verified")
                     }
                     if model.analysing.contains(item.id) {
-                        Spacer()
                         ProgressView().controlSize(.small).accessibilityLabel("Looking up")
                     }
                 }
@@ -191,8 +193,10 @@ struct MainView: View {
             .overlay {
                 if model.items.isEmpty, model.scanning {
                     ProgressView("Scanning installed software…")
+                } else if shown.isEmpty, search.isEmpty {
+                    ContentUnavailableView("No items match the filter", systemImage: "line.3.horizontal.decrease.circle")
                 } else if shown.isEmpty {
-                    ContentUnavailableView.search
+                    ContentUnavailableView.search(text: search)
                 }
             }
         } detail: {
@@ -219,19 +223,22 @@ struct MainView: View {
                 // A Menu with an explicit title: a bare toolbar Picker collapses to an unlabeled chevron.
                 Menu {
                     Picker("Status", selection: $filter) {
-                        Text("Any status (\(model.items.count))").tag(Status?.none)
+                        Text("Any status").tag(Status?.none)
                         ForEach([Status.bad, .warn, .ok, .unknown], id: \.self) { status in
                             Label("\(status.label) (\(model.count(status)))", systemImage: status.symbol).tag(Status?.some(status))
                         }
                     }
                     Picker("Verdict from", selection: $source) {
                         Text("Any source").tag(SourceFilter.any)
-                        ForEach([Verdict.Source.rules, .ai, .sdk, .none], id: \.self) { Text($0.label).tag(SourceFilter.only($0)) }
-                        Text(SourceFilter.notAI.label ?? "").tag(SourceFilter.notAI)
+                        ForEach([Verdict.Source.rules, .ai, .sdk, .none].map(SourceFilter.only) + [.notAI], id: \.self) { entry in
+                            Text("\(entry.label ?? "") (\(model.items.count { entry.allows(model.verdicts[$0.id]?.source) }))").tag(entry)
+                        }
                     }
                     Picker("Kind", selection: $kind) {
                         Text("Any kind").tag(String?.none)
-                        ForEach(kindNames.sorted { $0.value < $1.value }, id: \.key) { Text($0.value).tag(String?.some($0.key)) }
+                        ForEach(kindNames.sorted { $0.value < $1.value }, id: \.key) { kind in
+                            Text("\(kind.value) (\(model.items.count { $0.kind == kind.key }))").tag(String?.some(kind.key))
+                        }
                     }
                 } label: {
                     Label(filterLabel, systemImage: "line.3.horizontal.decrease.circle").labelStyle(.titleAndIcon)
@@ -290,7 +297,7 @@ struct DetailView: View {
                 if let summary = verdict.rule?.summary { Text(summary) }
 
                 if let optOut = verdict.rule?.optOut {
-                    GroupBox("How to switch it off") {
+                    GroupBox {
                         VStack(alignment: .leading, spacing: 8) {
                             Text(optOut.instructions)
                             if let command = optOut.command, !command.isEmpty {
@@ -314,6 +321,8 @@ struct DetailView: View {
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(4)
+                    } label: {
+                        Text("How to switch it off").font(.headline)
                     }
                 }
 
@@ -351,8 +360,8 @@ struct DetailView: View {
                     }
                 }
                 HStack {
-                    Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: item.path)]) }
-                    Button(verdict.source == .rules ? "Suggest a Correction…" : "Submit a Finding…") { submitting = true }
+                    Button("Show in Finder", systemImage: "folder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: item.path)]) }
+                    Button(verdict.source == .rules ? "Suggest a Correction…" : "Submit a Finding…", systemImage: "square.and.pencil") { submitting = true }
                 }
                 Text(item.id).font(.caption.monospaced()).foregroundStyle(.secondary).textSelection(.enabled)
             }
@@ -383,28 +392,25 @@ struct LookupLogView: View {
     var body: some View {
         // Two lookups in one list would read as one conversation, so each gets its heading.
         let twoParts = log.failed != nil && (log.verdict != nil || log.fromLookup)
-        VStack(spacing: 0) {
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 12) {
-                    if log.verdict == nil, log.failed == nil { Text("This log could not be read.").foregroundStyle(.secondary) }
-                    if twoParts {
-                        Text("The lookup behind the verdict").font(.headline)
-                        if log.verdict == nil { Text("Its log is not on this Mac, or cannot be read.").foregroundStyle(.secondary) }
-                    }
-                    LogTurns(turns: log.verdict ?? [])
-                    if twoParts { Text("A later lookup, which failed").font(.headline).padding(.top, 8) }
-                    LogTurns(turns: log.failed ?? [])
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 12) {
+                if log.verdict == nil, log.failed == nil { Text("This log could not be read.").foregroundStyle(.secondary) }
+                if twoParts {
+                    Text("The lookup behind the verdict").font(.headline)
+                    if log.verdict == nil { Text("Its log is not on this Mac, or cannot be read.").foregroundStyle(.secondary) }
                 }
-                .padding()
+                LogTurns(turns: log.verdict ?? [])
+                if twoParts { Text("A later lookup, which failed").font(.headline).padding(.top, 8) }
+                LogTurns(turns: log.failed ?? [])
             }
-            Divider()
+            .padding(20)
+        }
+        .sheetFooter {
             HStack {
                 Text("AI lookup log of \(log.name). Kept on this Mac only.").font(.callout).foregroundStyle(.secondary)
                 Spacer()
                 Button("Done") { dismiss() }.keyboardShortcut(.defaultAction)
             }
-            .padding()
-            .background(.bar)
         }
         .frame(width: 640, height: 600)
     }
@@ -514,12 +520,20 @@ struct SettingsView: View {
         .frame(width: 520)
         .onExitCommand { dismiss() }
         .onDisappear { if apiKey != Keychain.apiKey ?? "" { Keychain.apiKey = apiKey } }
-        .safeAreaInset(edge: .bottom) {
+        .sheetFooter {
             HStack {
                 Spacer()
                 Button("Done") { dismiss() }.keyboardShortcut(.defaultAction)
             }
-            .padding()
+        }
+    }
+}
+
+extension View {
+    /// The foot of a sheet: the same bar in every sheet, with the margins of a grouped form.
+    func sheetFooter(@ViewBuilder _ content: () -> some View) -> some View {
+        safeAreaInset(edge: .bottom, spacing: 0) {
+            content().padding(.horizontal, 20).padding(.vertical, 12).frame(maxWidth: .infinity, alignment: .leading).background(.bar)
         }
     }
 }

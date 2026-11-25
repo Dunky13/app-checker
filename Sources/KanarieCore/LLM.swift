@@ -171,7 +171,7 @@ public enum LLM {
         [{
           "entry": 1,
           "identifier": "the entry's identifier",
-          "name": "product name",
+          "name": "the product's name alone, without its kind or version",
           "telemetry": "none" | "opt-in" | "opt-out" | "forced" | "unknown",
           "summary": "One or two plain sentences: what is collected and who receives it.",
           "policyURL": "https://... privacy policy or telemetry docs, or null",
