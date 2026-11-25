@@ -8,12 +8,23 @@ public enum Shell {
         public var output = Data()
     }
 
+    /// Lets another task end a program that `run` is waiting for.
+    public final class Stop: Sendable {
+        private let state = OSAllocatedUnfairLock<(asked: Bool, end: (@Sendable () -> Void)?)>(initialState: (false, nil))
+        public init() {}
+        public func now() { state.withLock { $0.asked = true; return $0.end }?() }
+        var asked: Bool { state.withLock { $0.asked } }
+        /// Asked before the program started: it is ended as soon as it runs.
+        func attach(_ end: @escaping @Sendable () -> Void) { if state.withLock({ $0.end = end; return $0.asked }) { end() } }
+    }
+
     /// Runs a program and returns its stdout. Blocking: call from a background task.
     /// `acceptFailure` is for programs that report errors as output with a non-zero exit, like the claude CLI.
-    /// shortcut: the timeout stops the program itself but not processes it started; give it its own process group if that ever matters.
+    /// shortcut: a timeout or a stop ends the program itself but not processes it started, and one of those that holds
+    /// the program's output open keeps `run` waiting; give the program its own process group if that ever matters.
     public static func run(
         _ executable: String, _ arguments: [String],
-        env: [String: String]? = nil, cwd: URL? = nil, timeout: TimeInterval, acceptFailure: Bool = false
+        env: [String: String]? = nil, cwd: URL? = nil, timeout: TimeInterval, acceptFailure: Bool = false, stop: Stop? = nil
     ) throws -> Data {
         let process = Process(), out = Pipe()
         process.executableURL = URL(fileURLWithPath: executable)
@@ -25,16 +36,33 @@ public enum Shell {
         process.standardOutput = out
         process.standardError = FileHandle.nullDevice
         try process.run()
+        // Signalled when the program has ended. Whoever is woken by it passes it on, so every thread below ends with the program.
+        let over = DispatchSemaphore(value: 0)
+        // Asked nicely first; a program that ignores that is killed two seconds later.
+        // The waiting is done on threads of their own and not on a queue: callers wait in here on pooled threads, and on a
+        // machine with few cores those can all be taken, after which nothing queued runs and no timeout would ever come.
+        let end = { @Sendable in
+            process.terminate()
+            Thread.detachNewThread {
+                if over.wait(timeout: .now() + 2) == .success { over.signal() } else if process.isRunning { kill(process.processIdentifier, SIGKILL) }
+            }
+        }
         // Its own flag: a program that handles the signal exits like any other, and one that crashes was not timed out.
         let timedOut = OSAllocatedUnfairLock(initialState: false)
-        DispatchQueue.global().asyncAfter(deadline: .now() + timeout) {
-            guard process.isRunning else { return }
-            timedOut.withLock { $0 = true }
-            process.terminate()
+        Thread.detachNewThread {
+            if over.wait(timeout: .now() + timeout) == .success {
+                over.signal()
+            } else if process.isRunning {
+                timedOut.withLock { $0 = true }
+                end()
+            }
         }
+        stop?.attach(end)
         let data = out.fileHandleForReading.readDataToEndOfFile()
         process.waitUntilExit()
+        over.signal()
         let name = URL(fileURLWithPath: executable).lastPathComponent
+        if stop?.asked == true { throw Failure(errorDescription: "\(name) was stopped.", output: data) }
         if timedOut.withLock({ $0 }) { throw Failure(errorDescription: "\(name) timed out after \(Int(timeout)) s.", output: data) }
         guard process.terminationReason == .exit else {
             throw Failure(errorDescription: "\(name) was stopped by signal \(process.terminationStatus).", output: data)
