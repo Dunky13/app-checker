@@ -1071,7 +1071,9 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
          {"number": 40, "title": "Finding: cloudflared again", "body": "**Item:** `brew:cloudflared` (`cloudflared`, version `2`)"},
          {"number": 38, "title": "Finding: a pull request", "body": "**Item:** `brew:pr`", "pull_request": {"url": "x"}},
          {"number": 39, "title": "Linux support", "body": "**Item:** `brew:other`"},
-         {"number": 41, "title": "Finding: quoted", "body": "> **Item:** `brew:quoted`", "user": {"login": "x"}}]
+         {"number": 41, "title": "Finding: quoted", "body": "> **Item:** `brew:quoted`", "user": {"login": "x"}},
+         {"number": 42, "title": "Finding: two items", "body": "**Item:** `brew:a`\n**Item:** `brew:b`"},
+         {"number": 43, "title": "Findings: too many", "body": "\#((1...11).map { "**Item:** `brew:n\($0)`" }.joined(separator: "\\n"))"}]
         """#
         #expect(try Submission.openFindings(Data(list.utf8)) == ["brew:cloudflared": 34, "bin:agy": 34, "app:de.t7n.apps.mqtt-explorer": 29])
         #expect(Submission.issue(29).absoluteString == "https://github.com/Dunky13/kanarie/issues/29")

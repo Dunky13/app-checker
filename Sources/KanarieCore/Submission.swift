@@ -308,16 +308,18 @@ public enum Submission {
     /// Each item with a finding issue open, and the oldest such issue. An issue counts by its title, as the app writes it,
     /// and names its items on `**Item:**` lines; pull requests, which GitHub lists among the issues, do not count.
     /// Only the number is taken from an issue: the link the app opens is made from it, never read from the issue.
+    /// An issue naming more items than the app puts in one (1, or `bulkLimit` for "Findings: ") is not one it wrote, and counts for none.
     public static func openFindings(_ data: Data) throws -> [String: Int] {
         struct Present: Decodable {}
         struct Issue: Decodable { var number: Int, title: String, body: String?, pull_request: Present? }
         var found: [String: Int] = [:]
-        for issue in try JSONDecoder().decode([Issue].self, from: data)
-        where issue.pull_request == nil && (issue.title.hasPrefix("Finding: ") || issue.title.hasPrefix("Findings: ")) {
-            for line in (issue.body ?? "").split(whereSeparator: \.isNewline) {
-                guard let match = line.prefixMatch(of: #/\*\*Item:\*\* `([^`]+)`/#) else { continue }
-                found[String(match.1)] = min(found[String(match.1)] ?? .max, issue.number)
+        for issue in try JSONDecoder().decode([Issue].self, from: data) where issue.pull_request == nil {
+            let limit = issue.title.hasPrefix("Finding: ") ? 1 : issue.title.hasPrefix("Findings: ") ? bulkLimit : 0
+            let items = (issue.body ?? "").split(whereSeparator: \.isNewline).compactMap {
+                $0.prefixMatch(of: #/\*\*Item:\*\* `([^`]+)`/#).map { String($0.1) }
             }
+            guard items.count <= limit else { continue }
+            for item in items { found[item] = min(found[item] ?? .max, issue.number) }
         }
         return found
     }
