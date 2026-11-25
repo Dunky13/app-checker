@@ -201,7 +201,6 @@ public enum LLM {
     /// One item may be answered with a bare object instead of an array.
     public static func parseRules(from text: String, ids: [String]) -> [Result<Rule, any Error>] {
         let objects = answers(in: text)
-        let entry = { (object: [String: Any]) in object["entry"] as? Int ?? (object["entry"] as? String).flatMap(Int.init) }
         return ids.enumerated().map { index, id in
             Result {
                 guard !objects.isEmpty else { throw Failure(errorDescription: "The model did not answer with JSON.") }
@@ -228,8 +227,9 @@ public enum LLM {
     }
 
     /// The objects of the answer in a reply. Models put words around it: a citation like [1], an example in a fence of
-    /// its own, an object quoted from a page. So fenced parts are tried first, then every bracket in turn. JSON that
-    /// holds a verdict with an entry number wins; a verdict without one counts only when there is nothing better.
+    /// its own, an object quoted from a page, an object around the list. So fenced parts are tried first, then every
+    /// bracket in turn. JSON that holds a verdict with an entry number wins; a verdict without one counts only when
+    /// there is nothing better. Of several, the last one: the answer comes after what the model quotes on its way.
     static func answers(in text: String) -> [[String: Any]] {
         // shortcut: gives up after two million scanned characters, which only a reply full of unclosed brackets
         // reaches; find the brackets in one pass with a stack if replies ever get that large.
@@ -237,10 +237,11 @@ public enum LLM {
         // From an opening bracket to the one that closes it, minding strings.
         func span(_ text: Substring) -> Substring? {
             var depth = 0, inString = false, escaped = false
-            for index in text.indices {
+            // By scalar: a quote followed by a combining mark is one character, and would not end the string.
+            for index in text.unicodeScalars.indices {
                 budget -= 1
                 if budget < 0 { return nil }
-                let character = text[index]
+                let character = text.unicodeScalars[index]
                 if inString {
                     if escaped { escaped = false } else if character == "\\" { escaped = true } else if character == "\"" { inString = false }
                 } else if character == "\"" {
@@ -255,20 +256,28 @@ public enum LLM {
             return nil
         }
         var unnumbered: [[String: Any]]?
-        for candidate in blocks(of: text).filter(\.isCode).map(\.text) + [text] {
-            var rest = candidate[...]
-            while budget > 0, let open = rest.firstIndex(where: { $0 == "[" || $0 == "{" }) {
-                rest = rest[rest.index(after: open)...]
+        for candidate in blocks(of: text).filter(\.isCode).map(\.text).reversed() + [text] {
+            var rest = candidate[...], numbered: [[String: Any]]?, plain: [[String: Any]]?
+            while budget > 0, let open = rest.unicodeScalars.firstIndex(where: { $0 == "[" || $0 == "{" }) {
+                rest = rest[rest.unicodeScalars.index(after: open)...]
                 guard let found = span(candidate[open...]), let json = try? JSONSerialization.jsonObject(with: Data(found.utf8)) else { continue }
-                // What lies inside a JSON value is part of it, not an answer of its own.
-                rest = candidate[found.endIndex...]
-                let objects = json as? [[String: Any]] ?? (json as? [String: Any]).map { [$0] } ?? []
+                // A list may hold a stray note next to its objects.
+                let objects = (json as? [Any])?.compactMap { $0 as? [String: Any] } ?? (json as? [String: Any]).map { [$0] } ?? []
+                // Without a verdict it may be an object around the answer, so the search goes on inside it.
                 guard objects.contains(where: { $0["telemetry"] != nil }) else { continue }
-                if objects.contains(where: { $0["entry"] != nil }) { return objects }
-                unnumbered = unnumbered ?? objects
+                // What lies inside an answer is part of it, not an answer of its own.
+                rest = candidate[found.endIndex...]
+                if objects.contains(where: { entry($0) != nil }) { numbered = objects } else { plain = objects }
             }
+            if let numbered { return numbered }
+            unnumbered = unnumbered ?? plain
         }
         return unnumbered ?? []
+    }
+
+    /// The number an answer gives for its entry. A page's object with some other "entry" has none.
+    private static func entry(_ object: [String: Any]) -> Int? {
+        object["entry"] as? Int ?? (object["entry"] as? String).flatMap(Int.init)
     }
 
     /// For one item, as the tests use it.
@@ -305,7 +314,7 @@ public enum LLM {
         switch backend {
         case let .claudeCLI(path, model):
             let stop = Shell.Stop()
-            let run = Task.detached {
+            let run = { @Sendable () throws -> Data in
                 // Empty working directory, no settings, CLAUDE.md, skills, hooks or MCP servers, web tools only:
                 // the model reads untrusted web pages, so it gets nothing personal and nothing it could act with.
                 let cwd = FileManager.default.temporaryDirectory.appendingPathComponent("kanarie-\(UUID().uuidString)")
@@ -322,7 +331,12 @@ public enum LLM {
             }
             let data: Data
             // Stopping a batch ends the CLI, so it does not go on using quota for an answer nobody waits for.
-            do { data = try await withTaskCancellationHandler { try await run.value } onCancel: { stop.now() } } catch let failure as Shell.Failure {
+            // On a thread of its own: the CLI runs for minutes, and a pooled thread held that long is missing for everything else.
+            do {
+                data = try await withTaskCancellationHandler {
+                    try await withCheckedThrowingContinuation { continuation in Thread.detachNewThread { continuation.resume(with: Result(catching: run)) } }
+                } onCancel: { stop.now() }
+            } catch let failure as Shell.Failure {
                 // A lookup that ran out of time or was stopped still shows how far it got.
                 log += transcript(ofStream: failure.output).turns
                 throw failure

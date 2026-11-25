@@ -285,11 +285,13 @@ final class AppModel {
         guard batch == nil else { return }
         batch = Task {
             var rest = items[...]
+            // An item a lookup of its own judges while the batch waits is not looked up a second time.
+            let judged = Set(items.map(\.id).filter { saved.aiRules[$0] != nil })
             while !rest.isEmpty, !Task.isCancelled {
                 // The list was made when the batch began. By now a rescan may have removed or updated an item, the
                 // findings may cover it, or a lookup of its own may be running.
                 let group = rest.prefix(LLM.batchSize).compactMap { old in self.items.first { $0.id == old.id } }.filter { item in
-                    verdicts[item.id]?.source != .rules && !analysing.contains(item.id)
+                    verdicts[item.id]?.source != .rules && !analysing.contains(item.id) && (saved.aiRules[item.id] == nil || judged.contains(item.id))
                 }
                 rest = rest.dropFirst(LLM.batchSize)
                 if group.isEmpty { continue }

@@ -20,8 +20,8 @@ public enum Shell {
 
     /// Runs a program and returns its stdout. Blocking: call from a background task.
     /// `acceptFailure` is for programs that report errors as output with a non-zero exit, like the claude CLI.
-    /// shortcut: a timeout or a stop ends the program itself but not processes it started, and one of those that holds
-    /// the program's output open keeps `run` waiting; give the program its own process group if that ever matters.
+    /// shortcut: a timeout or a stop ends the program itself but not processes it started; those run on, and what they
+    /// print later is lost. Give the program its own process group if that ever matters.
     public static func run(
         _ executable: String, _ arguments: [String],
         env: [String: String]? = nil, cwd: URL? = nil, timeout: TimeInterval, acceptFailure: Bool = false, stop: Stop? = nil
@@ -58,9 +58,17 @@ public enum Shell {
             }
         }
         stop?.attach(end)
-        let data = out.fileHandleForReading.readDataToEndOfFile()
+        // Read on a thread of its own, so that `run` is bound to the program and not to its output: a process the
+        // program started can hold that open long after the program has ended.
+        let read = OSAllocatedUnfairLock(initialState: Data()), closed = DispatchSemaphore(value: 0)
+        Thread.detachNewThread {
+            while case let part = out.fileHandleForReading.availableData, !part.isEmpty { read.withLock { $0.append(part) } }
+            closed.signal()
+        }
         process.waitUntilExit()
         over.signal()
+        _ = closed.wait(timeout: .now() + 2)
+        let data = read.withLock { $0 }
         let name = URL(fileURLWithPath: executable).lastPathComponent
         if stop?.asked == true { throw Failure(errorDescription: "\(name) was stopped.", output: data) }
         if timedOut.withLock({ $0 }) { throw Failure(errorDescription: "\(name) timed out after \(Int(timeout)) s.", output: data) }

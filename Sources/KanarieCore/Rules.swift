@@ -139,8 +139,14 @@ public struct Rule: Codable, Sendable, Hashable {
         if summary.isEmpty { found.append("the summary of what is collected is missing") }
         if (sources ?? []).isEmpty { found.append("a source link is missing") }
         if [.optOut, .optIn].contains(telemetry), safeURL(optOut?.url) == nil { found.append("the documentation link for switching it off is missing or not an http(s) link") }
-        for link in [policyURL, optOut?.url].compactMap(\.self) + (sources ?? []) where safeURL(link) == nil {
-            found.append("not an http(s) link: \(link)")
+        // A curated link is read once, by whoever reviews the finding. After that it is a label to click.
+        for link in [policyURL, optOut?.url].compactMap(\.self) + (sources ?? [])
+        where safeURL(link).map({ $0.scheme == "https" && $0.user == nil && $0.host != nil }) != true {
+            found.append("not a plain https link: \(link.prefix(200))")
+        }
+        // The same goes for the command: its end must not sit behind a screen of spaces.
+        if let command = optOut?.command, command.count > 300 || command.contains("  ") {
+            found.append("the command is longer than 300 characters or padded with spaces")
         }
         return found
     }

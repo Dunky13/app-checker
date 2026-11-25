@@ -19,9 +19,14 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Framewor
 cp "$PRODUCTS/Kanarie" "$APP/Contents/MacOS/"
 # SwiftPM links without telling the linker which SDK it used, so the binary names the deployment target as its SDK
 # and macOS draws the app in that older look, with a toolbar that does not line up with the sidebar.
-MINIMUM="$(/usr/libexec/PlistBuddy -c "Print :LSMinimumSystemVersion" Info.plist)"
-xcrun vtool -set-build-version macos "$MINIMUM" "$(xcrun --sdk macosx --show-sdk-version)" -replace \
-  -output "$APP/Contents/MacOS/Kanarie" "$APP/Contents/MacOS/Kanarie"
+# The minimum stays what the compiler wrote. Each value on a line of its own, so a command that fails stops the build.
+BINARY="$APP/Contents/MacOS/Kanarie"
+MINIMUM="$(xcrun vtool -show-build "$BINARY" | awk '$1 == "minos" { print $2; exit }')"
+SDK="$(xcrun --sdk "${SDKROOT:-macosx}" --show-sdk-version)"
+[[ -n "$MINIMUM" && -n "$SDK" ]] || { echo "Could not read the minimum macOS version or the SDK version." >&2; exit 1; }
+xcrun vtool -set-build-version macos "$MINIMUM" "$SDK" -replace -output "$BINARY" "$BINARY"
+WRITTEN="$(xcrun vtool -show-build "$BINARY")"
+[[ "$WRITTEN" == *"sdk $SDK"* ]] || { echo "The SDK version was not written into the binary." >&2; exit 1; }
 cp -R "$PRODUCTS/Sparkle.framework" "$APP/Contents/Frameworks/"
 cp Resources/AppIcon.icns "$APP/Contents/Resources/"
 cp -R findings "$APP/Contents/Resources/"

