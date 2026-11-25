@@ -12,14 +12,14 @@ Many tools collect usage data unless you opt out, and the opt-out is often an en
 
 Arie is Kanarie's canary, and he does not sing. Not for seed, not for company, not for anyone. Only when something starts droning in the background does he get so cross that he sings right back at it.
 
-Miners took canaries underground because a canary goes quiet when the air turns bad. Arie works the other way round. As long as nothing on your Mac phones home, he keeps his beak shut and dozes on his perch in the menu bar. Silence is good news.
+Miners once took canaries underground to warn them of bad air. Arie keeps watch over your Mac instead, from his perch in the menu bar. While he has nothing to complain about, he keeps his beak shut and dozes.
 
-But Arie cannot stand a hum in the background. When an app starts sending telemetry, quietly droning data off your Mac, he puffs himself up and sings at it. That song is the notification you get.
+But Arie cannot stand a hum in the background. When something new or updated on your Mac may send telemetry, quietly droning data off your Mac, he lets you know: he sings at it, or at least ruffles his feathers. That is the notification you get.
 
 - **Green:** Arie dozes. There is nothing to hear, or you switched it off.
 - **Yellow:** Arie ruffles his feathers. Something hums, but there is a switch, and he shows you where it is.
-- **Red:** Arie sings at it, loudly. It hums, and it cannot be switched off.
-- **Grey:** Arie cocks his head. He cannot tell yet.
+- **Red:** Arie sings at it, loudly. It hums, and there is no known way to switch it off.
+- **Grey:** Arie cocks his head. He cannot tell.
 
 ## Screenshots
 

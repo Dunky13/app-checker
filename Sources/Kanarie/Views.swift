@@ -94,8 +94,14 @@ struct MenuView: View {
             Button("Check for Updates…") { updater.checkForUpdates() }
             Button("About Kanarie") {
                 dismiss()
-                NSApp.activate()
-                NSApp.orderFrontStandardAboutPanel(options: [.credits: NSAttributedString(string: "Arie, the canary, does not sing. He stays quiet while nothing on your Mac phones home, and sings right back at whatever does.")])
+                NSApp.activate(ignoringOtherApps: true)
+                let centred = NSMutableParagraphStyle()
+                centred.alignment = .center
+                // Without attributes the credits are set in Helvetica, black also in dark mode.
+                let credits = NSAttributedString(
+                    string: "Arie, the canary, does not sing. He stays quiet while nothing on your Mac phones home, and sings right back at whatever does.",
+                    attributes: [.font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize), .foregroundColor: NSColor.labelColor, .paragraphStyle: centred])
+                NSApp.orderFrontStandardAboutPanel(options: [.credits: credits])
             }
             Button("Quit Kanarie") { NSApp.terminate(nil) }
         }
@@ -107,8 +113,9 @@ struct MenuView: View {
     /// What Arie, the canary, is doing: the loudest status decides.
     private var arie: String {
         let items = { (n: Int) in n == 1 ? "1 item" : "\(n) items" }
-        if model.count(.bad) > 0 { return "Arie sings at \(items(model.count(.bad))) that cannot be switched off." }
+        if model.count(.bad) > 0 { return "Arie sings at \(items(model.count(.bad))) with no known opt-out." }
         if model.count(.warn) > 0 { return "Arie ruffles his feathers: \(items(model.count(.warn))) can be switched off." }
+        if model.count(.unknown) > 0 { return "Arie cocks his head: he cannot tell for \(items(model.count(.unknown)))." }
         return "Arie dozes. Nothing hums."
     }
 }

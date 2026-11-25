@@ -211,7 +211,9 @@ final class AppModel {
         let flagged = changed.filter { [.bad, .warn].contains(verdicts[$0.id]?.status) }
         if !firstScan, !flagged.isEmpty {
             notify(
-                flagged.count == 1 ? "Arie sings at \(flagged[0].name)" : "Arie sings at \(flagged.count) new or updated items",
+                // A song for red, ruffled feathers when every one of them can be switched off.
+                (flagged.contains { verdicts[$0.id]?.status == .bad } ? "Arie sings at " : "Arie ruffles his feathers at ")
+                    + (flagged.count == 1 ? flagged[0].name : "\(flagged.count) new or updated items"),
                 flagged.count == 1 ? "It may send telemetry. \(verdicts[flagged[0].id]?.state ?? "")" : "They may send telemetry: \(flagged.prefix(5).map(\.name).joined(separator: ", "))"
             )
         }
