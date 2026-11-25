@@ -5,56 +5,81 @@ The shapes follow the Arie drawing in site/index.html, without the shield.
 Needs shapely: python3 -m pip install shapely
 Run: python3 scripts/arie-symbol.py > Sources/Kanarie/ArieSymbol.swift
 """
-from shapely.geometry import Polygon, Point, LineString
+from shapely.geometry import LineString, Point, Polygon
 from shapely.ops import unary_union
-from shapely import affinity
 
-def bez(p0,p1,p2,p3,n=24):
-    return [tuple((1-t)**3*a+3*(1-t)**2*t*b+3*(1-t)*t**2*c+t**3*d for a,b,c,d in zip(p0,p1,p2,p3)) for t in [i/n for i in range(1,n+1)]]
-def quad(p0,p1,p2,n=12):
-    return [tuple((1-t)**2*a+2*(1-t)*t*b+t**2*c for a,b,c in zip(p0,p1,p2)) for t in [i/n for i in range(1,n+1)]]
+EYE = (170, 77.5)
+MENU_STROKE = 10
 
-torso=[(140,90)]
-for seg in [((118,92),(99,102),(90,111)),((80,121),(75,133),(76,145)),((77,157),(87,165),(100,169)),((108,171),(118,171),(128,171))]:
-    torso+=bez(torso[-1],*seg)
-torso.append((150,171))
-for seg in [((166,168),(178,152),(180,130)),((182,116),(184,106),(176,98))]:
-    torso+=bez(torso[-1],*seg)
-tail=[(84,140),(46,162)]+quad((46,162),(41,166),(45,171))+[(50,176)]+quad((50,176),(53,179),(57,177))+[(96,158)]
-head=Point(161,84).buffer(29,resolution=48)
-beak=unary_union([Polygon([(178,69.6),(212,84),(178,85.6)]),Polygon([(178,83.6),(208,84),(178,94.2)])])
-body=unary_union([Polygon(torso),Polygon(tail),head,beak])
-wing=[(108,110)]
-for seg in [((92,116),(82,127),(82,138)),((82,147),(90,151),(102,151)),((124,151),(142,141),(150,127)),((155,117),(150,108),(140,106)),((128,104),(116,106),(108,110))]:
-    wing+=bez(wing[-1],*seg)
+
+def bezier(p0, p1, p2, p3, steps=24):
+    return [tuple((1 - t) ** 3 * a + 3 * (1 - t) ** 2 * t * b + 3 * (1 - t) * t ** 2 * c + t ** 3 * d
+                  for a, b, c, d in zip(p0, p1, p2, p3))
+            for t in (i / steps for i in range(1, steps + 1))]
+
+
+def quadratic(p0, p1, p2, steps=12):
+    return [tuple((1 - t) ** 2 * a + 2 * (1 - t) * t * b + t ** 2 * c for a, b, c in zip(p0, p1, p2))
+            for t in (i / steps for i in range(1, steps + 1))]
+
+
+def curve(start, segments):
+    points = [start]
+    for segment in segments:
+        points += bezier(points[-1], *segment)
+    return points
+
+
+torso = curve((140, 90), [((118, 92), (99, 102), (90, 111)), ((80, 121), (75, 133), (76, 145)),
+                          ((77, 157), (87, 165), (100, 169)), ((108, 171), (118, 171), (128, 171))])
+torso.append((150, 171))
+torso += curve(torso[-1], [((166, 168), (178, 152), (180, 130)), ((182, 116), (184, 106), (176, 98))])[1:]
+tail = ([(84, 140), (46, 162)] + quadratic((46, 162), (41, 166), (45, 171)) + [(50, 176)]
+        + quadratic((50, 176), (53, 179), (57, 177)) + [(96, 158)])
+head = Point(161, 84).buffer(29, resolution=48)
+beak = unary_union([Polygon([(178, 69.6), (212, 84), (178, 85.6)]), Polygon([(178, 83.6), (208, 84), (178, 94.2)])])
+body = unary_union([Polygon(torso), Polygon(tail), head, beak])
+wing = curve((108, 110), [((92, 116), (82, 127), (82, 138)), ((82, 147), (90, 151), (102, 151)),
+                          ((124, 151), (142, 141), (150, 127)), ((155, 117), (150, 108), (140, 106)),
+                          ((128, 104), (116, 106), (108, 110))])
 # The wing's lower and front edge only, as a stroke: the top edge would run along the back.
-wing_line=LineString(wing[24:24*3+1])
+wing_line = LineString(wing[24:24 * 3 + 1])
 
-def path(g):
-    polys = [g] if g.geom_type=="Polygon" else list(g.geoms)
-    out=[]
-    for p in polys:
-        for ring in [p.exterior,*p.interiors]:
-            c=list(ring.coords)[:-1]
-            out.append("M"+" ".join(f"{x:.1f} {y:.1f}" for x,y in c)+"Z")
-    return "".join(out)
 
-def outline(w, eye_r, wing=True, feet=False):
-    ring=body.buffer(w/2,join_style="round").difference(body.buffer(-w/2,join_style="round"))
-    parts=[ring, Point(170,77.5).buffer(eye_r)]
-    if wing: parts.append(wing_line.buffer(w/2,cap_style="round"))
-    if feet: parts += [LineString([(125,171),(123,181)]).buffer(w/2), LineString([(145,171),(143,181)]).buffer(w/2)]
+def path(shape):
+    """SVG-like polygon rings, "M x y x y … Z", which Sources/Kanarie/Arie.swift fills even-odd."""
+    rings = []
+    for polygon in [shape] if shape.geom_type == "Polygon" else shape.geoms:
+        for ring in [polygon.exterior, *polygon.interiors]:
+            rings.append("M" + " ".join(f"{x:.1f} {y:.1f}" for x, y in list(ring.coords)[:-1]) + "Z")
+    return "".join(rings)
+
+
+def outline(stroke, eye, wing=True, feet=False):
+    parts = [body.buffer(stroke / 2).difference(body.buffer(-stroke / 2)), Point(EYE).buffer(eye)]
+    if wing:
+        parts.append(wing_line.buffer(stroke / 2))
+    if feet:
+        parts += [LineString([(125, 171), (123, 181)]).buffer(stroke / 2), LineString([(145, 171), (143, 181)]).buffer(stroke / 2)]
     return unary_union(parts).simplify(0.3)
 
-def filled(eye_r):
-    return body.difference(Point(170,77.5).buffer(eye_r)).simplify(0.3)
 
-minx,miny,maxx,maxy=body.buffer(8).bounds
-box=(round(minx),round(miny),round(maxx-minx),round(maxy-miny+6))
-paths={"menu":outline(10,6.5,wing=True),"menuAttention":filled(6.5),"empty":outline(7,5.5,wing=True,feet=True)}
+def filled(eye):
+    # As wide as the menu outline's outer edge, so the icon keeps its size when it switches.
+    return body.buffer(MENU_STROKE / 2).difference(Point(EYE).buffer(eye)).simplify(0.3)
+
+
+def box(margin_below):
+    min_x, min_y, max_x, max_y = body.buffer(8).bounds
+    return f"CGRect(x: {round(min_x)}, y: {round(min_y)}, width: {round(max_x - min_x)}, height: {round(max_y - min_y + margin_below)})"
+
+
 print("// Generated by scripts/arie-symbol.py. Do not edit by hand.")
 print("import AppKit\n\nextension Arie {")
-print(f"    static let box = CGRect(x: {box[0]}, y: {box[1]}, width: {box[2]}, height: {box[3]})")
-for name,g in paths.items():
-    print(f'    static let {name}Path = "{path(g)}"')
+# The empty state has feet below the body.
+print(f"    static let menuBox = {box(0)}")
+print(f"    static let emptyBox = {box(6)}")
+for name, shape in {"menu": outline(MENU_STROKE, 6.5), "menuAttention": filled(6.5),
+                    "empty": outline(7, 5.5, feet=True)}.items():
+    print(f'    static let {name}Path = "{path(shape)}"')
 print("}")
