@@ -132,6 +132,8 @@ public struct Rule: Codable, Sendable, Hashable {
         if !((disabledWhen ?? []) + (disabledWhenAll ?? []).flatMap(\.self) + (enabledWhen ?? [])).allSatisfy(\.isWellFormed) { found.append("malformed check") }
         // An empty combination would hold without reading anything.
         if let all = disabledWhenAll, all.isEmpty || all.contains(where: \.isEmpty) { found.append("disabledWhenAll has an empty list") }
+        // AI lookups are not asked for combinations, and dropping a malformed part would make green easier, not harder.
+        if !curated, disabledWhenAll != nil { found.append("an AI lookup cannot have disabledWhenAll") }
         // The command is offered for copying and, after a confirmation that shows it, for running, so nothing invisible (control or formatting characters, line breaks) may ride along.
         if optOut?.command.map(Check.hasHiddenCharacters) == true {
             found.append("the command contains hidden characters or line breaks")
@@ -184,6 +186,7 @@ public struct Rule: Codable, Sendable, Hashable {
             let results = (disabledWhen ?? []).map { $0.result(probe) } + all
             if results.contains(true) { return (.ok, "Telemetry is switched off on this Mac.", true) }
             if results.contains(nil) { return (.warn, "Telemetry is on by default. \(Self.blockedNote)", false) }
+            if groups.contains(true) { return (.warn, "Only part of the opt-out is set on this Mac, so telemetry stays on. You can switch off the rest.", true) }
             // Only an "on" switch that is not set: the state is the default, not a reading of the "off" switch.
             return results.isEmpty
                 ? (.warn, "Telemetry is on by default. The current setting cannot be read from this Mac.", false)

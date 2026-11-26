@@ -216,13 +216,13 @@ public enum LLM {
                 (object["match"], object["entry"], object["identifier"]) = ([id], nil, nil)
                 // Models also write "no opt-out" as the object with every field null.
                 if let optOut = object["optOut"] as? [String: Any], (optOut["instructions"] as? String ?? "").isEmpty { object["optOut"] = nil }
+                // Not asked for, and an AI lookup may not have it: see Rule.problems.
+                object["disabledWhenAll"] = nil
                 guard var rule = try? JSONDecoder().decode(Rule.self, from: JSONSerialization.data(withJSONObject: object)) else {
                     throw Failure(errorDescription: "The model's answer did not have the expected fields.")
                 }
                 rule.disabledWhen = rule.disabledWhen?.filter(\.isWellFormed)
                 rule.enabledWhen = rule.enabledWhen?.filter(\.isWellFormed)
-                // Not asked for, and filtering out a required part would make green easier, not harder.
-                rule.disabledWhenAll = nil
                 if let problem = rule.problems(curated: false).first { throw Failure(errorDescription: "The answer was rejected: \(problem).") }
                 return rule
             }

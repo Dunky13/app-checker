@@ -9,7 +9,7 @@
   "summary": "Sends usage metrics (latency, reliability, usage patterns; no code, prompts or file paths) to Anthropic and third-party logging infrastructure. Sends error reports (stack traces, with redaction) to a third-party error tracker, on by default only for Pro, Max and Ultra sign-ins on v2.1.198 or later that connect directly to the Claude API. Metrics are off by default on Bedrock, Vertex and Foundry.",
   "policyURL": "https://www.anthropic.com/legal/privacy",
   "optOut": {
-    "instructions": "Set CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 to turn off metrics, error reports and surveys at once; it also stops auto-updates. Individually: DISABLE_TELEMETRY=1 turns off metrics, DISABLE_ERROR_REPORTING=1 turns off error reports. CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC and DISABLE_TELEMETRY also turn off feature-flag evaluation, which can make Remote Control unavailable. DISABLE_ERROR_REPORTING=1 alone keeps Remote Control working but leaves metrics on. These variables can also be put in the env block of ~/.claude/settings.json.",
+    "instructions": "Set CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 to turn off metrics, error reports and surveys at once; it also stops auto-updates. Individually: DISABLE_TELEMETRY=1 turns off metrics, DISABLE_ERROR_REPORTING=1 turns off error reports, which are only sent on Pro, Max and Ultra sign-ins. CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC and DISABLE_TELEMETRY also turn off feature-flag evaluation, which can make Remote Control unavailable. DISABLE_ERROR_REPORTING=1 alone keeps Remote Control working but leaves metrics on. These variables can also be put in the env block of ~/.claude/settings.json.",
     "command": "echo 'export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1' >> ~/.zshrc",
     "url": "https://code.claude.com/docs/en/data-usage"
   },
@@ -26,8 +26,7 @@
   "disabledWhenAll": [
     [
       {
-        "env": "DISABLE_TELEMETRY",
-        "equals": "1"
+        "env": "DISABLE_TELEMETRY"
       },
       {
         "json": "~/.claude/settings.json",
@@ -37,8 +36,7 @@
     ],
     [
       {
-        "env": "DISABLE_ERROR_REPORTING",
-        "equals": "1"
+        "env": "DISABLE_ERROR_REPORTING"
       },
       {
         "json": "~/.claude/settings.json",

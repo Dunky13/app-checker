@@ -78,7 +78,7 @@ public enum Submission {
         }
     }
 
-    static let combined = "is part of a combination that switches it off"
+    static let combined = "is needed to switch it off"
 
     static func describe(_ check: Check) -> String {
         if let name = check.env {
@@ -105,7 +105,7 @@ public enum Submission {
         alone.since = nil
         let verdict = Verdict(item: item, rules: [alone], aiRules: [:], sdks: [], probe: probe)
         let colour = [Status.ok: "green", .warn: "yellow", .bad: "red", .unknown: "grey"][verdict.status] ?? ""
-        return lines(rule.disabledWhen, "switches it off") + lines(rule.disabledWhenAll?.flatMap(\.self), combined) + lines(rule.enabledWhen, "switches it on") + ["Verdict with this finding: \(colour). \(verdict.state)"]
+        return lines(rule.disabledWhen, "switches it off") + (rule.disabledWhenAll ?? []).enumerated().flatMap { lines($1, "part \($0 + 1) of \(rule.disabledWhenAll?.count ?? 0) needed to switch it off") } + lines(rule.enabledWhen, "switches it on") + ["Verdict with this finding: \(colour). \(verdict.state)"]
     }
 
     /// A lookup as a bulk submission sends it: for this item, written as the form writes it, and only when the form
@@ -121,7 +121,6 @@ public enum Submission {
         sent.optOut = found.optOut.map { OptOut(instructions: text($0.instructions), command: optional($0.command), url: optional($0.url)) }
         // A lookup writes "no checks" as an empty list, the form leaves the field out: the same finding.
         (sent.disabledWhen, sent.enabledWhen) = (found.disabledWhen?.isEmpty == false ? found.disabledWhen : nil, found.enabledWhen?.isEmpty == false ? found.enabledWhen : nil)
-        sent.disabledWhenAll = found.disabledWhenAll?.isEmpty == false ? found.disabledWhenAll : nil
         return Draft(from: found, item: item).rule(for: item) == sent ? sent : nil
     }
 
