@@ -1,0 +1,14 @@
+{
+  "match": [
+    "app:com.abhishek.Clocker"
+  ],
+  "name": "Clocker",
+  "telemetry": "forced",
+  "summary": "Per its privacy policy, Clocker sends crash data (stack traces, device state, unique device identifiers) to Google Firebase Crashlytics. It sends anonymous usage analytics (usage counts, feature, theme and display preferences) to TelemetryDeck. The policy and the public repo describe no setting to turn either off, though I could not read the app's source to confirm there is none.",
+  "policyURL": "https://www.adrakstudio.com/clocker/privacy",
+  "sources": [
+    "https://www.adrakstudio.com/clocker/privacy",
+    "https://abhishekbanthia.com/privacy-policy-for-clocker/",
+    "https://github.com/n0shake/clocker"
+  ]
+}
