@@ -1,8 +1,9 @@
 name: Finding pull request
 
 # A finding sent from the app arrives as an issue titled "Finding: …" or "Findings: …". This writes it to a draft
-# pull request that closes the issue. The index stays unsigned: the signing key never comes to GitHub.
-# The maintainer accepts it with scripts/accept-finding.py <issue number>, which signs and marks it ready.
+# pull request that closes the issue. The index stays unsigned: pull requests never get a signing key.
+# Merging it publishes it, because CI signs the index on main. The maintainer can instead accept it with
+# scripts/accept-finding.py <issue number>, which runs the tests, signs locally and marks it ready.
 on:
   issues:
     types: [opened, edited, reopened]

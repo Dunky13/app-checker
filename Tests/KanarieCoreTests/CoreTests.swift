@@ -590,12 +590,12 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
     }
 
     /// The app only takes downloaded findings that its signed index lists, so an unsigned change would silently never reach users.
-    /// A pull request from someone else cannot sign, and scripts/accept-finding.py runs the tests before it signs.
+    /// A pull request cannot sign: CI signs on main after a merge (the sign job in ci.yml), and scripts/accept-finding.py signs locally.
     @Test(.enabled(if: ProcessInfo.processInfo.environment["GITHUB_EVENT_NAME"] != "pull_request"))
-    func indexIsSignedWithTheUpdateKeyAndListsEveryFile() throws {
+    func indexIsSignedAndListsEveryFile() throws {
         let info = try #require(NSDictionary(contentsOf: repoRoot.appendingPathComponent("Info.plist")))
         #expect(throws: Never.self, "run scripts/sign-findings.sh") {
-            try Findings.verified(folder: folder, publicKey: info["SUPublicEDKey"] as? String ?? "")
+            try Findings.verified(folder: folder, publicKeys: ["SUPublicEDKey", "KanarieFindingsKey"].compactMap { info[$0] as? String })
         }
     }
 }
@@ -746,17 +746,17 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         for (serial, files) in [(1, ["x/0.json": Data(good.utf8), "y/0.json": other]), (2, ["y/0.json": other])] {
             let index = try JSONEncoder().encode(Findings.Index(version: 1, serial: serial, files: files.mapValues(Findings.sha256)))
             try Findings.store(files, index: index, signature: Data(key.signature(for: index).base64EncodedString().utf8), in: folder)
-            let stored = try Findings.verified(folder: folder, publicKey: publicKey)
+            let stored = try Findings.verified(folder: folder, publicKeys: [publicKey])
             // The second download has one file less: nothing of the first one may stay behind.
             #expect(stored.index.serial == serial && stored.rules.count == files.count && Findings.read(folder: folder).count == files.count)
         }
         // Files the Finder or a network share leaves behind are not findings.
         try Data().write(to: folder.appendingPathComponent("y/._0.json"))
         try Data().write(to: folder.appendingPathComponent("y/NOTES.md"))
-        #expect(throws: Never.self) { try Findings.verified(folder: folder, publicKey: publicKey) }
+        #expect(throws: Never.self) { try Findings.verified(folder: folder, publicKeys: [publicKey]) }
         // A changed file is.
         try Data("{}".utf8).write(to: folder.appendingPathComponent("y/0.json"))
-        #expect(throws: CocoaError.self) { try Findings.verified(folder: folder, publicKey: publicKey) }
+        #expect(throws: CocoaError.self) { try Findings.verified(folder: folder, publicKeys: [publicKey]) }
     }
 
     @Test func checksNeedAnExpectedValueAndAPathInsideHomeOrHomebrew() {
@@ -775,7 +775,7 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         let publicKey = key.publicKey.rawRepresentation.base64EncodedString()
         let data = try JSONEncoder().encode(Findings.Index(version: 1, serial: 7, files: ["x/0.json": Findings.sha256(file)]))
         let signature = try key.signature(for: data).base64EncodedString()
-        let index = try Findings.index(data, signature: signature + "\n", publicKey: publicKey)
+        let index = try Findings.index(data, signature: signature + "\n", publicKeys: [publicKey])
         #expect(index.serial == 7)
         #expect(try Findings.rules(from: ["x/0.json": file], matching: index).count == 1)
         // A changed, missing or extra file does not match the index.
@@ -783,14 +783,15 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         #expect(throws: CocoaError.self) { try Findings.rules(from: [:], matching: index) }
         #expect(throws: CocoaError.self) { try Findings.rules(from: ["x/0.json": file, "y/0.json": file], matching: index) }
         // A changed index, no signature, or somebody else's signature.
-        #expect(throws: CocoaError.self) { try Findings.index(data + Data(" ".utf8), signature: signature, publicKey: publicKey) }
-        #expect(throws: CocoaError.self) { try Findings.index(data, signature: "", publicKey: publicKey) }
+        #expect(throws: CocoaError.self) { try Findings.index(data + Data(" ".utf8), signature: signature, publicKeys: [publicKey]) }
+        #expect(throws: CocoaError.self) { try Findings.index(data, signature: "", publicKeys: [publicKey]) }
         let other = Curve25519.Signing.PrivateKey().publicKey.rawRepresentation.base64EncodedString()
-        #expect(throws: CocoaError.self) { try Findings.index(data, signature: signature, publicKey: other) }
+        #expect(throws: CocoaError.self) { try Findings.index(data, signature: signature, publicKeys: [other]) }
+        #expect(throws: Never.self) { try Findings.index(data, signature: signature, publicKeys: ["", other, publicKey]) }
         // A signed index for a newer format, or one that names a file outside the folder.
         for bad in [Findings.Index(version: 2, serial: 8, files: [:]), Findings.Index(version: 1, serial: 8, files: ["../x/0.json": "00"])] {
             let data = try JSONEncoder().encode(bad)
-            #expect(throws: CocoaError.self) { try Findings.index(data, signature: key.signature(for: data).base64EncodedString(), publicKey: publicKey) }
+            #expect(throws: CocoaError.self) { try Findings.index(data, signature: key.signature(for: data).base64EncodedString(), publicKeys: [publicKey]) }
         }
     }
 }

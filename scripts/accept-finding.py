@@ -26,7 +26,7 @@ CHECK = ["env", "defaults", "json", "file", "key", "equals", "contains", "notIn"
 # Not shown in a review, although they are neither control nor format characters.
 IGNORABLE = {0x034F, 0x115F, 0x1160, 0x17B4, 0x17B5, 0x2800, 0x3164, 0xFFA0, 0x16FE4, *range(0x180B, 0x1810),
              *range(0xFE00, 0xFE10), *range(0xFFF0, 0xFFF9), *range(0xE0000, 0xE1000)}
-SIGNATURE_TEST = "indexIsSignedWithTheUpdateKeyAndListsEveryFile"
+SIGNATURE_TEST = "indexIsSignedAndListsEveryFile"
 # An issue with several findings has a section per finding, headed like this. Submission.bulkLimit in the app.
 HEADING = re.compile(r"^### Finding (\d+)$", re.M)
 BULK_LIMIT = 10
@@ -445,10 +445,13 @@ def drafted(event):
     else:
         sys.exit(f"The branch {branch} kept changing while this ran; the last push's message is above.")
     body = ("\n".join([line for line, _ in described] + leftout(number, skipped)) + "\n\nWritten from the issue by a workflow. The findings passed the parser's checks; "
-            "the tests and the review are still to come. The index is not signed, so the app would not take this change: "
-            f"do not merge it as it is. To accept it, run `scripts/accept-finding.py {number}`. It writes the branch again from main, "
-            "shows the change, signs the index after your yes and marks this pull request ready. If the issue is edited "
-            "after that, this branch is written again unsigned and the pull request goes back to draft.")
+            "the tests and the review are still to come. The index is not signed: merging this publishes it, because CI "
+            "signs the index on main once the tests pass. An edit of the issue writes this branch again, so merge only the "
+            f"commit you read: `gh pr merge {branch} --merge --match-head-commit <sha>`. "
+            f"To check it locally first, run `scripts/accept-finding.py {number}`. "
+            "It writes the branch again from main, shows the change, signs the index after your yes and marks this pull "
+            "request ready. If the issue is edited after that, this branch is written again unsigned and the pull request "
+            "goes back to draft.")
     if not pull:
         run("gh", "pr", "create", "--draft", "--base", "main", "--head", branch, "--title", title, "--body-file", "-", input=body)
     else:
