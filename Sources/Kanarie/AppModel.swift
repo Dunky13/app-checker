@@ -11,8 +11,8 @@ final class AppModel {
     nonisolated static let stateFile = supportDir.appendingPathComponent("state.json"), cachedFindings = supportDir.appendingPathComponent("findings")
     /// One file per item: a log holds pages of web results, too much for the state file that is rewritten on every save.
     nonisolated static let lookupLogs = LookupLogs(folder: supportDir.appendingPathComponent("lookups"))
-    /// Same key as the app's own updates: only findings the maintainer signed are accepted.
-    nonisolated static var publicKey: String { Bundle.main.infoDictionary?["SUPublicEDKey"] as? String ?? "" }
+    /// The app's update key, which the maintainer signs with, and the findings key that CI on main signs with.
+    nonisolated static var publicKeys: [String] { ["SUPublicEDKey", "KanarieFindingsKey"].compactMap { Bundle.main.infoDictionary?[$0] as? String } }
     nonisolated static var bundledFindings: URL? { Bundle.main.url(forResource: "findings", withExtension: nil) }
 
     /// Everything that survives a restart.
@@ -77,7 +77,7 @@ final class AppModel {
                 NSLog("Kanarie: the bundled findings are invalid: \(error.localizedDescription)")
             }
         }
-        if let cached = try? Findings.verified(folder: cachedFindings, publicKey: publicKey), cached.index.serial > best.serial {
+        if let cached = try? Findings.verified(folder: cachedFindings, publicKeys: publicKeys), cached.index.serial > best.serial {
             best = (cached.index.serial, cached.rules)
         }
         return best
@@ -289,7 +289,7 @@ final class AppModel {
             // Findings are a few kilobytes each. The cap also holds for the index, which is read before its signature can be checked.
             let fetch = { (path: String) in try await session.data(from: Self.findingsURL.appendingPathComponent(path), limit: 1_000_000) }
             let (indexData, signature) = (try await fetch("index.json"), try await fetch("index.json.sig"))
-            let index = try Findings.index(indexData, signature: String(decoding: signature, as: UTF8.self), publicKey: Self.publicKey)
+            let index = try Findings.index(indexData, signature: String(decoding: signature, as: UTF8.self), publicKeys: Self.publicKeys)
             // Nothing newer. This also refuses an older index that someone plays back, even after the cache was lost.
             guard index.serial > serial, index.serial >= saved.serial ?? 0 else { return }
             // Files the app already has are reused by their hash and every other listed file is fetched,

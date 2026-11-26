@@ -416,10 +416,11 @@ def drafted(event):
     else:
         sys.exit(f"The branch {branch} kept changing while this ran; the last push's message is above.")
     body = ("\n".join(line for line, _ in described) + "\n\nWritten from the issue by a workflow. The findings passed the parser's checks; "
-            "the tests and the review are still to come. The index is not signed, so the app would not take this change: "
-            f"do not merge it as it is. To accept it, run `scripts/accept-finding.py {number}`. It writes the branch again from main, "
-            "shows the change, signs the index after your yes and marks this pull request ready. If the issue is edited "
-            "after that, this branch is written again unsigned and the pull request goes back to draft.")
+            "the tests and the review are still to come. The index is not signed: merging this publishes it, because CI "
+            f"signs the index on main once the tests pass. To check it locally first, run `scripts/accept-finding.py {number}`. "
+            "It writes the branch again from main, shows the change, signs the index after your yes and marks this pull "
+            "request ready. If the issue is edited after that, this branch is written again unsigned and the pull request "
+            "goes back to draft.")
     if not pull:
         run("gh", "pr", "create", "--draft", "--base", "main", "--head", branch, "--title", title, "--body-file", "-", input=body)
         return
