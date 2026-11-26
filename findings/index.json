@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "serial": 1795718909,
+  "serial": 1795730029,
   "files": {
     "agy/0.json": "14dc29df8a097ff1cd7f3b7c065c8dede0a4bb034880bae457ce504107505e75",
     "aider/0.json": "1e3d819714573c1d0782f7e8d8fb9d815f8e8a160dbe7e001e4f8dcadf7e4284",
@@ -16,6 +16,7 @@
     "bruno/0.json": "489d1aa2377e32d6c196ac229ab145e0ace45e979cdde128d9f52280563b6d01",
     "bun/0.json": "1ba87db67497a8375a2fa3f6d792cc323ef6d403bb6918b96f2ad8b1b0a2a109",
     "claude-code/0.json": "0581a4226b7a8ec267515867445dd0d21aded514e8ac322a800c75bf636d1a80",
+    "clocker/0.json": "e2a60cd957e2d6de351faa24a8fc536e7cc42b8e3467f4b91ef39b3febc9e34d",
     "cloudflared/0.json": "01dd81a7ea0e643d2b8a122a087b1fff9c44ddaa1ebe836a000e75dc96875246",
     "codex-cli/0.json": "32e403526e21ac813859b29f5192bf9a3d2265b271d8b4cc5e07489d8829c02e",
     "displaylink-manager/0.json": "a60f9d2c2144ce3b06309481be41da5508ff286891580fc4cf6b03f5ffe98fa5",
