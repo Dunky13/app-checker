@@ -1,0 +1,12 @@
+{
+  "match": [
+    "app:co.palokaj.battery"
+  ],
+  "name": "Battery",
+  "telemetry": "forced",
+  "summary": "The developer's self-made analytics endpoint (unidentifiedanalytics.web.app) records the IP address of each app open to count unique users, and the app also contacts icanhasip.com, github.com and electronjs.org. The developer receives this data, and the only documented way to stop it is blocking those URLs, which also breaks auto-updates.",
+  "policyURL": "https://github.com/actuallymentor/battery",
+  "sources": [
+    "https://github.com/actuallymentor/battery"
+  ]
+}
