@@ -139,11 +139,14 @@ public enum Findings {
         return rules
     }
 
-    /// The signed list of files. The signature is the maintainer's Ed25519 one, made with the Sparkle update key.
-    public static func index(_ data: Data, signature: String, publicKey: String) throws -> Index {
+    /// The signed list of files. The Ed25519 signature is made with any one of `publicKeys`' private keys:
+    /// the Sparkle update key on the maintainer's Mac, or the findings key that CI signs with on main.
+    public static func index(_ data: Data, signature: String, publicKeys: [String]) throws -> Index {
         guard let signature = Data(base64Encoded: signature.trimmingCharacters(in: .whitespacesAndNewlines)),
-              let key = Data(base64Encoded: publicKey).flatMap({ try? Curve25519.Signing.PublicKey(rawRepresentation: $0) }),
-              key.isValidSignature(signature, for: data) else { throw failure("The findings are not signed by Kanarie.") }
+              publicKeys.contains(where: { key in
+                  Data(base64Encoded: key).flatMap { try? Curve25519.Signing.PublicKey(rawRepresentation: $0) }?.isValidSignature(signature, for: data) == true
+              })
+        else { throw failure("The findings are not signed by Kanarie.") }
         let index = try JSONDecoder().decode(Index.self, from: data)
         guard index.version <= supportedVersion else { throw failure("Findings version \(index.version) needs a newer Kanarie.") }
         guard index.files.keys.allSatisfy(isPath) else { throw failure("The findings index lists an unexpected file name.") }
@@ -170,9 +173,9 @@ public enum Findings {
     }
 
     /// A folder that carries its own index and signature, such as the app's cache of the last download.
-    public static func verified(folder: URL, publicKey: String) throws -> (index: Index, rules: [Rule]) {
+    public static func verified(folder: URL, publicKeys: [String]) throws -> (index: Index, rules: [Rule]) {
         let signature = try String(contentsOf: folder.appendingPathComponent("index.json.sig"), encoding: .utf8)
-        let index = try index(Data(contentsOf: folder.appendingPathComponent("index.json")), signature: signature, publicKey: publicKey)
+        let index = try index(Data(contentsOf: folder.appendingPathComponent("index.json")), signature: signature, publicKeys: publicKeys)
         return (index, try rules(from: read(folder: folder), matching: index))
     }
 }

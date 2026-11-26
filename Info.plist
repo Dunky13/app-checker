@@ -32,6 +32,8 @@
 	<string>https://raw.githubusercontent.com/Dunky13/kanarie/main/appcast.xml</string>
 	<key>SUPublicEDKey</key>
 	<string>CIKVfBlCMo2CUPj7QLGS8uWx0FINoL++02suMafoJcs=</string>
+	<key>KanarieFindingsKey</key>
+	<string>RVKMf0sWuC5FeuQubNYV30TD8mbiVe1Dy5awV6uVvg8=</string>
 	<key>SUEnableSystemProfiling</key>
 	<false/>
 	<key>ArieOrigin</key>
