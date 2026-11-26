@@ -376,6 +376,9 @@ struct DetailView: View {
     @State private var submitting = false
     @State private var log: OpenedLog?
     @State private var confirmRelookup = false
+    @State private var confirmTrash = false
+    @State private var trashError: String?
+    @State private var trashing = false
 
     private var sourceNote: String {
         switch verdict.source {
@@ -509,6 +512,21 @@ struct DetailView: View {
                 HStack {
                     if !model.removed.contains(item.id) {
                         Button("Show in Finder", systemImage: "folder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: item.path)]) }
+                        if item.kind == "app", item.id != "app:\(Bundle.main.bundleIdentifier ?? "")" {
+                            Button("Move to Trash…", systemImage: "trash") { confirmTrash = true }
+                                .disabled(trashing)
+                                .confirmationDialog("Move \(item.name) to the Trash?", isPresented: $confirmTrash) {
+                                    Button("Move to Trash", role: .destructive) {
+                                        (trashError, trashing) = (nil, true)
+                                        Task {
+                                            do { try await model.moveToTrash(item) } catch { trashError = error.localizedDescription }
+                                            trashing = false
+                                        }
+                                    }
+                                } message: {
+                                    Text("\(item.path)\n\nYou can drag it back out of the Trash. Its settings and data in your Library folder stay, and so do background helpers it installed elsewhere and Homebrew's record of it.")
+                                }
+                        }
                     }
                     if let number = model.openFinding(for: item) {
                         // Someone proposed a finding already: add to that one instead of opening another.
@@ -519,6 +537,9 @@ struct DetailView: View {
                     } else {
                         Button(verdict.source == .rules ? "Suggest a Correction…" : verdict.source == .ai ? "Edit or Submit…" : "Submit a Finding…", systemImage: "square.and.pencil") { submitting = true }
                     }
+                }
+                if let trashError {
+                    Label(trashError, systemImage: "exclamationmark.triangle").foregroundStyle(.red)
                 }
                 Text(item.id).font(.caption.monospaced()).foregroundStyle(.secondary).textSelection(.enabled)
             }

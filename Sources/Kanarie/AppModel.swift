@@ -272,6 +272,24 @@ final class AppModel {
         return added ? "Added to \(name). New terminal windows have it." : "\(name) has this line already."
     }
 
+    /// Moves an app the person confirmed to the Trash, then scans again so it shows as no longer installed.
+    func moveToTrash(_ item: Item) async throws {
+        struct Refusal: LocalizedError { var errorDescription: String? }
+        let path = URL(fileURLWithPath: item.path).standardizedFileURL.path
+        // A running app, or a helper inside it, keeps running from the Trash, still sending what it sends.
+        let running = NSWorkspace.shared.runningApplications.contains {
+            guard let bundle = $0.bundleURL?.standardizedFileURL.path else { return false }
+            return bundle == path || bundle.hasPrefix(path + "/")
+        }
+        if running { throw Refusal(errorDescription: "\(item.name) is running. Quit it first.") }
+        do {
+            try FileManager.default.trashItem(at: URL(fileURLWithPath: path), resultingItemURL: nil)
+        } catch {
+            throw Refusal(errorDescription: "\(error.localizedDescription) Use Show in Finder and drag it to the Trash: Finder asks for your password when needed.")
+        }
+        await rescan()
+    }
+
     /// This Mac's settings as the checks read them, for a finding that is not in use yet.
     var probe: Probe { Probe.live(env: env) }
 
