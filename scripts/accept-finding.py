@@ -103,6 +103,10 @@ def checked(rule):
         plain(source, "a source")
 
 
+class Taken(ValueError):
+    """A new finding for a file that is there already."""
+
+
 def target(body, findings):
     """Where a submitted finding goes and what is written there: (path below findings/, text).
     An issue is text from anyone, so only its JSON block and a file name of the known form are used."""
@@ -127,7 +131,7 @@ def target(body, findings):
     if new:
         path = f"{new.group(1)}/0.json"
         if path in findings:
-            raise ValueError(f"findings/{path} is there already, so this is a correction or needs a folder of its own")
+            raise Taken(f"findings/{path} is there already, so this is a correction or needs a folder of its own")
     elif fix:
         # The file with that first version among the findings for the same items.
         same = [path for path, old in findings.items()
@@ -147,8 +151,10 @@ def target(body, findings):
     return path, json.dumps(rule, indent=2, ensure_ascii=False) + "\n"
 
 
-def targets(body, findings):
-    """Every finding of an issue, in its order: [(path below findings/, text)]. Without headings the issue holds one."""
+def targets(body, findings, skipped=None):
+    """Every finding of an issue, in its order: [(path below findings/, text)]. Without headings the issue holds one.
+    In an issue with several, a new finding whose file is there already is left out, with why added to `skipped`,
+    so one duplicate does not hold back the others."""
     body = body.replace("\r\n", "\n")
     parts = HEADING.split(body)
     if len(parts) == 1:
@@ -165,11 +171,18 @@ def targets(body, findings):
     for number, section in zip(numbers, sections):
         try:
             path, text = target(section, findings)
+        except Taken as error:
+            if skipped is None:
+                raise ValueError(f"finding {number}: {error}") from None
+            skipped.append(f"finding {number}: {error}")
+            continue
         except ValueError as error:
             raise ValueError(f"finding {number}: {error}") from None
         if any(path == earlier for earlier, _ in placed):
             raise ValueError(f"finding {number} goes to findings/{path} as an earlier one does")
         placed.append((path, text))
+    if not placed:
+        raise ValueError("every finding in it is there already")
     return placed
 
 
@@ -251,15 +264,17 @@ def accept(issues):
             sys.exit("The signature test did not pass on main, see above. If the tests do not build, fix that. If the index "
                      "does not cover the findings on main: run scripts/sign-findings.sh there, after reading what changed "
                      "since the last signature, and get that merged first.")
-        lines, folders, written = [], [], set()
+        lines, folders, written, left = [], [], set(), []
         for number in issues:
             issue = json.loads(run("gh", "issue", "view", number, "--json", "body,author,state", capture_output=True).stdout)
             if issue["state"] != "OPEN":
                 sys.exit(f"#{number} is not open.")
+            skipped = []
             try:
-                placed = targets(issue["body"], findings())
+                placed = targets(issue["body"], findings(), skipped)
             except ValueError as error:
                 sys.exit(f"#{number}: {error}.")
+            left += [f"- Left out of #{number}, {reason}." for reason in skipped]
             for path, _ in placed:
                 if path in written:
                     sys.exit(f"#{number}: another issue of this run already wrote findings/{path}. Take them one at a time.")
@@ -273,6 +288,8 @@ def accept(issues):
         run("git", "add", "findings")
         # As git itself shows it: a diff tool or filter from the configuration could show something else.
         run("git", "--no-pager", "diff", "--cached", "--no-ext-diff", "--no-textconv", "--", "findings")
+        if left:
+            print("\n".join(left))
         # The signature tells every installed app that the maintainer has accepted this change.
         # A "y" typed while the tests ran was not an answer to this question.
         termios.tcflush(sys.stdin, termios.TCIFLUSH)
@@ -313,7 +330,7 @@ def accept(issues):
     finally:
         run("git", "checkout", "-q", "-")
     try:
-        body = "\n".join(lines) + "\n\nThe findings passed the tests, and the maintainer read this change before signing the index."
+        body = "\n".join(lines + left) + "\n\nThe findings passed the tests, and the maintainer read this change before signing the index."
         if draft:
             number = str(draft[0]["number"])
             # Ready only with what was signed: the workflow may have written the branch again in the meantime.
@@ -371,7 +388,8 @@ def drafted(event):
         run("git", "fetch", "-q", "origin", "main")
         run("git", "switch", "-q", "--detach", "origin/main")
         try:
-            placed = targets(issue["body"] or "", findings())
+            skipped = []
+            placed = targets(issue["body"] or "", findings(), skipped)
         except ValueError as error:
             return refuse(error, pull)
         head = remote_head(branch)
@@ -415,7 +433,7 @@ def drafted(event):
             sys.exit(f"The branch {branch} could not be pushed; git's message is above.")
     else:
         sys.exit(f"The branch {branch} kept changing while this ran; the last push's message is above.")
-    body = ("\n".join(line for line, _ in described) + "\n\nWritten from the issue by a workflow. The findings passed the parser's checks; "
+    body = ("\n".join([line for line, _ in described] + [f"- Left out: {reason}." for reason in skipped]) + "\n\nWritten from the issue by a workflow. The findings passed the parser's checks; "
             "the tests and the review are still to come. The index is not signed, so the app would not take this change: "
             f"do not merge it as it is. To accept it, run `scripts/accept-finding.py {number}`. It writes the branch again from main, "
             "shows the change, signs the index after your yes and marks this pull request ready. If the issue is edited "
@@ -436,8 +454,9 @@ if __name__ == "__main__":
             # For the tests: the issue body in a file, each target file and its text out, or why it is refused.
             # Read as bytes, so the line ends arrive as GitHub sends them.
             try:
-                placed = targets(Path(arguments[1]).read_bytes().decode(), findings())
-                print("".join(f"{path}\n{text}" for path, text in placed), end="")
+                skipped = []
+                placed = targets(Path(arguments[1]).read_bytes().decode(), findings(), skipped)
+                print("".join(f"Skipped: {reason}.\n" for reason in skipped) + "".join(f"{path}\n{text}" for path, text in placed), end="")
             except ValueError as error:
                 print(f"Refused: {error}.")
                 sys.exit(1)

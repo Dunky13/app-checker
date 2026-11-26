@@ -1038,6 +1038,13 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         // Refused: two findings for one file, numbers out of order, a section without a finding, and more than fit in one issue.
         #expect(try parse(text.replacingOccurrences(of: "example-two", with: "example-one")) == "Refused: finding 2 goes to findings/example-one/0.json as an earlier one does.\n")
         #expect(try parse(text.replacingOccurrences(of: "### Finding 2", with: "### Finding 3")) == "Refused: the findings are not numbered 1, 2, 3 and so on.\n")
+        // A new finding where one is already is left out of an issue with others, and refuses an issue with no others.
+        let taken = "is there already, so this is a correction or needs a folder of its own"
+        let second = try #require(placed.range(of: "example-two/0.json\n")?.lowerBound)
+        #expect(try parse(text.replacingOccurrences(of: "example-one/0.json", with: "github-cli/0.json"))
+                == "Skipped: finding 1: findings/github-cli/0.json \(taken).\n" + placed[second...])
+        #expect(try parse(text.replacingOccurrences(of: "example-one/0.json", with: "github-cli/0.json").replacingOccurrences(of: "example-two/0.json", with: "bun/0.json"))
+                == "Refused: every finding in it is there already.\n")
         #expect(try parse(text.replacingOccurrences(of: "### Finding 2\n", with: "### Finding 2\n\nNothing here.\n\n### Finding 3\n")) == "Refused: finding 2: there is no finding in the issue.\n")
         let first = try #require(text.components(separatedBy: "### Finding 2").first?.components(separatedBy: "### Finding 1\n").last)
         let eleven = (1...11).map { "### Finding \($0)\n\(first)" }.joined()
