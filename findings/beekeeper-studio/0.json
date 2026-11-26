@@ -1,0 +1,18 @@
+{
+  "match": [
+    "app:io.beekeeperstudio.desktop"
+  ],
+  "name": "Beekeeper Studio",
+  "telemetry": "opt-in",
+  "summary": "Beekeeper's current docs say telemetry is opt-in and excludes query content, database data and connection details, and its retention page says diagnostic and usage data is kept up to 12 months. A 2024 maintainer reply said there was no telemetry at all, so the current status should be confirmed in the app.",
+  "policyURL": "https://docs.beekeeperstudio.io/user_guide/security/",
+  "optOut": {
+    "instructions": "Telemetry is off unless you opt in, so decline any anonymous usage data consent prompt. The exact in-app setting and its location were not confirmed.",
+    "url": "https://docs.beekeeperstudio.io/user_guide/security/"
+  },
+  "sources": [
+    "https://docs.beekeeperstudio.io/user_guide/security/",
+    "https://github.com/beekeeper-studio/beekeeper-studio/issues/2626",
+    "https://www.beekeeperstudio.io/legal/retention"
+  ]
+}

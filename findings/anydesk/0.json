@@ -1,0 +1,17 @@
+{
+  "match": [
+    "app:com.philandro.anydesk"
+  ],
+  "name": "AnyDesk",
+  "telemetry": "opt-in",
+  "summary": "AnyDesk's settings page says client, device, and network usage data is collected only with the user's consent, through the \"Allow collection of usage data\" checkbox under Help Us Improve. The data goes to AnyDesk Software GmbH to improve the product. The page does not state the checkbox's default, so this is classified as opt-in based on the consent wording.",
+  "policyURL": "https://anydesk.com/en/privacy",
+  "optOut": {
+    "instructions": "Open AnyDesk, choose the upper-right menu, then Settings, then Application > General. Under Help Us Improve, clear the \"Allow collection of usage data\" checkbox.",
+    "url": "https://support.anydesk.com/docs/settings"
+  },
+  "sources": [
+    "https://support.anydesk.com/docs/settings",
+    "https://www.alphr.com/anydesk-unattended-access/"
+  ]
+}

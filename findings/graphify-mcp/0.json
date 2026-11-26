@@ -1,0 +1,12 @@
+{
+  "match": [
+    "bin:graphify-mcp"
+  ],
+  "name": "graphify-mcp",
+  "telemetry": "none",
+  "summary": "The maintainers' README states 'No telemetry, no usage tracking, no analytics.' Code is processed locally; document, PDF, and image content goes to the AI assistant or LLM provider you configure, and queries are logged only to ~/.cache/graphify-queries.log on your machine.",
+  "policyURL": "https://github.com/graphify-labs/graphify",
+  "sources": [
+    "https://github.com/graphify-labs/graphify"
+  ]
+}

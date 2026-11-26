@@ -1,0 +1,12 @@
+{
+  "match": [
+    "app:com.moonlight-stream.Moonlight"
+  ],
+  "name": "Moonlight",
+  "telemetry": "none",
+  "summary": "The official policy (dated 2018) says Moonlight clients do not directly send analytics or telemetry. Diagnostic details such as PC names and IP addresses reach the project only through crash reports the user opts into in OS settings, or through logs the user posts publicly.",
+  "policyURL": "https://moonlight-stream.org/privacy.html",
+  "sources": [
+    "https://moonlight-stream.org/privacy.html"
+  ]
+}

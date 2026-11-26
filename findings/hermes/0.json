@@ -1,0 +1,18 @@
+{
+  "match": [
+    "bin:hermes"
+  ],
+  "name": "Hermes",
+  "telemetry": "opt-in",
+  "summary": "Shared metrics are off until you enable them. When enabled, local counters are uploaded as packages to the Nous Research telemetry service at https://telemetry.nousresearch.com/v1/telemetry; prompts, responses, and tool arguments are excluded.",
+  "policyURL": "https://github.com/NousResearch/hermes-agent/pull/144820/files",
+  "optOut": {
+    "instructions": "Set telemetry.shared_metrics.enabled and telemetry.shared_metrics.send to false in the config.yaml of your active profile (~/.hermes/config.yaml for the default profile), or decline the offer if setup asks again.",
+    "url": "https://github.com/NousResearch/hermes-agent/pull/144820/files"
+  },
+  "sources": [
+    "https://github.com/NousResearch/hermes-agent/pull/144820/files",
+    "https://github.com/NousResearch/hermes-agent/issues/69526",
+    "https://hermes-agent.nousresearch.com/docs/reference/faq"
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "match": [
+    "app:com.displaylink.DisplayLinkUserAgent"
+  ],
+  "name": "DisplayLink Manager",
+  "telemetry": "none",
+  "summary": "DisplayLink's support article states that DisplayLink Manager \"does not send any data or pixels back to DisplayLink/Synaptics.\" This is a vendor statement in a support article rather than a formal privacy policy, and the app needs Screen Recording permission only to read pixels locally for the display.",
+  "policyURL": "https://support.displaylink.com/knowledgebase/articles/2008685-macos-screen-recording-permission",
+  "sources": [
+    "https://support.displaylink.com/knowledgebase/articles/2008685-macos-screen-recording-permission"
+  ]
+}

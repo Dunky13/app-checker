@@ -1,0 +1,14 @@
+{
+  "match": [
+    "app:com.mitchellh.ghostty"
+  ],
+  "name": "Ghostty",
+  "telemetry": "none",
+  "summary": "The maintainer states there is no telemetry in Ghostty. Crash reports are saved locally and only leave the machine if a user uploads them manually; the one automatic network request is a Sparkle update check to release.files.ghostty.org, which the maintainer says does not track or log requests.",
+  "policyURL": "https://github.com/ghostty-org/ghostty",
+  "sources": [
+    "https://github.com/ghostty-org/ghostty",
+    "https://news.ycombinator.com/item?id=47207472",
+    "https://github.com/ghostty-org/ghostty/discussions/3859"
+  ]
+}
