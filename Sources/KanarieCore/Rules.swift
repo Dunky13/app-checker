@@ -84,11 +84,13 @@ public struct Rule: Codable, Sendable, Hashable {
     public var policyURL: String?
     public var optOut: OptOut?
     public var disabledWhen: [Check]?
+    /// Off only when every group holds, each by any one of its checks: for products with several switches that all have to be off.
+    public var disabledWhenAll: [[Check]]?
     public var enabledWhen: [Check]?
     public var sources: [String]?
     /// The first version this finding applies to. Comes from the file name only: it is not read from a file or an AI answer.
     public var since: String?
-    private enum CodingKeys: String, CodingKey { case match, name, telemetry, summary, policyURL, optOut, disabledWhen, enabledWhen, sources }
+    private enum CodingKeys: String, CodingKey { case match, name, telemetry, summary, policyURL, optOut, disabledWhen, disabledWhenAll, enabledWhen, sources }
 
     static let unsureNote = "The installed version does not say which finding applies, so the strictest one is shown."
 
@@ -127,7 +129,9 @@ public struct Rule: Codable, Sendable, Hashable {
         if match.isEmpty || !match.allSatisfy({ id in ["app", "brew", "cask", "bin", "npm", "ext"].contains { id.hasPrefix("\($0):") } }) {
             found.append("match needs ids starting with app:, brew:, cask:, bin:, npm: or ext:")
         }
-        if !((disabledWhen ?? []) + (enabledWhen ?? [])).allSatisfy(\.isWellFormed) { found.append("malformed check") }
+        if !((disabledWhen ?? []) + (disabledWhenAll ?? []).flatMap(\.self) + (enabledWhen ?? [])).allSatisfy(\.isWellFormed) { found.append("malformed check") }
+        // An empty combination would hold without reading anything.
+        if let all = disabledWhenAll, all.isEmpty || all.contains(where: \.isEmpty) { found.append("disabledWhenAll has an empty list") }
         // The command is offered for copying and, after a confirmation that shows it, for running, so nothing invisible (control or formatting characters, line breaks) may ride along.
         if optOut?.command.map(Check.hasHiddenCharacters) == true {
             found.append("the command contains hidden characters or line breaks")
@@ -171,7 +175,13 @@ public struct Rule: Codable, Sendable, Hashable {
             if forced.contains(true) { return (.warn, "A setting on this Mac switches telemetry on. You can switch it off.", true) }
             // An "on" switch that could not be read may still be set, so it must not end in green.
             if forced.contains(nil) { return (.warn, "Telemetry is on by default. \(Self.blockedNote)", false) }
-            let results = (disabledWhen ?? []).map { $0.result(probe) }
+            // A combination counts as one more "off" switch: a group with no match rules it out, one that could not be read leaves it open.
+            let groups = (disabledWhenAll ?? []).map { group in
+                let found = group.map { $0.result(probe) }
+                return found.contains(true) ? true : found.contains(nil) ? nil : false
+            }
+            let all: [Bool?] = groups.isEmpty ? [] : [groups.contains(false) ? false : groups.contains(nil) ? nil : true]
+            let results = (disabledWhen ?? []).map { $0.result(probe) } + all
             if results.contains(true) { return (.ok, "Telemetry is switched off on this Mac.", true) }
             if results.contains(nil) { return (.warn, "Telemetry is on by default. \(Self.blockedNote)", false) }
             // Only an "on" switch that is not set: the state is the default, not a reading of the "off" switch.

@@ -221,6 +221,8 @@ public enum LLM {
                 }
                 rule.disabledWhen = rule.disabledWhen?.filter(\.isWellFormed)
                 rule.enabledWhen = rule.enabledWhen?.filter(\.isWellFormed)
+                // Not asked for, and filtering out a required part would make green easier, not harder.
+                rule.disabledWhenAll = nil
                 if let problem = rule.problems(curated: false).first { throw Failure(errorDescription: "The answer was rejected: \(problem).") }
                 return rule
             }

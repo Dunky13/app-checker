@@ -329,7 +329,7 @@ struct BulkSubmitView: View {
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "development build"
         let entries = zip(included, checks).map { entry, check in
             // As in SubmitView: what a lookup's own checks read stays on this Mac.
-            let readings = entry.rule.disabledWhen == nil && entry.rule.enabledWhen == nil ? Submission.readings(entry.rule, item: entry.item, probe: model.probe) : nil
+            let readings = entry.rule.disabledWhen == nil && entry.rule.disabledWhenAll == nil && entry.rule.enabledWhen == nil ? Submission.readings(entry.rule, item: entry.item, probe: model.probe) : nil
             return Submission.Entry(item: entry.item, rule: entry.rule, origin: "AI lookup, not edited", readings: readings, sourceCheck: check, removed: model.removed.contains(entry.item.id))
         }
         do {

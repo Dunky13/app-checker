@@ -20,7 +20,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 # The order the findings in this repository are written in.
-ORDER = ["match", "name", "telemetry", "summary", "policyURL", "optOut", "disabledWhen", "enabledWhen", "sources"]
+ORDER = ["match", "name", "telemetry", "summary", "policyURL", "optOut", "disabledWhen", "disabledWhenAll", "enabledWhen", "sources"]
 OPT_OUT = ["instructions", "command", "url"]
 CHECK = ["env", "defaults", "json", "file", "key", "equals", "contains", "notIn"]
 # Not shown in a review, although they are neither control nor format characters.
@@ -92,8 +92,13 @@ def checked(rule):
         for key in ("command", "url"):
             if rule["optOut"].get(key) is not None:
                 plain(rule["optOut"][key], f"optOut.{key}")
-    for key in ("disabledWhen", "enabledWhen"):
-        for check in listed(rule.get(key), key):
+    groups = listed(rule.get("disabledWhenAll"), "disabledWhenAll")
+    # An empty combination would hold without reading anything.
+    if "disabledWhenAll" in rule and (not groups or not all(listed(group, "a group in disabledWhenAll") for group in groups)):
+        raise ValueError("disabledWhenAll has an empty list")
+    lists = [(key, listed(rule.get(key), key)) for key in ("disabledWhen", "enabledWhen")] + [("disabledWhenAll", group) for group in groups]
+    for key, checks in lists:
+        for check in checks:
             known(check, CHECK, f"a check in {key}")
             for field, value in check.items():
                 for entry in listed(value, "notIn") if field == "notIn" else [value]:

@@ -8,9 +8,25 @@
   "summary": "Sends diagnostics (crash reports and debug info, via Sentry) and anonymized usage metrics by default. Server-side data is collected when using Zed's hosted AI or collaboration services.",
   "policyURL": "https://zed.dev/privacy-policy",
   "optOut": {
-    "instructions": "In settings.json set \"telemetry\": {\"diagnostics\": false, \"metrics\": false}. Both must be false to stop all client-side telemetry, so this app does not check the state.",
+    "instructions": "In settings.json set \"telemetry\": {\"diagnostics\": false, \"metrics\": false}. Both must be false to stop all client-side telemetry.",
     "url": "https://github.com/zed-industries/zed/blob/main/docs/src/telemetry.md"
   },
+  "disabledWhenAll": [
+    [
+      {
+        "json": "~/.config/zed/settings.json",
+        "key": "telemetry.diagnostics",
+        "equals": "false"
+      }
+    ],
+    [
+      {
+        "json": "~/.config/zed/settings.json",
+        "key": "telemetry.metrics",
+        "equals": "false"
+      }
+    ]
+  ],
   "sources": [
     "https://github.com/zed-industries/zed/blob/main/docs/src/telemetry.md",
     "https://github.com/zed-industries/zed/blob/main/assets/settings/default.json",
