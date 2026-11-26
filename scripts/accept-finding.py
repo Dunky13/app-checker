@@ -270,18 +270,17 @@ def accept(issues):
                      "does not cover the findings on main: run scripts/sign-findings.sh there, after reading what changed "
                      "since the last signature, and get that merged first.")
         lines, folders, written, left = [], [], set(), []
+        # The findings on main, read once: a file an earlier issue of this run wrote is a clash below, not a duplicate to leave out.
+        on_main = findings()
         for number in issues:
             issue = json.loads(run("gh", "issue", "view", number, "--json", "body,author,state", capture_output=True).stdout)
             if issue["state"] != "OPEN":
                 sys.exit(f"#{number} is not open.")
             skipped = []
             try:
-                placed = targets(issue["body"], findings(), skipped)
+                placed = targets(issue["body"], on_main, skipped)
             except ValueError as error:
                 sys.exit(f"#{number}: {error}.")
-            # Taken by an earlier issue of this run, not by main: that one is not a duplicate to leave out.
-            if any(f"findings/{path} is there already" in reason for reason in skipped for path in written):
-                sys.exit(f"#{number}: another issue of this run already wrote one of its files. Take them one at a time.")
             left += leftout(number, skipped)
             for path, _ in placed:
                 if path in written:
