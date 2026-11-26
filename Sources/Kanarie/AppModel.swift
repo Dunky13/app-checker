@@ -100,7 +100,7 @@ final class AppModel {
         (serial, rules) = Self.loadFindings()
         saved.serial = max(saved.serial ?? 0, serial)
         UserDefaults.standard.register(defaults: [
-            "refreshRules": true, "backend": "claude", "claudeModel": "sonnet",
+            "refreshRules": true, "refreshHours": 24, "backend": "claude", "claudeModel": "sonnet",
             "apiBaseURL": "https://openrouter.ai/api/v1", "apiModel": "~anthropic/claude-sonnet-latest",
         ])
         if !UserDefaults.standard.bool(forKey: "didSetUp") {
@@ -111,9 +111,14 @@ final class AppModel {
         }
         Task {
             await rescan()
+            // Wakes every minute, so a new interval in Settings counts from the last download without a relaunch.
+            var last = Date.distantPast
             while true {
-                await refreshFindings()
-                try? await Task.sleep(for: .seconds(86400))
+                if -last.timeIntervalSinceNow >= Double(max(1, UserDefaults.standard.integer(forKey: "refreshHours"))) * 3600 {
+                    await refreshFindings()
+                    last = .now
+                }
+                try? await Task.sleep(for: .seconds(60))
             }
         }
     }
