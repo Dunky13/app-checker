@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "serial": 1795697724,
+  "serial": 1795718909,
   "files": {
     "agy/0.json": "14dc29df8a097ff1cd7f3b7c065c8dede0a4bb034880bae457ce504107505e75",
     "aider/0.json": "1e3d819714573c1d0782f7e8d8fb9d815f8e8a160dbe7e001e4f8dcadf7e4284",
@@ -15,7 +15,7 @@
     "beekeeper-studio/0.json": "b2a173222fe9fd996992c0969adc7e39a0904a5d90839967ea561d59d0fbc11b",
     "bruno/0.json": "489d1aa2377e32d6c196ac229ab145e0ace45e979cdde128d9f52280563b6d01",
     "bun/0.json": "1ba87db67497a8375a2fa3f6d792cc323ef6d403bb6918b96f2ad8b1b0a2a109",
-    "claude-code/0.json": "db7dc384e30429de89e46dae95e24a254b0d6177ad8d53b5aaa226ee877005dc",
+    "claude-code/0.json": "0581a4226b7a8ec267515867445dd0d21aded514e8ac322a800c75bf636d1a80",
     "cloudflared/0.json": "01dd81a7ea0e643d2b8a122a087b1fff9c44ddaa1ebe836a000e75dc96875246",
     "codex-cli/0.json": "32e403526e21ac813859b29f5192bf9a3d2265b271d8b4cc5e07489d8829c02e",
     "displaylink-manager/0.json": "a60f9d2c2144ce3b06309481be41da5508ff286891580fc4cf6b03f5ffe98fa5",
@@ -29,7 +29,7 @@
     "ghostty/0.json": "0114b9dbb509a5e2c77be5305ca1722f707af4ccfbb38919210294d6fd1d86c2",
     "github-cli/0.json": "83ccd0e14ffb0293831b72795414f8cba8459388e5b922ddcc2c1d9c5abfb46d",
     "go/0.json": "4955ec7352389b9be9ff0347e508c2c549f5dbba483bc7f4f0db5010556eb6e7",
-    "google-chrome/0.json": "057a28717cc6bf76ad69177c9bd39600375444f13b55f7a922b9d41e3e379515",
+    "google-chrome/0.json": "4380f959908414f8bf2690195bb1b5eadc46f06022fdfc27018a151c45b3518d",
     "google-cloud-cli/0.json": "1dc061fd93883d49f3f8e3d1779454e0434f04a37eecf98cccef57105683cce6",
     "graphify-mcp/0.json": "0af385c17ffb0bcc00adb1b4c2cad82f3415e2aba2a581a28af2ce1d772c9b2e",
     "graphify/0.json": "1e18d8da12ddfb50a3bba28062c1d9b17aeae61a45fb56be385b54743c301d09",
@@ -62,6 +62,6 @@
     "vscode-redhat-yaml-xml/0.json": "7a74eaea5a2a9110fa71bdc5590798346e942f0cdf8722c90ffe324cf301d1bd",
     "wrangler/0.json": "17b5d9ac14b2d6c450627d87f4fe52e9eac689936ae2bac139286e0fb487d2f8",
     "yarn/0.json": "037f254e981345212a1f97ccad844a7db8863da2c8f7df93d0288c0fed861ce5",
-    "zed/0.json": "e33b55d954fead8b7dafd8d0da08d4b9ed711dc92fb4b51164b3b324ffaabe57"
+    "zed/0.json": "3d092aba10ffdf5bdb7ee8c8ae65df2ce4390c75c2c40ef9381b7c4ac87a6a17"
   }
 }
