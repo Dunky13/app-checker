@@ -1,0 +1,14 @@
+{
+  "match": [
+    "brew:cloudflared"
+  ],
+  "name": "cloudflared",
+  "telemetry": "forced",
+  "summary": "The master source hardcodes a Sentry DSN and calls sentry.Init unconditionally in the access login, curl and token commands, with no environment variable, flag or condition that disables it, so error reports go to Sentry (sentry.io). The source I read does not show when events are captured, and an open 2024 feature request asking for an off switch has no maintainer response.",
+  "policyURL": "https://www.cloudflare.com/privacypolicy/",
+  "sources": [
+    "https://raw.githubusercontent.com/cloudflare/cloudflared/master/cmd/cloudflared/access/cmd.go",
+    "https://github.com/cloudflare/cloudflared/issues/1298",
+    "https://www.cloudflare.com/privacypolicy/"
+  ]
+}
