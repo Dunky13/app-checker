@@ -26,12 +26,16 @@ public enum Submission {
         }
 
         /// The checks of the finding this draft started from. They were written for its telemetry class, so another class drops them.
-        var kept: (off: [Check], on: [Check]) {
-            guard let base, !replaceChecks, base.telemetry == telemetry, [.optOut, .optIn].contains(telemetry) else { return ([], []) }
-            return (base.disabledWhen ?? [], base.enabledWhen ?? [])
+        var kept: (off: [Check], all: [[Check]], on: [Check]) {
+            guard let base, !replaceChecks, base.telemetry == telemetry, [.optOut, .optIn].contains(telemetry) else { return ([], [], []) }
+            return (base.disabledWhen ?? [], base.disabledWhenAll ?? [], base.enabledWhen ?? [])
         }
 
-        public var checks: [String] { kept.off.map { describe($0) + " switches it off" } + kept.on.map { describe($0) + " switches it on" } }
+        public var checks: [String] {
+            kept.off.map { describe($0) + " switches it off" }
+                + kept.all.map { $0.map(describe).joined(separator: " or ") + " \(Submission.combined)" }
+                + kept.on.map { describe($0) + " switches it on" }
+        }
 
         public func rule(for item: Item) -> Rule {
             let text = { (field: String) in field.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -46,8 +50,9 @@ public enum Submission {
             guard [.optOut, .optIn].contains(telemetry) else { return rule }
             rule.optOut = OptOut(instructions: text(instructions), command: optional(command), url: optional(optOutURL))
             var off = kept.off
-            if off.isEmpty, kept.on.isEmpty, telemetry == .optOut, let variable = optional(variable) { off = [Check(env: variable, equals: optional(value))] }
+            if off.isEmpty, kept.all.isEmpty, kept.on.isEmpty, telemetry == .optOut, let variable = optional(variable) { off = [Check(env: variable, equals: optional(value))] }
             (rule.disabledWhen, rule.enabledWhen) = (off.isEmpty ? nil : off, kept.on.isEmpty ? nil : kept.on)
+            rule.disabledWhenAll = kept.all.isEmpty ? nil : kept.all
             return rule
         }
 
@@ -65,13 +70,15 @@ public enum Submission {
         /// What keeps this draft from being a usable finding: the checks every curated finding passes, on the submitter's Mac already.
         public func problems(for item: Item) -> [String] {
             // Only where the field is in use: with another telemetry class or with kept checks it is not shown.
-            let name = telemetry == .optOut && kept.off.isEmpty && kept.on.isEmpty ? variable.trimmingCharacters(in: .whitespacesAndNewlines) : ""
+            let name = telemetry == .optOut && kept.off.isEmpty && kept.all.isEmpty && kept.on.isEmpty ? variable.trimmingCharacters(in: .whitespacesAndNewlines) : ""
             // Before the finding's own problems, which end with the links: the form shows only the first few.
             // Named as the form shows it: the finding's own message names the JSON value.
             let own = rule(for: item).problems(curated: true).map { $0 == Rule.unknownProblem ? "choose what Telemetry is: a finding cannot say Could not tell" : $0 }
             return (name.isEmpty || Check.isName(name) ? [] : ["the variable is a name only, such as EXAMPLE_TELEMETRY; its value goes in the other field"]) + own
         }
     }
+
+    static let combined = "is needed to switch it off"
 
     static func describe(_ check: Check) -> String {
         if let name = check.env {
@@ -98,7 +105,7 @@ public enum Submission {
         alone.since = nil
         let verdict = Verdict(item: item, rules: [alone], aiRules: [:], sdks: [], probe: probe)
         let colour = [Status.ok: "green", .warn: "yellow", .bad: "red", .unknown: "grey"][verdict.status] ?? ""
-        return lines(rule.disabledWhen, "switches it off") + lines(rule.enabledWhen, "switches it on") + ["Verdict with this finding: \(colour). \(verdict.state)"]
+        return lines(rule.disabledWhen, "switches it off") + (rule.disabledWhenAll ?? []).enumerated().flatMap { lines($1, "one way to meet part \($0 + 1) of \(rule.disabledWhenAll?.count ?? 0) needed to switch it off") } + lines(rule.enabledWhen, "switches it on") + ["Verdict with this finding: \(colour). \(verdict.state)"]
     }
 
     /// A lookup as a bulk submission sends it: for this item, written as the form writes it, and only when the form
@@ -132,7 +139,7 @@ public enum Submission {
     }
 
     public static func sourceCheck(_ rule: Rule, pages: [String], cited: Int) -> SourceCheck {
-        var names = ((rule.disabledWhen ?? []) + (rule.enabledWhen ?? [])).compactMap { $0.env ?? $0.key ?? $0.contains }
+        var names = ((rule.disabledWhen ?? []) + (rule.disabledWhenAll ?? []).flatMap(\.self) + (rule.enabledWhen ?? [])).compactMap { $0.env ?? $0.key ?? $0.contains }
         // Variables and preference keys in the command count too: that line is copied straight into a shell.
         let command = rule.optOut?.command ?? ""
         // The simple kind of word boundary: the default one does not see a boundary at "." or ":" between letters ("$env:NAME").

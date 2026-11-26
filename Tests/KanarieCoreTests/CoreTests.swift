@@ -103,6 +103,34 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         #expect(!Check(env: "X", equals: "1", notIn: ["0"]).isWellFormed && !Check(file: "~/f", contains: "c", notIn: ["0"]).isWellFormed)
     }
 
+    /// Zed and Claude Code are off only when several switches all are.
+    @Test func everyGroupOfACombinationMustHold() {
+        var both = rule(.optOut)
+        both.disabledWhenAll = [[Check(env: "A"), Check(json: "p.json", key: "a", equals: "1")], [Check(env: "B")]]
+        #expect(both.evaluate(probe(env: ["A": "1", "B": "1"])).status == .ok)
+        #expect(both.evaluate(probe(env: ["B": "1"], files: ["p.json": #"{"a": "1"}"#])).status == .ok)
+        let one = both.evaluate(probe(env: ["A": "1"]))
+        #expect(one.status == .warn && one.state.hasPrefix("Only part of the opt-out is set") && one.read)
+        #expect(both.evaluate(probe()).state.hasPrefix("No opt-out setting was found"))
+        // A part that could not be read leaves it open, but a part that does not match rules it out.
+        #expect(both.evaluate(probe(env: ["B": "1"], blocked: ["p.json"])).state.contains(Rule.blockedNote))
+        #expect(!both.evaluate(probe(blocked: ["p.json"])).state.contains(Rule.blockedNote))
+        // Any one "off" switch is still enough, and an "on" switch still wins.
+        both.disabledWhen = [Check(env: "OFF")]
+        #expect(both.evaluate(probe(env: ["OFF": "1"])).status == .ok)
+        both.enabledWhen = [Check(env: "ON")]
+        #expect(both.evaluate(probe(env: ["A": "1", "B": "1", "ON": "1"])).status == .warn)
+        // An empty combination would be green without reading anything.
+        for empty: [[Check]] in [[], [[]], [[Check(env: "A")], []]] {
+            var hollow = rule(.optOut)
+            hollow.disabledWhenAll = empty
+            #expect(hollow.evaluate(probe()).status == .warn && hollow.problems(curated: false).contains("disabledWhenAll has an empty list"))
+        }
+        var malformed = rule(.optOut)
+        malformed.disabledWhenAll = [[Check(env: "A B")]]
+        #expect(malformed.problems(curated: false).contains("malformed check"))
+    }
+
     @Test func curatedBeatsAIAndScanHitsStayUnknown() {
         let item = Item(id: "brew:x", name: "x", version: "1", path: "/x")
         let ai = ["brew:x": rule(.forced)]
@@ -187,6 +215,14 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         #expect(rule.telemetry == .optOut)
         #expect(rule.disabledWhen == [Check(env: "TOOL_TELEMETRY", equals: "0")])
         #expect(rule.evaluate(probe(env: ["TOOL_TELEMETRY": "0"])).status == .ok)
+        // A combination was not asked for: even a malformed one is left out rather than rejecting the answer.
+        for all in [#"[[{"env": "X"}]]"#, #""x""#] {
+            let combined = reply.replacingOccurrences(of: #""enabledWhen": []"#, with: #""enabledWhen": [], "disabledWhenAll": \#(all)"#)
+            #expect(try LLM.parseRule(from: combined, itemID: "npm:tool").disabledWhenAll == nil)
+        }
+        var saved = rule
+        saved.disabledWhenAll = [[Check(env: "X")]]
+        #expect(saved.problems(curated: false).contains("an AI lookup cannot have disabledWhenAll"))
     }
 
     @Test func readsMessagesAndToolCallsFromTheCLIStream() {
@@ -556,6 +592,26 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         #expect(try !Findings.rules(from: Findings.read(folder: folder)).isEmpty)
     }
 
+    /// Issue 49: three settings that were switched off stayed yellow.
+    @Test func chromeZedAndClaudeCodeReadTheirSwitches() throws {
+        let all = try Findings.rules(from: Findings.read(folder: folder))
+        let find = { (id: String) in try #require(all.first { $0.match.contains(id) }) }
+        let chrome = try find("app:com.google.Chrome"), zed = try find("app:dev.zed.Zed"), claude = try find("npm:@anthropic-ai/claude-code")
+        let state = "~/Library/Application Support/Google/Chrome/Local State"
+        #expect(chrome.evaluate(probe(files: [state: #"{"user_experience_metrics": {"reporting_enabled": false}}"#])).status == .ok)
+        #expect(chrome.evaluate(probe(files: [state: #"{"user_experience_metrics": {"reporting_enabled": true}}"#])).status == .warn)
+        let zedSettings = { (text: String) in probe(files: ["~/.config/zed/settings.json": text]) }
+        #expect(zed.evaluate(zedSettings(#"{ // comment\#n "telemetry": {"diagnostics": false, "metrics": false,}}"#)).status == .ok)
+        #expect(zed.evaluate(zedSettings(#"{"telemetry": {"diagnostics": false}}"#)).status == .warn)
+        #expect(claude.evaluate(probe(env: ["CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "0"])).status == .ok)
+        let settings = probe(env: ["DISABLE_TELEMETRY": "1"], files: ["~/.claude/settings.json": #"{"env": {"DISABLE_ERROR_REPORTING": "1"}}"#])
+        #expect(claude.evaluate(settings).status == .ok)
+        // Error reports alone keep Remote Control working but leave the metrics on.
+        #expect(claude.evaluate(probe(env: ["DISABLE_ERROR_REPORTING": "1"])).state.hasPrefix("Only part of the opt-out is set"))
+        // The variables count when set at all, as Claude Code reads them.
+        #expect(claude.evaluate(probe(env: ["DISABLE_TELEMETRY": "true", "DISABLE_ERROR_REPORTING": "0"])).status == .ok)
+    }
+
     /// gh reads any GH_TELEMETRY value but a few "off" spellings as on, and that beats DO_NOT_TRACK and the config file.
     @Test func gitHubCLIIsNotGreenWhenItsOwnVariableSwitchesTelemetryOn() throws {
         let all = try Findings.rules(from: Findings.read(folder: folder))
@@ -893,6 +949,11 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         draft.variable = "IGNORED"
         #expect(draft.rule(for: item).disabledWhen == found.disabledWhen && draft.rule(for: item).enabledWhen == found.enabledWhen)
         #expect(draft.checks.count == 2 && draft.rule(for: item).match == ["brew:x"])
+        // A correction keeps a combination as it is.
+        found.disabledWhenAll = [[Check(env: "A"), Check(env: "B")], [Check(env: "C")]]
+        let combined = Submission.Draft(from: found, item: item)
+        #expect(combined.rule(for: item).disabledWhenAll == found.disabledWhenAll && combined.checks.contains("variable A set or variable B set is needed to switch it off"))
+        found.disabledWhenAll = nil
         draft.telemetry = .optIn
         #expect(draft.rule(for: item).disabledWhen == nil && draft.rule(for: item).enabledWhen == nil && draft.checks.isEmpty)
         // Back on the first class they return, until the person replaces them and names the variable.
@@ -912,6 +973,14 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         #expect(lines.count == 3 && lines[0].hasSuffix("does not match") && lines[1].hasSuffix("could not be read") && lines[2].contains("yellow"))
         #expect(!lines.joined().contains("hunter2"))
         #expect(Submission.readings(found, item: item, probe: probe(env: ["EXAMPLE_TOKEN": "0"])).joined().contains("green"))
+        var combined = rule(.optOut)
+        combined.disabledWhenAll = [[Check(env: "A"), Check(env: "B")], [Check(env: "C")]]
+        #expect(Submission.readings(combined, item: item, probe: probe(env: ["B": "1"])) == [
+            "variable A set (one way to meet part 1 of 2 needed to switch it off): does not match",
+            "variable B set (one way to meet part 1 of 2 needed to switch it off): matches",
+            "variable C set (one way to meet part 2 of 2 needed to switch it off): does not match",
+            "Verdict with this finding: yellow. Only part of the opt-out is set on this Mac, so telemetry stays on. You can switch off the rest.",
+        ])
         // An extension is read in every editor that has it, as the verdict does.
         var extensionItem = Item(id: "ext:a.b", name: "b", version: "1", path: "/x")
         extensionItem.editors = ["Code", "Cursor"]

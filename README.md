@@ -187,7 +187,7 @@ Each file is one finding. It matches one or more item IDs:
 }
 ```
 
-`telemetry` is `none`, `opt-in`, `opt-out` or `forced`. `disabledWhen` and `enabledWhen` are lists of checks; one matching check is enough. On an opt-out rule, `enabledWhen` lists switches that force telemetry on, and a match there wins over `disabledWhen`. A check reads one value:
+`telemetry` is `none`, `opt-in`, `opt-out` or `forced`. `disabledWhen` and `enabledWhen` are lists of checks; one matching check is enough. On an opt-out rule, `enabledWhen` lists switches that force telemetry on, and a match there wins over `disabledWhen`. For a product with several switches that must all be off, `disabledWhenAll` is a list of groups of checks: it counts as off when every group has a matching check, for example `[[{ "json": "~/a.json", "key": "metrics", "equals": "false" }], [{ "json": "~/a.json", "key": "crashes", "equals": "false" }]]`. Apps before 0.1.7 ignore it. A check reads one value:
 
 - `{ "env": "NAME", "equals": "0" }`: a variable in your login shell. Without `equals`, any non-empty value matches. `{ "env": "NAME", "notIn": ["0", "false"] }` matches when the variable is set to anything else, ignoring case and surrounding spaces.
 - `{ "defaults": "bundle.id", "key": "name", "equals": "0" }`: a macOS preference. Booleans read as `1` and `0`.

@@ -10,6 +10,13 @@
     "instructions": "Open Chrome Settings > You and Google > Google services and turn off 'Help improve Chrome's features and performance'.",
     "url": "https://support.google.com/chrome/answer/14746339"
   },
+  "disabledWhen": [
+    {
+      "json": "~/Library/Application Support/Google/Chrome/Local State",
+      "key": "user_experience_metrics.reporting_enabled",
+      "equals": "false"
+    }
+  ],
   "sources": [
     "https://support.google.com/chrome/answer/14746339",
     "https://support.google.com/chrome/answer/96817"
