@@ -973,6 +973,14 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         #expect(lines.count == 3 && lines[0].hasSuffix("does not match") && lines[1].hasSuffix("could not be read") && lines[2].contains("yellow"))
         #expect(!lines.joined().contains("hunter2"))
         #expect(Submission.readings(found, item: item, probe: probe(env: ["EXAMPLE_TOKEN": "0"])).joined().contains("green"))
+        var combined = rule(.optOut)
+        combined.disabledWhenAll = [[Check(env: "A"), Check(env: "B")], [Check(env: "C")]]
+        #expect(Submission.readings(combined, item: item, probe: probe(env: ["B": "1"])) == [
+            "variable A set (one way to meet part 1 of 2 needed to switch it off): does not match",
+            "variable B set (one way to meet part 1 of 2 needed to switch it off): matches",
+            "variable C set (one way to meet part 2 of 2 needed to switch it off): does not match",
+            "Verdict with this finding: yellow. Only part of the opt-out is set on this Mac, so telemetry stays on. You can switch off the rest.",
+        ])
         // An extension is read in every editor that has it, as the verdict does.
         var extensionItem = Item(id: "ext:a.b", name: "b", version: "1", path: "/x")
         extensionItem.editors = ["Code", "Cursor"]

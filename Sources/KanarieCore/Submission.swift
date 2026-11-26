@@ -105,7 +105,7 @@ public enum Submission {
         alone.since = nil
         let verdict = Verdict(item: item, rules: [alone], aiRules: [:], sdks: [], probe: probe)
         let colour = [Status.ok: "green", .warn: "yellow", .bad: "red", .unknown: "grey"][verdict.status] ?? ""
-        return lines(rule.disabledWhen, "switches it off") + (rule.disabledWhenAll ?? []).enumerated().flatMap { lines($1, "part \($0 + 1) of \(rule.disabledWhenAll?.count ?? 0) needed to switch it off") } + lines(rule.enabledWhen, "switches it on") + ["Verdict with this finding: \(colour). \(verdict.state)"]
+        return lines(rule.disabledWhen, "switches it off") + (rule.disabledWhenAll ?? []).enumerated().flatMap { lines($1, "one way to meet part \($0 + 1) of \(rule.disabledWhenAll?.count ?? 0) needed to switch it off") } + lines(rule.enabledWhen, "switches it on") + ["Verdict with this finding: \(colour). \(verdict.state)"]
     }
 
     /// A lookup as a bulk submission sends it: for this item, written as the form writes it, and only when the form
