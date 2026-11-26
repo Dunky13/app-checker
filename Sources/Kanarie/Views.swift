@@ -646,6 +646,7 @@ private struct LogText: View {
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @AppStorage("refreshRules") private var refreshRules = true
+    @AppStorage("refreshHours") private var refreshHours = 24
     @AppStorage("backend") private var backend = "claude"
     @AppStorage("claudeModel") private var claudeModel = ""
     @AppStorage("apiBaseURL") private var apiBaseURL = ""
@@ -660,9 +661,16 @@ struct SettingsView: View {
                     .onChange(of: launchAtLogin) { _, on in
                         do { try on ? SMAppService.mainApp.register() : SMAppService.mainApp.unregister() } catch { launchAtLogin = !on }
                     }
-                Toggle("Download new findings daily", isOn: $refreshRules)
+                Toggle("Download new findings", isOn: $refreshRules)
+                Picker("Check for new findings", selection: $refreshHours) {
+                    Text("Every hour").tag(1)
+                    Text("Every 6 hours").tag(6)
+                    Text("Every day").tag(24)
+                    Text("Every week").tag(168)
+                }
+                .disabled(!refreshRules)
             } footer: {
-                Text("Findings, and the list of findings waiting for review, are fetched from GitHub. Nothing about your Mac is sent.").frame(maxWidth: .infinity, alignment: .leading)
+                Text("Findings, and the list of findings waiting for review, are fetched from GitHub, at launch and then as often as set here. Nothing about your Mac is sent.").frame(maxWidth: .infinity, alignment: .leading)
             }
             Section {
                 Picker("Backend", selection: $backend) {
