@@ -1,0 +1,19 @@
+{
+  "match": [
+    "bin:agy"
+  ],
+  "name": "agy",
+  "telemetry": "opt-out",
+  "summary": "When telemetry is on, the agy CLI collects usage data and sends it to Google to improve Antigravity. The toggle is saved with the signed-in account rather than in a local file, and business accounts have it off; a GitHub issue reports it is left on by default for the agy acp bridge.",
+  "policyURL": "https://antigravity.google/docs/settings?tab=cli",
+  "optOut": {
+    "instructions": "In an agy session, open /settings or /config and turn off 'Enable Telemetry' (saved to your account). For the agy acp subcommand only, pass --disable_telemetry after 'acp' (as reported in the issue; confirm with 'agy acp --help').",
+    "url": "https://antigravity.google/docs/settings?tab=cli"
+  },
+  "sources": [
+    "https://antigravity.google/docs/settings?tab=cli",
+    "https://github.com/magpie-community/plugins/issues/893",
+    "https://github.com/furedea/dotfiles/issues/517",
+    "https://github.com/furedea/dotfiles/pull/518"
+  ]
+}

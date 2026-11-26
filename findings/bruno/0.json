@@ -1,0 +1,21 @@
+{
+  "match": [
+    "app:com.usebruno.app"
+  ],
+  "name": "Bruno",
+  "telemetry": "opt-out",
+  "summary": "Bruno sends limited, anonymized usage telemetry to PostHog (us.i.posthog.com), which is on by default. Users have reported PostHog requests still occurring with the toggle off (issue #9943, still open), so the opt-out may be incomplete.",
+  "policyURL": "https://www.usebruno.com/privacy-policy",
+  "optOut": {
+    "instructions": "Open Bruno's global Preferences, go to the About tab, and switch off the Telemetry toggle. Then confirm in Developer Tools > Network that no requests go to us.i.posthog.com, since some users report they still do.",
+    "url": "https://docs.usebruno.com/get-started/configure/settings"
+  },
+  "sources": [
+    "https://docs.usebruno.com/get-started/configure/settings",
+    "https://github.com/usebruno/bruno/issues/337",
+    "https://github.com/usebruno/bruno/issues/9943",
+    "https://raw.githubusercontent.com/usebruno/bruno/main/packages/bruno-app/src/providers/App/useTelemetry.js",
+    "https://www.usebruno.com/privacy-policy",
+    "https://www.usebruno.com/security"
+  ]
+}

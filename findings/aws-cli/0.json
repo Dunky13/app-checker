@@ -1,0 +1,26 @@
+{
+  "match": [
+    "brew:awscli"
+  ],
+  "name": "AWS CLI",
+  "telemetry": "opt-out",
+  "summary": "AWS CLI v2 adds a session ID to the User-Agent header of API requests it sends to AWS. The session ID is a 12-character hash of a machine-specific host ID, the terminal name, and a timestamp, and the CLI's maintainers describe it as an ID for telemetry collection. It is sent to AWS and the request metadata is visible in CloudTrail.",
+  "policyURL": "https://aws.amazon.com/privacy/",
+  "optOut": {
+    "instructions": "Run the export command in each shell where you use the AWS CLI, or add the same line to your shell startup file to make it persistent. Setting AWS_CLI_SESSION_ID_DISABLED to true stops the CLI from storing a session ID.",
+    "command": "export AWS_CLI_SESSION_ID_DISABLED=true",
+    "url": "https://github.com/aws/aws-cli/issues/9990"
+  },
+  "disabledWhen": [
+    {
+      "env": "AWS_CLI_SESSION_ID_DISABLED",
+      "equals": "true"
+    }
+  ],
+  "sources": [
+    "https://github.com/aws/aws-cli/issues/9990",
+    "https://dev.classmethod.jp/en/articles/aws-cli-session-id-disabled/",
+    "https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-envvars.html",
+    "https://aws.amazon.com/privacy/"
+  ]
+}
