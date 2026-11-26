@@ -1,0 +1,17 @@
+{
+  "match": [
+    "app:de.t7n.apps.mqtt-explorer"
+  ],
+  "name": "MQTT Explorer",
+  "telemetry": "forced",
+  "summary": "The 0.3.5 source starts a crash reporter with uploadToServer set to true and no opt-out, sending error and stack-trace reports with platform, app version, and event data to the developer's host (master points to app-telemetry.t7n.de; the 0.3.5 tag points to localhost, so the shipped endpoint is unverified). The project's website says telemetry was removed, but neither the master nor the 0.3.5 source shows that.",
+  "policyURL": "https://github.com/thomasnordquist/MQTT-Explorer/issues/52",
+  "sources": [
+    "https://github.com/thomasnordquist/MQTT-Explorer/blob/master/src/registerCrashReporter.ts",
+    "https://github.com/thomasnordquist/MQTT-Explorer/blob/v0.3.5/src/registerCrashReporter.ts",
+    "https://github.com/thomasnordquist/MQTT-Explorer/blob/v0.3.5/src/electron.ts",
+    "https://github.com/thomasnordquist/MQTT-Explorer/issues/52",
+    "https://mqtt-explorer.com/",
+    "https://github.com/thomasnordquist/MQTT-Explorer/releases"
+  ]
+}
