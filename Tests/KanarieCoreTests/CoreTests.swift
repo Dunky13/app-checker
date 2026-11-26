@@ -592,7 +592,7 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
     /// The app only takes downloaded findings that its signed index lists, so an unsigned change would silently never reach users.
     /// A pull request cannot sign: CI signs on main after a merge (the sign job in ci.yml), and scripts/accept-finding.py signs locally.
     @Test(.enabled(if: ProcessInfo.processInfo.environment["GITHUB_EVENT_NAME"] != "pull_request"))
-    func indexIsSignedWithTheUpdateKeyAndListsEveryFile() throws {
+    func indexIsSignedAndListsEveryFile() throws {
         let info = try #require(NSDictionary(contentsOf: repoRoot.appendingPathComponent("Info.plist")))
         #expect(throws: Never.self, "run scripts/sign-findings.sh") {
             try Findings.verified(folder: folder, publicKeys: ["SUPublicEDKey", "KanarieFindingsKey"].compactMap { info[$0] as? String })

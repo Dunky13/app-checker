@@ -26,7 +26,7 @@ CHECK = ["env", "defaults", "json", "file", "key", "equals", "contains", "notIn"
 # Not shown in a review, although they are neither control nor format characters.
 IGNORABLE = {0x034F, 0x115F, 0x1160, 0x17B4, 0x17B5, 0x2800, 0x3164, 0xFFA0, 0x16FE4, *range(0x180B, 0x1810),
              *range(0xFE00, 0xFE10), *range(0xFFF0, 0xFFF9), *range(0xE0000, 0xE1000)}
-SIGNATURE_TEST = "indexIsSignedWithTheUpdateKeyAndListsEveryFile"
+SIGNATURE_TEST = "indexIsSignedAndListsEveryFile"
 # An issue with several findings has a section per finding, headed like this. Submission.bulkLimit in the app.
 HEADING = re.compile(r"^### Finding (\d+)$", re.M)
 BULK_LIMIT = 10

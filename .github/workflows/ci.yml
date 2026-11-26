@@ -26,21 +26,31 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: main
-      - id: sign
+      # Without the key: the tests run code that reads the environment.
+      - id: check
+        run: |
+          if swift test --filter indexIsSignedAndListsEveryFile; then
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+          else
+            # The findings must pass every other test first: what they reject is never signed.
+            GITHUB_EVENT_NAME=pull_request swift test
+          fi
+      - if: steps.check.outputs.signed != 'true'
         env:
           FINDINGS_SIGNING_KEY: ${{ secrets.FINDINGS_SIGNING_KEY }}
         run: |
-          if swift test --filter indexIsSignedWithTheUpdateKeyAndListsEveryFile; then
-            echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          # The findings must pass every other test first: what they reject is never signed.
-          GITHUB_EVENT_NAME=pull_request swift test
           KEY="$RUNNER_TEMP/findings.key"
           trap 'rm -f "$KEY"' EXIT
           (umask 077 && printf '%s' "$FINDINGS_SIGNING_KEY" > "$KEY")
           SPARKLE_KEY_FILE="$KEY" scripts/sign-findings.sh
-          swift test --filter indexIsSignedWithTheUpdateKeyAndListsEveryFile
+      # Already signed, the tip of main is what the test job checks, even when it is later than this run's commit.
+      - id: sign
+        run: |
+          if [[ "${{ steps.check.outputs.signed }}" == true ]]; then
+            echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          swift test --filter indexIsSignedAndListsEveryFile
           git config user.name "github-actions[bot]"
           git config user.email "41898828+github-actions[bot]@users.noreply.github.com"
           git add findings/index.json findings/index.json.sig

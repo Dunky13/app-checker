@@ -143,8 +143,9 @@ public enum Findings {
     /// the Sparkle update key on the maintainer's Mac, or the findings key that CI signs with on main.
     public static func index(_ data: Data, signature: String, publicKeys: [String]) throws -> Index {
         guard let signature = Data(base64Encoded: signature.trimmingCharacters(in: .whitespacesAndNewlines)),
-              publicKeys.contains(where: { Data(base64Encoded: $0).flatMap({ try? Curve25519.Signing.PublicKey(rawRepresentation: $0) })?
-                  .isValidSignature(signature, for: data) == true })
+              publicKeys.contains(where: { key in
+                  Data(base64Encoded: key).flatMap { try? Curve25519.Signing.PublicKey(rawRepresentation: $0) }?.isValidSignature(signature, for: data) == true
+              })
         else { throw failure("The findings are not signed by Kanarie.") }
         let index = try JSONDecoder().decode(Index.self, from: data)
         guard index.version <= supportedVersion else { throw failure("Findings version \(index.version) needs a newer Kanarie.") }
