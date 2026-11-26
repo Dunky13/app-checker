@@ -182,8 +182,13 @@ def targets(body, findings, skipped=None):
             raise ValueError(f"finding {number} goes to findings/{path} as an earlier one does")
         placed.append((path, text))
     if not placed:
-        raise ValueError("every finding in it is there already")
+        raise ValueError("every finding in it is there already: " + "; ".join(skipped))
     return placed
+
+
+def leftout(number, skipped):
+    """The lines that say which findings of an issue were left out: in the commit, so a later run can compare them."""
+    return [f"- Left out of #{number}: {reason}." for reason in skipped]
 
 
 def write(number, login, placed):
@@ -274,7 +279,10 @@ def accept(issues):
                 placed = targets(issue["body"], findings(), skipped)
             except ValueError as error:
                 sys.exit(f"#{number}: {error}.")
-            left += [f"- Left out of #{number}, {reason}." for reason in skipped]
+            # Taken by an earlier issue of this run, not by main: that one is not a duplicate to leave out.
+            if any(f"findings/{path} is there already" in reason for reason in skipped for path in written):
+                sys.exit(f"#{number}: another issue of this run already wrote one of its files. Take them one at a time.")
+            left += leftout(number, skipped)
             for path, _ in placed:
                 if path in written:
                     sys.exit(f"#{number}: another issue of this run already wrote findings/{path}. Take them one at a time.")
@@ -305,7 +313,7 @@ def accept(issues):
         if not signed():
             sys.exit("The test of the new signature did not pass. Nothing was committed.")
         run("git", "add", "findings")
-        run("git", "commit", "-q", "-s", "-m", title + "\n\n" + "\n".join(lines))
+        run("git", "commit", "-q", "-s", "-m", title + "\n\n" + "\n".join(lines + left))
         if not shown():
             sys.exit("What was signed is not what was committed. The commit is dropped.")
     except BaseException:
@@ -410,16 +418,20 @@ def drafted(event):
                 print(f"::warning::The branch {branch} holds a signed index and has no open pull request yet: left alone.", file=sys.stderr)
                 return
             index = {"findings/index.json", "findings/index.json.sig"}
+            # What the branch says was left out counts too: an edit that adds or drops a duplicate changes the pull request.
+            said = {line for line in run("git", "log", "--format=%B", f"{base}..{ref}", capture_output=True).stdout.splitlines()
+                    if line.startswith("- Left out of #")}
             if (pull and set(changed.values()) <= {"A", "M"} and set(changed) - index == {f"findings/{path}" for path, _ in placed}
+                    and said == set(leftout(number, skipped))
                     and all(run("git", "show", f"{ref}:findings/{path}", capture_output=True).stdout == text for path, text in placed)):
                 return
         run("git", "switch", "-q", "--no-track", "-C", branch, "origin/main")
         described = write(number, issue["author"]["login"], placed)
         run("git", "add", "findings")
         if not run("git", "diff", "--cached", "--name-only", capture_output=True).stdout:
-            return refuse("its findings are on main already", pull)
+            return refuse("its findings are on main already" + "".join(f"; {reason}" for reason in skipped), pull)
         title = titled([folder for _, folder in described])
-        run("git", "commit", "-q", "-s", "-m", title + "\n\n" + "\n".join(line for line, _ in described))
+        run("git", "commit", "-q", "-s", "-m", title + "\n\n" + "\n".join([line for line, _ in described] + leftout(number, skipped)))
         # Back to draft before the branch changes, so a step that fails after the push does not leave it ready.
         unready(pull)
         # Only over what this run compared: a signed push in the meantime makes this run start again.
@@ -433,19 +445,23 @@ def drafted(event):
             sys.exit(f"The branch {branch} could not be pushed; git's message is above.")
     else:
         sys.exit(f"The branch {branch} kept changing while this ran; the last push's message is above.")
-    body = ("\n".join([line for line, _ in described] + [f"- Left out: {reason}." for reason in skipped]) + "\n\nWritten from the issue by a workflow. The findings passed the parser's checks; "
+    body = ("\n".join([line for line, _ in described] + leftout(number, skipped)) + "\n\nWritten from the issue by a workflow. The findings passed the parser's checks; "
             "the tests and the review are still to come. The index is not signed, so the app would not take this change: "
             f"do not merge it as it is. To accept it, run `scripts/accept-finding.py {number}`. It writes the branch again from main, "
             "shows the change, signs the index after your yes and marks this pull request ready. If the issue is edited "
             "after that, this branch is written again unsigned and the pull request goes back to draft.")
     if not pull:
         run("gh", "pr", "create", "--draft", "--base", "main", "--head", branch, "--title", title, "--body-file", "-", input=body)
-        return
-    try:
-        run("gh", "pr", "edit", str(pull["number"]), "--title", title, "--body-file", "-", input=body)
-    finally:
-        # Again, even when the edit fails: the maintainer may have marked it ready between the first time and the push.
-        unready(pull)
+    else:
+        try:
+            run("gh", "pr", "edit", str(pull["number"]), "--title", title, "--body-file", "-", input=body)
+        finally:
+            # Again, even when the edit fails: the maintainer may have marked it ready between the first time and the push.
+            unready(pull)
+    if skipped:
+        # The pull request closes the issue, so the submitter is told what it leaves out. In a code block, as a refusal is.
+        run("gh", "issue", "comment", number, "--body-file", "-", input="The pull request for this issue leaves out:\n\n"
+            + "".join(f"    {reason}.\n" for reason in skipped) + "\nSend those again as a correction, or under a folder of their own.")
 
 if __name__ == "__main__":
     arguments = sys.argv[1:]

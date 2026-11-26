@@ -1044,7 +1044,7 @@ func rule(_ telemetry: Telemetry, disabledWhen: [Check]? = nil, enabledWhen: [Ch
         #expect(try parse(text.replacingOccurrences(of: "example-one/0.json", with: "github-cli/0.json"))
                 == "Skipped: finding 1: findings/github-cli/0.json \(taken).\n" + placed[second...])
         #expect(try parse(text.replacingOccurrences(of: "example-one/0.json", with: "github-cli/0.json").replacingOccurrences(of: "example-two/0.json", with: "bun/0.json"))
-                == "Refused: every finding in it is there already.\n")
+                == "Refused: every finding in it is there already: finding 1: findings/github-cli/0.json \(taken); finding 2: findings/bun/0.json \(taken).\n")
         #expect(try parse(text.replacingOccurrences(of: "### Finding 2\n", with: "### Finding 2\n\nNothing here.\n\n### Finding 3\n")) == "Refused: finding 2: there is no finding in the issue.\n")
         let first = try #require(text.components(separatedBy: "### Finding 2").first?.components(separatedBy: "### Finding 1\n").last)
         let eleven = (1...11).map { "### Finding \($0)\n\(first)" }.joined()
