@@ -51,6 +51,8 @@ An item with a finding shows what it collects, whether that is switched off on t
 - **Add to** your shell profile (`~/.zshrc` for zsh) puts the variable in the profile your login shell reads.
 - **Copy** is for anything else: you paste it wherever you like.
 
+When an app's telemetry cannot be switched off, **Move to Trash…** on the app removes it. It asks first and refuses while the app or a helper inside it is running. The app's data in your Library folder, background helpers it installed elsewhere and Homebrew's record of it stay.
+
 > [!NOTE]
 > **Run** and **Add** ask first and show you the exact command or lines. The details are under [What the colours mean](#what-the-colours-mean).
 
