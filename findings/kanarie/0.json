@@ -1,0 +1,12 @@
+{
+  "match": [
+    "app:io.went.kanarie"
+  ],
+  "name": "Kanarie",
+  "telemetry": "none",
+  "summary": "The project's README states that Kanarie has no telemetry of its own. Its only network use is downloading the findings list from the project's GitHub repository, checking for updates through Sparkle with the anonymous system profile disabled, and sending an item's name, identifier and version to a chosen AI backend (Claude Code CLI or an OpenAI-compatible API) when the user asks for a lookup.",
+  "policyURL": "https://github.com/Dunky13/kanarie",
+  "sources": [
+    "https://github.com/Dunky13/kanarie"
+  ]
+}

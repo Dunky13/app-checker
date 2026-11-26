@@ -1,0 +1,12 @@
+{
+  "match": [
+    "bin:graphify"
+  ],
+  "name": "graphify",
+  "telemetry": "none",
+  "summary": "The maintainers state there is no telemetry, usage tracking or analytics, and code is parsed locally. Docs, PDFs and images are sent to whichever AI backend you configure, and a local query log at ~/.cache/graphify-queries.log is on by default but is never sent off the machine.",
+  "policyURL": "https://github.com/Graphify-Labs/graphify",
+  "sources": [
+    "https://github.com/Graphify-Labs/graphify"
+  ]
+}
