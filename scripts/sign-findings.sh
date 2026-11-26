@@ -1,7 +1,7 @@
 #!/bin/bash
-# Writes findings/index.json, the list of every finding file with its SHA-256, and signs it with the
-# Sparkle EdDSA key. The app only accepts downloaded findings that match a signed index, so run this
-# after every change below findings/ and commit the index and its signature with it.
+# Writes findings/index.json, the list of every finding file with its SHA-256, and signs it. The app only
+# accepts downloaded findings that match a signed index. CI runs this on main after a merge that changed
+# findings/, with the findings key; locally it signs with the Sparkle EdDSA key.
 # The key is read from the login keychain, or from SPARKLE_KEY_FILE.
 set -euo pipefail
 cd "$(dirname "$0")/.."
