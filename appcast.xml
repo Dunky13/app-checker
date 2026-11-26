@@ -3,6 +3,15 @@
     <channel>
         <title>Kanarie</title>
         <item>
+            <title>0.1.6</title>
+            <pubDate>Thu, 26 Nov 2026 13:31:21 +0100</pubDate>
+            <link>https://github.com/Dunky13/kanarie</link>
+            <sparkle:version>0.1.6</sparkle:version>
+            <sparkle:shortVersionString>0.1.6</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+            <enclosure url="https://github.com/Dunky13/kanarie/releases/download/v0.1.6/Kanarie-0.1.6-universal.zip" length="3084240" type="application/octet-stream" sparkle:edSignature="ghI1y8MtugHK8Mprao2Udyr6gV2cbft4u6c1u6eWQjVgOiMw1xVXofWF2lBaNIFbbQQqO+T6WiET1PS6wxvkAg=="/>
+        </item>
+        <item>
             <title>0.1.5</title>
             <pubDate>Wed, 25 Nov 2026 21:22:17 +0100</pubDate>
             <link>https://github.com/Dunky13/kanarie</link>
@@ -19,15 +28,6 @@
             <sparkle:shortVersionString>0.1.4</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
             <enclosure url="https://github.com/Dunky13/kanarie/releases/download/v0.1.4/Kanarie-0.1.4-universal.zip" length="2915139" type="application/octet-stream" sparkle:edSignature="ngg0Uq+bXagqfJCoMM7ms3jp+5qVEZ5paBb/tOWefBGdykThxN9Ax7mrmxfSIAdgHQrEbPu9XowFPH/QrWQ4Cg=="/>
-        </item>
-        <item>
-            <title>0.1.3</title>
-            <pubDate>Wed, 25 Nov 2026 15:24:08 +0100</pubDate>
-            <link>https://github.com/Dunky13/kanarie</link>
-            <sparkle:version>0.1.3</sparkle:version>
-            <sparkle:shortVersionString>0.1.3</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
-            <enclosure url="https://github.com/Dunky13/kanarie/releases/download/v0.1.3/Kanarie-0.1.3-universal.zip" length="2834852" type="application/octet-stream" sparkle:edSignature="wAo0kiE+QCTjkfFgP9sIco3t/TDqYU55oH8IcUTXzM8cI5DYo12YDi9qSnmmdqWg8g10dnTZU9wqlFJP3k7nDw=="/>
         </item>
     </channel>
 </rss>
