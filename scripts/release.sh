@@ -99,5 +99,7 @@ fi
 gh release create "v$VERSION" "$OUT/$ZIP" "$DMG" --repo "$REPO" --target "$COMMIT" --title "Kanarie $VERSION" --generate-notes
 git add appcast.xml Casks/kanarie.rb
 git commit -s -m "Release $VERSION"
-git push
+# main may have moved during notarization; the tag already points at $COMMIT, and this commit only touches the feed and the cask.
+git pull --rebase origin main
+git push origin HEAD:main
 echo "Released $VERSION"

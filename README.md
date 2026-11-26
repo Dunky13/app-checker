@@ -237,6 +237,8 @@ Print the verdicts without the interface:
 - the Sparkle EdDSA private key in the login keychain (or `SPARKLE_KEY_FILE`). Keep a backup: without it no update can be signed, and findings only by CI,
 - the `gh` CLI, signed in.
 
+Or let CI pick the version: Actions, Release, Run workflow, and choose `patch`, `minor` or `major`. It raises that part of the highest `vX.Y.Z` tag and runs the same script on `main`, with these secrets of the `release` environment: `DEVELOPER_ID_P12` (the certificate and its key, base64), `DEVELOPER_ID_P12_PASSWORD`, `NOTARY_KEY` (the contents of the `.p8`), `NOTARY_KEY_ID`, `NOTARY_ISSUER_ID` and `SPARKLE_PRIVATE_KEY` (the Sparkle key, not the findings key).
+
 ## License
 
 [MIT](LICENSE)

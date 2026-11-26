@@ -1,0 +1,89 @@
+name: Release
+
+# Started by hand: Actions, Release, Run workflow, and pick the part of the version to raise.
+# The next version is the highest vX.Y.Z tag with that part raised; scripts/release.sh does the rest.
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Part of the version to raise
+        type: choice
+        options: [patch, minor, major]
+        default: patch
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: macos-15
+    # Holds the signing and notarization secrets. Its branch policy allows main only.
+    environment: release
+    if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+    # Two notarizations of up to 30 minutes each, and create-dmg waits for Finder without a limit.
+    timeout-minutes: 120
+    steps:
+      # Every tag, to find the last version.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - id: version
+        env:
+          BUMP: ${{ inputs.bump }}
+        run: |
+          LAST="$(git tag --list 'v*' --sort=-v:refname | grep -E '^v(0|[1-9][0-9]*)(\.(0|[1-9][0-9]*)){1,2}$' | head -1)"
+          [[ -n "$LAST" ]] || { echo "No vX.Y.Z tag to raise." >&2; exit 1; }
+          IFS=. read -r MAJOR MINOR PATCH <<< "${LAST#v}"
+          PATCH="${PATCH:-0}"  # release.sh also accepts versions like 1.2
+          case "$BUMP" in
+            major) VERSION="$((MAJOR + 1)).0.0" ;;
+            minor) VERSION="$MAJOR.$((MINOR + 1)).0" ;;
+            patch) VERSION="$MAJOR.$MINOR.$((PATCH + 1))" ;;
+            *) echo "Unknown bump: $BUMP" >&2; exit 1 ;;
+          esac
+          echo "$LAST -> v$VERSION ($BUMP)" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - run: brew install create-dmg
+
+      - env:
+          VERSION: ${{ steps.version.outputs.version }}
+          DEVELOPER_ID_P12: ${{ secrets.DEVELOPER_ID_P12 }}
+          DEVELOPER_ID_P12_PASSWORD: ${{ secrets.DEVELOPER_ID_P12_PASSWORD }}
+          NOTARY_KEY: ${{ secrets.NOTARY_KEY }}
+          NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          DIR="$RUNNER_TEMP/release-keys"
+          KEYCHAIN="$RUNNER_TEMP/release.keychain-db"
+          KEYCHAIN_PASSWORD="$(uuidgen)"
+          trap 'security delete-keychain "$KEYCHAIN" 2>/dev/null; rm -rf "$DIR"' EXIT
+          (umask 077 && mkdir -p "$DIR" &&
+            printf '%s' "$DEVELOPER_ID_P12" | base64 --decode > "$DIR/developer-id.p12" &&
+            printf '%s' "$NOTARY_KEY" > "$DIR/AuthKey.p8" &&
+            printf '%s' "$SPARKLE_PRIVATE_KEY" > "$DIR/sparkle.key")
+          # The files are enough from here: keep the raw secrets out of the tests and tools release.sh runs.
+          unset DEVELOPER_ID_P12 NOTARY_KEY SPARKLE_PRIVATE_KEY
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 7200 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security import "$DIR/developer-id.p12" -k "$KEYCHAIN" -P "$DEVELOPER_ID_P12_PASSWORD" -T /usr/bin/codesign
+          unset DEVELOPER_ID_P12_PASSWORD
+          # Without the partition list, codesign waits for a password prompt nobody answers.
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" >/dev/null
+          security list-keychains -d user -s "$KEYCHAIN" "$HOME/Library/Keychains/login.keychain-db"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898828+github-actions[bot]@users.noreply.github.com"
+          NOTARY_KEY_FILE="$DIR/AuthKey.p8" SPARKLE_KEY_FILE="$DIR/sparkle.key" scripts/release.sh "$VERSION"
