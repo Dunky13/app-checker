@@ -1,0 +1,27 @@
+{
+  "match": [
+    "bin:unsloth"
+  ],
+  "name": "unsloth",
+  "telemetry": "opt-out",
+  "summary": "Per GitHub issue #8900, loading a model with from_pretrained() makes a default-on usage-count request: it downloads a bucketed file from a Hugging Face repo, reflecting environment type, VRAM and GPU-count buckets. Hugging Face receives the request metadata. The official docs say Unsloth collects no usage telemetry beyond minimal hardware information, which the issue disputes.",
+  "policyURL": "https://unsloth.ai/docs/new/studio",
+  "optOut": {
+    "instructions": "Set the environment variable UNSLOTH_DISABLE_STATISTICS before running or importing unsloth. Setting HF_HUB_OFFLINE or TRANSFORMERS_OFFLINE also stops it, per the issue's reading of the source. I did not confirm the accepted value for UNSLOTH_DISABLE_STATISTICS, so 1 is an assumption.",
+    "command": "export UNSLOTH_DISABLE_STATISTICS=1",
+    "url": "https://github.com/unslothai/unsloth/issues/8900"
+  },
+  "disabledWhen": [
+    {
+      "env": "UNSLOTH_DISABLE_STATISTICS"
+    },
+    {
+      "env": "HF_HUB_OFFLINE",
+      "equals": "1"
+    }
+  ],
+  "sources": [
+    "https://github.com/unslothai/unsloth/issues/8900",
+    "https://unsloth.ai/docs/new/studio"
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "match": [
+    "app:com.jetbrains.dataspell"
+  ],
+  "name": "DataSpell",
+  "telemetry": "opt-out",
+  "summary": "JetBrains says anonymous usage statistics are off by default in release builds, but the data-sharing notice says non-commercial licenses collect analytics and detailed AI and code-related data by default. Data goes to JetBrains and is processed in the EU. I could not confirm the error-report default for DataSpell, so this rating uses the worst default.",
+  "policyURL": "https://www.jetbrains.com/legal/docs/terms/product_data_collection/",
+  "optOut": {
+    "instructions": "Open Settings > Appearance & Behavior > System Settings > Data Sharing. Clear 'Send usage statistics' and the option for detailed data collection by JetBrains AI.",
+    "url": "https://www.jetbrains.com/help/dataspell/settings-usage-statistics.html"
+  },
+  "sources": [
+    "https://www.jetbrains.com/help/dataspell/settings-usage-statistics.html",
+    "https://www.jetbrains.com/legal/docs/terms/product_data_collection/",
+    "https://www.jetbrains.com/help/dataspell/working-offline.html"
+  ]
+}
