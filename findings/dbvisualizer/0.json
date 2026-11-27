@@ -1,0 +1,19 @@
+{
+  "match": [
+    "app:com.dbvis.DbVisualizer"
+  ],
+  "name": "DbVisualizer",
+  "telemetry": "opt-in",
+  "summary": "DbVis says anonymous usage data needs explicit user approval, which the first-start wizard asks for. It covers feature usage such as startup time, with no queries, table data or identifying information. A separate 'Report Application Errors' option also exists, and its default is not documented. The update check is on by default, and data goes to DbVis Software AB.",
+  "policyURL": "https://www.dbvis.com/privacy/",
+  "optOut": {
+    "instructions": "Open Tools > Tool Properties > Telemetry. Clear 'Collect Anonymous Usage Statistics' and 'Report Application Errors'. No restart is needed.",
+    "url": "https://www.dbvis.com/docs/ug/telemetry/"
+  },
+  "sources": [
+    "https://www.dbvis.com/docs/ug/telemetry/",
+    "https://www.dbvis.com/security/",
+    "https://www.dbvis.com/docs/ug/getting-started/starting-dbvisualizer/",
+    "https://www.dbvis.com/privacy/"
+  ]
+}

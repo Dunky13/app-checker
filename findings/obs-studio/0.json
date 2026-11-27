@@ -1,0 +1,13 @@
+{
+  "match": [
+    "app:com.obsproject.obs-studio"
+  ],
+  "name": "OBS Studio",
+  "telemetry": "none",
+  "summary": "An OBS project forum admin states there is no telemetry apart from a single random identifier used to manage automatic update rollouts, and the update check can be disabled. The check contacts obsproject.com. The privacy policy covers the project's services and website in general terms and does not describe desktop app telemetry.",
+  "policyURL": "https://obsproject.com/privacy-policy",
+  "sources": [
+    "https://obsproject.com/forum/threads/contact-information-for-risk-assessment.167278/",
+    "https://obsproject.com/privacy-policy"
+  ]
+}

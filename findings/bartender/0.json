@@ -1,0 +1,13 @@
+{
+  "match": [
+    "app:com.surteesstudios.Bartender"
+  ],
+  "name": "Bartender",
+  "telemetry": "none",
+  "summary": "The current owner (Applause) says Bartender 6 sends nothing anywhere and keeps menu item images in memory only. The privacy policy confirms menu-bar images are processed locally. The same policy notes license validation and update checks, and its website analytics apply to the website, not the app. I found no independent audit.",
+  "policyURL": "https://www.macbartender.com/privacy/",
+  "sources": [
+    "https://mjtsai.com/blog/2025/10/06/bartender-6/",
+    "https://www.macbartender.com/privacy/"
+  ]
+}

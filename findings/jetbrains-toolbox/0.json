@@ -1,0 +1,17 @@
+{
+  "match": [
+    "app:com.jetbrains.toolbox"
+  ],
+  "name": "JetBrains Toolbox",
+  "telemetry": "opt-in",
+  "summary": "The Toolbox App sends usage data to JetBrains only after the user gives explicit consent. The 2017 release notes say the data is anonymous and has no project names or paths. The FAQ also says download requests from the app are identified server-side by a query string.",
+  "policyURL": "https://www.jetbrains.com/help/toolbox-app/frequently-asked-questions.html",
+  "optOut": {
+    "instructions": "Decline the consent prompt on first start. To withdraw consent later, open Toolbox App Settings and turn off usage statistics sharing. I didn't find an official page naming the exact label.",
+    "url": "https://blog.jetbrains.com/blog/2017/05/22/jetbrains-toolbox-app-1-3-is-here/"
+  },
+  "sources": [
+    "https://www.jetbrains.com/help/toolbox-app/frequently-asked-questions.html",
+    "https://blog.jetbrains.com/blog/2017/05/22/jetbrains-toolbox-app-1-3-is-here/"
+  ]
+}

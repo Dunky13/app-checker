@@ -1,0 +1,17 @@
+{
+  "match": [
+    "app:com.1password.1password"
+  ],
+  "name": "1Password",
+  "telemetry": "opt-in",
+  "summary": "1Password says usage telemetry is optional and collected only with consent. It covers actions such as unlocking or creating an item, plus device type, account type and app version, and never includes vault contents. 1Password receives it, and the policy says Business and Teams accounts may have it turned on automatically.",
+  "policyURL": "https://support.1password.com/telemetry/",
+  "optOut": {
+    "instructions": "Open and unlock 1Password, select your account at the top of the sidebar, choose Manage Accounts, pick the account, select Usage data, and deselect \"Share information about your usage\". You can also do this on 1Password.com under Manage Account > Usage Data.",
+    "url": "https://support.1password.com/telemetry/"
+  },
+  "sources": [
+    "https://support.1password.com/telemetry/",
+    "https://1password.com/legal/privacy/"
+  ]
+}
