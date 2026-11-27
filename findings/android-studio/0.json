@@ -1,0 +1,17 @@
+{
+  "match": [
+    "app:com.google.android.studio"
+  ],
+  "name": "Android Studio",
+  "telemetry": "opt-in",
+  "summary": "Android Studio can send usage statistics to Google, such as feature use, resource usage, and internal identifiers like package names, class names and plugin configuration. A first-launch dialog asks for consent, and it can be changed under Settings > Appearance & Behavior > Data Sharing. Google's docs describe the toggle but don't state the default, so opt-in rests on the consent dialog described by secondary sources.",
+  "policyURL": "https://developer.android.com/studio/gemini/data-and-privacy",
+  "optOut": {
+    "instructions": "In Android Studio open Settings > Appearance & Behavior > System Settings > Data Sharing and turn off 'Send usage statistics'. This is only needed if you consented.",
+    "url": "https://developer.android.com/studio/gemini/data-and-privacy"
+  },
+  "sources": [
+    "https://developer.android.com/studio/gemini/data-and-privacy",
+    "https://github.com/StellarSand/privacy-settings/blob/main/Privacy%20Settings/Android-Studio.md"
+  ]
+}

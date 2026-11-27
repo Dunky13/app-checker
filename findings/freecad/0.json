@@ -1,0 +1,19 @@
+{
+  "match": [
+    "app:org.freecad.FreeCAD"
+  ],
+  "name": "FreeCAD",
+  "telemetry": "opt-in",
+  "summary": "The FreeCAD application itself collects no personal data. The separate FreeCAD Telemetry addon, which you must install yourself from the Addon Manager, sends non-identifying usage data (version, platform, preferences, installed addons, abnormal shutdowns) to a PostHog server in the EU run by the FreeCAD Project Association.",
+  "policyURL": "https://github.com/FreeCAD/FreeCAD/blob/main/PRIVACY_POLICY.md",
+  "optOut": {
+    "instructions": "Don't install the Telemetry addon. If it's installed, remove it in the Addon Manager, or uncheck \"Enabled\" in the addon's preferences.",
+    "url": "https://github.com/FreeCAD/FreeCAD-Telemetry"
+  },
+  "sources": [
+    "https://github.com/FreeCAD/FreeCAD-Telemetry",
+    "https://github.com/FreeCAD/FreeCAD/blob/main/PRIVACY_POLICY.md",
+    "https://blog.freecad.org/2025/03/30/freecad-telemetry-addon-is-now-available/",
+    "https://fpa.freecad.org/PRIVACY-POLICY.html"
+  ]
+}

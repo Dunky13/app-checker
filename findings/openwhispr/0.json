@@ -1,0 +1,14 @@
+{
+  "match": [
+    "app:com.gizmolabs.openwhispr"
+  ],
+  "name": "OpenWhispr",
+  "telemetry": "none",
+  "summary": "The OpenWhispr docs say it does not collect analytics or telemetry. Audio goes to a cloud provider only if you choose cloud transcription, and OpenWhispr Cloud logs requests server-side. A \"Usage analytics\" setting exists, off by default, and an independent review found nothing in the desktop code that reads it. The mobile app sends Sentry crash reports, which is not the desktop app.",
+  "policyURL": "https://docs.openwhispr.com/faq",
+  "sources": [
+    "https://docs.openwhispr.com/faq",
+    "https://embertype.com/blog/openwhispr-review/",
+    "https://github.com/OpenWhispr/openwhispr/pull/3429"
+  ]
+}

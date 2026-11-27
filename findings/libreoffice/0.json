@@ -1,0 +1,17 @@
+{
+  "match": [
+    "app:org.libreoffice.script"
+  ],
+  "name": "LibreOffice",
+  "telemetry": "opt-in",
+  "summary": "The privacy policy describes no automatic usage telemetry. Crash reports are generated on a crash and sent to The Document Foundation only if the user agrees, because the user is prompted each time. The \"Send crash reports to The Document Foundation\" option is under LibreOffice > General.",
+  "policyURL": "https://www.libreoffice.org/about-us/privacy/privacy-policy-en/",
+  "optOut": {
+    "instructions": "Open LibreOffice > Preferences > LibreOffice > General and leave \"Send crash reports to The Document Foundation\" unchecked. Decline the prompt if a crash report is offered.",
+    "url": "https://www.libreoffice.org/about-us/privacy/privacy-policy-en/"
+  },
+  "sources": [
+    "https://www.libreoffice.org/about-us/privacy/privacy-policy-en/",
+    "https://books.libreoffice.org/en/GS262/GS26212-ConfiguringLO.html"
+  ]
+}
