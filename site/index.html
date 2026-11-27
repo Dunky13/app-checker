@@ -139,12 +139,17 @@ code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.92em
   text-wrap: balance;
 }
 .painted small { display: block; font: 400 0.46em/1.35 var(--hand); margin-top: 0.45em; }
+/* spray-painted through a stencil: soft overspray, paint worn off where the bricks are rough */
 .stencil {
-  font: 700 clamp(0.95rem, 3.4vw, 1.8rem)/1 var(--round);
-  letter-spacing: 0.16em;
+  font: 700 clamp(1.2rem, 4.2vw, 2.4rem)/1 "DIN Condensed", "Avenir Next Condensed", var(--round);
+  letter-spacing: 0.14em;
   white-space: nowrap;
   color: var(--paint);
   margin: 0;
+  opacity: 0.82;
+  text-shadow: 0 0 1px currentColor, 0 0 7px color-mix(in oklch, currentColor 30%, transparent);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='420' height='120'%3E%3Cfilter id='p' x='0' y='0' width='100%25' height='100%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.09 .14' numOctaves='4' seed='3'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -26 0 0 0 20'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23p)'/%3E%3C/svg%3E");
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='420' height='120'%3E%3Cfilter id='p' x='0' y='0' width='100%25' height='100%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.09 .14' numOctaves='4' seed='3'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -26 0 0 0 20'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23p)'/%3E%3C/svg%3E");
 }
 
 /* ---------- a bill: pastel paper, taped to the wall ---------- */
@@ -254,7 +259,8 @@ code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.92em
 }
 @media (max-width: 859px) { .ghost.g1 { display: none; } }
 .ghost.g2 {
-  bottom: 4%; left: -3%; transform: rotate(-3deg); background-color: var(--mint);
+  /* pasted over the top of the no-posting stencil, of course */
+  bottom: calc(10px + clamp(1.2rem, 4.2vw, 2.4rem)); left: -3%; transform: rotate(-3deg); background-color: var(--mint);
   padding-right: 30px;
   --crease: 84deg; --bleach: 10% 100%;
   --worn: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='900' height='160'%3E%3Cfilter id='w' x='0' y='0' width='100%25' height='100%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.04 .06' numOctaves='3' seed='23'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -30 0 0 0 23.4'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23w)'/%3E%3C/svg%3E");
@@ -896,11 +902,11 @@ footer li:nth-child(4) { transform: rotate(1.5deg); background: var(--pink); }
 <main id="main">
 
   <section class="patch hero" aria-labelledby="h1">
+    <p class="stencil no-paste" aria-hidden="true" lang="nl">VERBODEN AAN TE PLAKKEN</p>
     <div class="ghosts" aria-hidden="true">
       <div class="ghost g1" lang="nl">ROMMELMARKT ZAT</div>
       <div class="ghost g2" lang="nl">FIETS GEVONDEN</div>
     </div>
-    <p class="stencil no-paste" aria-hidden="true" lang="nl">VERBODEN AAN TE PLAKKEN</p>
 
     <div class="bill poster tape settle" style="--i:0">
       <p class="kicker">Public notice from Arie, canary</p>
