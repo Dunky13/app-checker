@@ -228,19 +228,39 @@ code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.92em
   padding-bottom: 72px;
 }
 .ghosts { position: absolute; inset: 0; pointer-events: none; z-index: 0; }
+/* old bills, half scraped off: torn edges, missing flecks, a sun-bleached corner and one crease */
 .ghost {
   position: absolute;
   font: 700 clamp(1.7rem, 5vw, 3.2rem)/0.95 var(--round);
   padding: 14px 18px;
   color: var(--ink-soft);
   white-space: nowrap;
-  background: var(--noise) var(--sky);
-  border-radius: 6px;
+  background:
+    linear-gradient(var(--crease), transparent 49.6%, oklch(0.2 0.02 60 / 0.12) 50%, oklch(1 0 0 / 0.16) 50.5%, transparent 51.2%),
+    radial-gradient(ellipse 60% 120% at var(--bleach), oklch(1 0 0 / 0.2), transparent 70%),
+    var(--noise) var(--sky);
+  border-radius: 2px;
   opacity: 0.85;
+  -webkit-mask: var(--worn);
+  mask: var(--worn);
 }
-.ghost.g1 { bottom: 2%; left: 56%; transform: rotate(-5deg); }
+.ghost.g1 {
+  bottom: 2%; left: 56%; transform: rotate(-5deg);
+  padding-right: 34px;
+  --crease: 96deg; --bleach: 85% 0;
+  --worn: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='900' height='160'%3E%3Cfilter id='w' x='0' y='0' width='100%25' height='100%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.035 .07' numOctaves='3' seed='7'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -30 0 0 0 23.4'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23w)'/%3E%3C/svg%3E");
+  /* left edge ripped, bottom-right corner torn away */
+  clip-path: polygon(2% 0, 100% 3%, 100% 58%, 97% 66%, 98.4% 74%, 95.2% 83%, 96% 100%, 1% 97%, 2% 86%, 0 74%, 2.6% 61%, 0.6% 47%, 2.8% 33%, 0.4% 19%, 2.2% 9%);
+}
 @media (max-width: 859px) { .ghost.g1 { display: none; } }
-.ghost.g2 { bottom: 4%; left: -3%; transform: rotate(-3deg); background-color: var(--mint); }
+.ghost.g2 {
+  bottom: 4%; left: -3%; transform: rotate(-3deg); background-color: var(--mint);
+  padding-right: 30px;
+  --crease: 84deg; --bleach: 10% 100%;
+  --worn: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='900' height='160'%3E%3Cfilter id='w' x='0' y='0' width='100%25' height='100%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.04 .06' numOctaves='3' seed='23'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -30 0 0 0 23.4'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23w)'/%3E%3C/svg%3E");
+  /* right edge ripped where the next bill was pulled off */
+  clip-path: polygon(0 4%, 100% 0, 98.2% 12%, 100% 25%, 97.4% 37%, 99.2% 51%, 96.8% 64%, 98.6% 79%, 96.2% 90%, 97.4% 100%, 0.8% 97%);
+}
 .no-paste { position: absolute; left: clamp(10px, 3vw, 40px); bottom: 10px; z-index: 0; pointer-events: none; }
 .poster {
   --r: -1deg;
@@ -878,7 +898,7 @@ footer li:nth-child(4) { transform: rotate(1.5deg); background: var(--pink); }
   <section class="patch hero" aria-labelledby="h1">
     <div class="ghosts" aria-hidden="true">
       <div class="ghost g1" lang="nl">ROMMELMARKT ZAT</div>
-      <div class="ghost g2" lang="nl">FIETS GEVON</div>
+      <div class="ghost g2" lang="nl">FIETS GEVONDEN</div>
     </div>
     <p class="stencil no-paste" aria-hidden="true" lang="nl">VERBODEN AAN TE PLAKKEN</p>
 
