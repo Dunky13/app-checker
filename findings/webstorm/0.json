@@ -1,0 +1,17 @@
+{
+  "match": [
+    "app:com.jetbrains.WebStorm"
+  ],
+  "name": "WebStorm",
+  "telemetry": "opt-out",
+  "summary": "Automatic error reports are on by default in release builds. Anonymous usage statistics and detailed code-related data are off by default for commercial licenses, but on by default for the non-commercial license. JetBrains receives the data, stored in the EU. The help page says the non-commercial license cannot disable the consent, while JetBrains' legal notice says non-commercial users can opt out, so those sources conflict.",
+  "policyURL": "https://www.jetbrains.com/legal/docs/terms/product_data_collection/",
+  "optOut": {
+    "instructions": "Open Settings | Appearance & Behavior | System Settings | Data Sharing and clear the checkboxes for error reports, usage statistics and detailed code-related data.",
+    "url": "https://www.jetbrains.com/help/webstorm/settings-usage-statistics.html"
+  },
+  "sources": [
+    "https://www.jetbrains.com/help/webstorm/settings-usage-statistics.html",
+    "https://www.jetbrains.com/legal/docs/terms/product_data_collection/"
+  ]
+}

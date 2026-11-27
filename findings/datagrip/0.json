@@ -1,0 +1,19 @@
+{
+  "match": [
+    "app:com.jetbrains.datagrip"
+  ],
+  "name": "DataGrip",
+  "telemetry": "opt-out",
+  "summary": "JetBrains says usage statistics are off by default in release builds, but automatic error reports are on by default. On a free non-commercial license, anonymous statistics are mandatory and detailed code-related and AI data collection is on by default. Data goes to JetBrains and is processed in the EU.",
+  "policyURL": "https://www.jetbrains.com/legal/docs/terms/product_data_collection/",
+  "optOut": {
+    "instructions": "Open Settings > Appearance & Behavior > System Settings > Data Sharing. Clear the usage statistics, error report and detailed data collection options. On a non-commercial license the anonymous statistics option cannot be turned off.",
+    "url": "https://www.jetbrains.com/help/datagrip/settings-usage-statistics.html"
+  },
+  "sources": [
+    "https://www.jetbrains.com/help/datagrip/settings-usage-statistics.html",
+    "https://www.jetbrains.com/legal/docs/terms/product_data_collection/",
+    "https://www.jetbrains.com/help/datagrip/working-offline.html",
+    "https://blog.jetbrains.com/datagrip/2025/10/01/datagrip-is-now-free-for-non-commercial-use/"
+  ]
+}

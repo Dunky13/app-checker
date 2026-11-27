@@ -1,0 +1,16 @@
+{
+  "match": [
+    "app:com.apple.Safari"
+  ],
+  "name": "Safari",
+  "telemetry": "opt-out",
+  "summary": "By default Safari sends information calculated from website addresses to Google Safe Browsing and Apple for Fraudulent Website Warning. Apple receives page addresses when you translate a page, unless it was viewed in Private Browsing. Highlights is opt-in.",
+  "policyURL": "https://www.apple.com/legal/privacy/data/en/safari/",
+  "optOut": {
+    "instructions": "Open Settings > Apps > Safari and turn off Fraudulent Website Warning. This covers only the Safe Browsing data flow.",
+    "url": "https://www.apple.com/legal/privacy/data/en/safari/"
+  },
+  "sources": [
+    "https://www.apple.com/legal/privacy/data/en/safari/"
+  ]
+}

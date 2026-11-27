@@ -1,0 +1,30 @@
+{
+  "match": [
+    "ext:eamodio.gitlens"
+  ],
+  "name": "GitLens",
+  "telemetry": "opt-out",
+  "summary": "GitLens sends usage telemetry to GitKraken, the vendor, and it is on by default (gitlens.telemetry.enabled defaults to true). It is sent only when both that setting and VS Code's telemetry.telemetryLevel allow it. GitKraken's privacy policy mentions usage analytics for its applications but does not name GitLens.",
+  "policyURL": "https://www.gitkraken.com/privacy",
+  "optOut": {
+    "instructions": "Set \"gitlens.telemetry.enabled\" to false in VS Code settings, or set VS Code's \"telemetry.telemetryLevel\" to \"off\". Either one stops GitLens telemetry.",
+    "url": "https://github.com/gitkraken/vscode-gitlens/issues/2612"
+  },
+  "disabledWhen": [
+    {
+      "equals": "false",
+      "json": "~/Library/Application Support/Code/User/settings.json",
+      "key": "gitlens.telemetry.enabled"
+    },
+    {
+      "equals": "off",
+      "json": "~/Library/Application Support/Code/User/settings.json",
+      "key": "telemetry.telemetryLevel"
+    }
+  ],
+  "sources": [
+    "https://github.com/gitkraken/vscode-gitlens/issues/2612",
+    "https://raw.githubusercontent.com/gitkraken/vscode-gitlens/main/package.json",
+    "https://www.gitkraken.com/privacy"
+  ]
+}

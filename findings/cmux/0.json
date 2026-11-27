@@ -1,0 +1,31 @@
+{
+  "match": [
+    "app:com.cmuxterm.app"
+  ],
+  "name": "cmux",
+  "telemetry": "opt-out",
+  "summary": "cmux sends anonymous analytics to PostHog and crash reports to Sentry, and fetches remote feature flags. The macOS app has this on by default (app.sendAnonymousTelemetry defaults to true). A merged PR makes telemetry opt-in only for the standalone daemons and Chief, not for the Mac app.",
+  "policyURL": "https://cmux.com/docs/managed-policies",
+  "optOut": {
+    "instructions": "Turn off Settings > App > \"Send anonymous telemetry\" (or set app.sendAnonymousTelemetry to false in ~/.config/cmux/cmux.json), then restart cmux because the setting is read once at launch. Administrators can force it off with the DisableTelemetry key in a managed profile for com.cmuxterm.app.",
+    "url": "https://cmux.com/docs/configuration"
+  },
+  "disabledWhen": [
+    {
+      "equals": "false",
+      "json": "~/.config/cmux/cmux.json",
+      "key": "app.sendAnonymousTelemetry"
+    },
+    {
+      "defaults": "com.cmuxterm.app",
+      "equals": "1",
+      "key": "DisableTelemetry"
+    }
+  ],
+  "sources": [
+    "https://github.com/manaflow-ai/cmux/pull/610",
+    "https://cmux.com/docs/managed-policies",
+    "https://cmux.com/docs/configuration",
+    "https://github.com/manaflow-ai/cmux/pull/55005"
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "match": [
+    "app:dev.herdr.app"
+  ],
+  "name": "Herdr",
+  "telemetry": "opt-out",
+  "summary": "Release builds send a daily report with a random install ID to telemetry.herdr.dev. It contains app and core versions, OS and architecture, bucketed usage time and counts, agent names, built-in layout names, mod counts, command names and event counters. It never includes terminal content, file or folder paths, or custom names.",
+  "policyURL": "https://github.com/herdrdev/herdr-app/blob/master/docs/security.md",
+  "optOut": {
+    "instructions": "Open Settings → Privacy in Herdr and turn telemetry off, or set \"telemetry\": false in settings.json. For a single run, launch with DO_NOT_TRACK=1 or HERDR_TELEMETRY=0. Update checks continue.",
+    "url": "https://github.com/herdrdev/herdr-app/blob/master/docs/security.md"
+  },
+  "disabledWhen": [
+    {
+      "env": "DO_NOT_TRACK",
+      "equals": "1"
+    },
+    {
+      "env": "HERDR_TELEMETRY",
+      "equals": "0"
+    }
+  ],
+  "sources": [
+    "https://github.com/herdrdev/herdr-app/blob/master/docs/security.md"
+  ]
+}
